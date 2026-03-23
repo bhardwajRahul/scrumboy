@@ -81,6 +81,7 @@ func DecryptTOTPSecret(key []byte, encrypted string) ([]byte, error) {
 
 // DecodeKey decodes a base64-encoded 32-byte key. Returns error if wrong length.
 func DecodeKey(b64 string) ([]byte, error) {
+	b64 = strings.TrimSpace(b64)
 	key, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		key, err = base64.RawURLEncoding.DecodeString(b64)
