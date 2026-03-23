@@ -37,3 +37,8 @@ Thumbs.db
 coverage.out
 *.cover
 *.test
+
+# Development related
+f.bat
+a.bat
+*.pem
