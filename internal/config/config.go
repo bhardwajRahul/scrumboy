@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -51,8 +52,9 @@ func FromEnv() Config {
 		SQLiteJournalMode: getenv("SQLITE_JOURNAL_MODE", "WAL"),
 		SQLiteSynchronous: getenv("SQLITE_SYNCHRONOUS", "FULL"),
 
-		ScrumboyMode:           mode,
-		TwoFactorEncryptionKey: getenv("SCRUMBOY_ENCRYPTION_KEY", ""),
+		ScrumboyMode: mode,
+		// Trim whitespace so keys from .env / copy-paste decode (base64 is sensitive to newlines).
+		TwoFactorEncryptionKey: strings.TrimSpace(os.Getenv("SCRUMBOY_ENCRYPTION_KEY")),
 
 		TLSCertFile: getenv("SCRUMBOY_TLS_CERT", "./cert.pem"),
 		TLSKeyFile:  getenv("SCRUMBOY_TLS_KEY", "./key.pem"),

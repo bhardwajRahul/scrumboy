@@ -1,17 +1,18 @@
 package store
 
 import (
-	"errors"
 	"time"
+
+	"scrumboy/internal/errs"
 )
 
 var (
-	ErrNotFound                   = errors.New("not found")
-	ErrConflict                   = errors.New("conflict")
-	ErrValidation                 = errors.New("validation")
-	ErrUnauthorized               = errors.New("unauthorized")
-	ErrTooManyAttempts            = errors.New("too many attempts")
-	Err2FAEncryptionNotConfigured = errors.New("2FA encryption not configured")
+	ErrNotFound                   = errs.ErrNotFound
+	ErrConflict                   = errs.ErrConflict
+	ErrValidation                 = errs.ErrValidation
+	ErrUnauthorized               = errs.ErrUnauthorized
+	ErrTooManyAttempts            = errs.ErrTooManyAttempts
+	Err2FAEncryptionNotConfigured = errs.Err2FAEncryptionNotConfigured
 )
 
 const (
