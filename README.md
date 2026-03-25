@@ -7,47 +7,51 @@
 
 ## Quick Start
 
-### Option 1: Docker (recommended)
+Runs in seconds. No setup required.
 
-**Prerequisites:** Docker + Docker Compose v2
+No `.env` file, TLS certificates, or encryption key are required to start the app.
+
+### Run with Docker
 
 ```bash
-git clone https://github.com/markrai/scrumboy
-cd scrumboy
 docker compose up --build
 ```
 
-Open [http://127.0.0.1:8080](http://127.0.0.1:8080).
+Open [http://localhost:8080](http://localhost:8080).
 
-- **Listen address:** Compose maps `127.0.0.1:8080:8080` (localhost only on the host).
-- **Container env:** `DATA_DIR=/data`, `SQLITE_PATH=/data/app.db`, plus SQLite and body-size overrides as set in `docker-compose.yml`.
-- **Full mode (default):** create your first (bootstrap) user.
-- **Anonymous mode (optional):** set `SCRUMBOY_MODE=anonymous` in `docker-compose.yml` (under `environment:` for the service), then bring the stack up again.
-- **Data on host:** `./data` is mounted to `/data` in the container (your SQLite file lives under `./data` on the machine running Docker).
-
-### Option 2: Run from source
-
-**Prerequisites:** Go 1.22+
+### Run from source
 
 ```bash
-git clone https://github.com/markrai/scrumboy
-cd scrumboy
 go run ./cmd/scrumboy
 ```
 
 Open [http://localhost:8080](http://localhost:8080).
 
-**First run (full mode):** create your bootstrap user.
+## Optional Configuration
 
-**Data & config:** by default the server uses `./data` and `./data/app.db` (relative to the process working directory-run from the repo root). Override paths and other settings with env vars (see **Config** below).
+### Environment variables
 
-**Anonymous mode (quick test, no login):** in Bash, a variable can prefix a single command on one line (no `export` needed):
+Note: `scrumboy.env` is not a standard KEY=value file — it contains only the raw encryption key on a single line.
 
-```bash
-SCRUMBOY_MODE=anonymous go run ./cmd/scrumboy
-```
+- The app does **not** automatically load `.env` files.
+- On Linux/macOS, export variables manually (for example: `export SCRUMBOY_ENCRYPTION_KEY=...`).
+- Windows helper scripts load `scrumboy.env` automatically.
 
-Then open [http://localhost:8080](http://localhost:8080).
+### Encryption key (optional)
+
+- `SCRUMBOY_ENCRYPTION_KEY` is **not** required for basic startup.
+- It is required for:
+  - 2FA
+  - Password reset flows
+- If an existing database already has 2FA-enabled users, startup fails without this key.
+
+Generate a key with: `openssl rand -base64 32`
+
+### TLS / HTTPS (optional)
+
+- TLS is optional.
+- HTTPS is enabled only when both `SCRUMBOY_TLS_CERT` and `SCRUMBOY_TLS_KEY` files exist.
+- Otherwise, the server runs on HTTP by default.
 
 ### Frontend build note
 
@@ -106,6 +110,7 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 # Config
 
 Env vars and defaults are defined in `internal/config/config.go`. ResolveDataDir uses `DATA_DIR` and `SQLITE_PATH` as documented there.
+None of these are required for basic startup.
 
 | Variable | Default (from code) |
 |----------|---------------------|
