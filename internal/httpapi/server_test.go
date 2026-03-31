@@ -536,6 +536,89 @@ func TestAddLane_ResponseAndBoardReflectTrimmedName(t *testing.T) {
 	t.Fatalf("lane %q missing from board", created.Key)
 }
 
+func TestDeleteLane_RequiresMaintainer(t *testing.T) {
+	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t)
+	owner := bootstrapUserClient(t, ownerClient, ts.URL, "Owner", "owner@example.com", "password123")
+	ownerID := int64(owner["id"].(float64))
+
+	st := store.New(sqlDB, nil)
+	ctxOwner := store.WithUserID(context.Background(), ownerID)
+	project, err := st.CreateProject(ctxOwner, "delete-lane-auth")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	added, err := st.AddWorkflowColumn(ctxOwner, project.ID, "Review")
+	if err != nil {
+		t.Fatalf("AddWorkflowColumn: %v", err)
+	}
+
+	contributor, err := st.CreateUser(context.Background(), "deletelane-contrib@example.com", "password123", "Contributor")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := st.AddProjectMember(ctxOwner, ownerID, project.ID, contributor.ID, store.RoleContributor); err != nil {
+		t.Fatalf("AddProjectMember: %v", err)
+	}
+
+	contributorClient := newCookieClient(t)
+	loginUserClient(t, contributorClient, ts.URL, "deletelane-contrib@example.com", "password123")
+
+	resp, body := doJSON(t, contributorClient, http.MethodDelete, ts.URL+"/api/board/"+project.Slug+"/workflow/"+added.Key, nil, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d body=%s", resp.StatusCode, string(body))
+	}
+}
+
+func TestDeleteLane_BoardNoLongerShowsLane(t *testing.T) {
+	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t)
+	owner := bootstrapUserClient(t, ownerClient, ts.URL, "Owner", "owner@example.com", "password123")
+	ownerID := int64(owner["id"].(float64))
+
+	st := store.New(sqlDB, nil)
+	project, err := st.CreateProject(store.WithUserID(context.Background(), ownerID), "delete-lane-board")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	added, err := st.AddWorkflowColumn(store.WithUserID(context.Background(), ownerID), project.ID, "Review")
+	if err != nil {
+		t.Fatalf("AddWorkflowColumn: %v", err)
+	}
+
+	resp, body := doJSON(t, ownerClient, http.MethodDelete, ts.URL+"/api/board/"+project.Slug+"/workflow/"+added.Key, nil, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete lane status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var board struct {
+		ColumnOrder []struct {
+			Key    string `json:"key"`
+			IsDone bool   `json:"isDone"`
+		} `json:"columnOrder"`
+	}
+	resp, body = doJSON(t, ownerClient, http.MethodGet, ts.URL+"/api/board/"+project.Slug, nil, &board)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get board status=%d body=%s", resp.StatusCode, string(body))
+	}
+	doneCount := 0
+	for _, lane := range board.ColumnOrder {
+		if lane.Key == added.Key {
+			t.Fatalf("expected lane %q to be removed from board", added.Key)
+		}
+		if lane.IsDone {
+			doneCount++
+		}
+	}
+	if doneCount != 1 {
+		t.Fatalf("expected exactly one done lane, got %d", doneCount)
+	}
+}
+
 func TestFullMode_MultiProjectBehavior(t *testing.T) {
 	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
 	defer cleanup()
@@ -2094,9 +2177,9 @@ func TestAPI_BoardPagedAndLaneEndpoint(t *testing.T) {
 
 	// GET /api/board/{slug}?limitPerLane=10 returns columnsMeta
 	var board struct {
-		Project      map[string]any            `json:"project"`
-		Columns      map[string][]any          `json:"columns"`
-		ColumnsMeta  map[string]map[string]any `json:"columnsMeta"`
+		Project     map[string]any            `json:"project"`
+		Columns     map[string][]any          `json:"columns"`
+		ColumnsMeta map[string]map[string]any `json:"columnsMeta"`
 	}
 	resp, _ = doJSON(t, client, http.MethodGet, ts.URL+"/api/board/"+p.Slug+"?limitPerLane=10", nil, &board)
 	if resp.StatusCode != http.StatusOK {

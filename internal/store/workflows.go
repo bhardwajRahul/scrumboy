@@ -447,6 +447,116 @@ VALUES (?, ?, ?, ?, ?, 0, 0)`, projectID, key, name, defaultWorkflowColor, inser
 	}, nil
 }
 
+func (s *Store) DeleteWorkflowColumn(ctx context.Context, projectID int64, key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return fmt.Errorf("%w: invalid workflow column key", ErrValidation)
+	}
+
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin delete workflow column tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	loadWorkflow := func() ([]WorkflowColumn, error) {
+		rows, err := tx.QueryContext(ctx, `
+SELECT id, project_id, key, name, color, position, is_done, system
+FROM project_workflow_columns
+WHERE project_id = ?
+ORDER BY position ASC, id ASC`, projectID)
+		if err != nil {
+			return nil, fmt.Errorf("list workflow columns for delete: %w", err)
+		}
+		defer rows.Close()
+		out := make([]WorkflowColumn, 0, 8)
+		for rows.Next() {
+			var col WorkflowColumn
+			var isDone, isSystem int
+			if err := rows.Scan(&col.ID, &col.ProjectID, &col.Key, &col.Name, &col.Color, &col.Position, &isDone, &isSystem); err != nil {
+				return nil, fmt.Errorf("scan workflow column for delete: %w", err)
+			}
+			col.IsDone = isDone == 1
+			col.System = isSystem == 1
+			out = append(out, col)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("rows workflow columns for delete: %w", err)
+		}
+		return out, nil
+	}
+
+	workflow, err := loadWorkflow()
+	if err != nil {
+		return err
+	}
+	if len(workflow) == 0 {
+		if err := s.ensureDefaultWorkflowColumnsExec(ctx, tx, tx, projectID); err != nil {
+			return err
+		}
+		workflow, err = loadWorkflow()
+		if err != nil {
+			return err
+		}
+	}
+
+	targetIdx := -1
+	for i, col := range workflow {
+		if col.Key == key {
+			targetIdx = i
+			break
+		}
+	}
+	if targetIdx < 0 {
+		return ErrNotFound
+	}
+	target := workflow[targetIdx]
+	if target.IsDone {
+		return fmt.Errorf("%w: cannot delete done workflow column", ErrValidation)
+	}
+	if len(workflow) <= 2 {
+		return fmt.Errorf("%w: project workflow must have at least 2 columns", ErrValidation)
+	}
+
+	var todoCount int
+	if err := tx.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM todos
+WHERE project_id = ? AND column_key = ?`, projectID, key).Scan(&todoCount); err != nil {
+		return fmt.Errorf("count todos for workflow column delete: %w", err)
+	}
+	if todoCount > 0 {
+		return fmt.Errorf("%w: workflow column is not empty", ErrConflict)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+DELETE FROM project_workflow_columns
+WHERE id = ?`, target.ID); err != nil {
+		return fmt.Errorf("delete workflow column: %w", err)
+	}
+
+	nextPos := 0
+	for i, col := range workflow {
+		if i == targetIdx {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+UPDATE project_workflow_columns
+SET position = ?
+WHERE id = ?`, nextPos, col.ID); err != nil {
+			return fmt.Errorf("resequence workflow columns after delete: %w", err)
+		}
+		nextPos++
+	}
+
+	if err := validateExactlyOneDoneColumn(ctx, tx, projectID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete workflow column tx: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) ValidateProjectColumnKey(ctx context.Context, projectID int64, columnKey string) (WorkflowColumn, error) {
 	return validateProjectColumnKeyQueryer(ctx, s.db, projectID, columnKey)
 }
