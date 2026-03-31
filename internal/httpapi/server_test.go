@@ -224,7 +224,8 @@ func TestRenameLane_RequiresMaintainer(t *testing.T) {
 	loginUserClient(t, contributorClient, ts.URL, "contrib@example.com", "password123")
 
 	resp, body := doJSON(t, contributorClient, http.MethodPatch, ts.URL+"/api/board/"+project.Slug+"/workflow/"+store.DefaultColumnDoing, map[string]any{
-		"name": "Working",
+		"name":  "Working",
+		"color": "#10B981",
 	}, nil)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d body=%s", resp.StatusCode, string(body))
@@ -246,7 +247,8 @@ func TestRenameLane_NonexistentKeyReturns404(t *testing.T) {
 	}
 
 	resp, body := doJSON(t, ownerClient, http.MethodPatch, ts.URL+"/api/board/"+project.Slug+"/workflow/not_a_lane", map[string]any{
-		"name": "Working",
+		"name":  "Working",
+		"color": "#10B981",
 	}, nil)
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", resp.StatusCode, string(body))
@@ -273,23 +275,31 @@ func TestRenameLane_EmptyNameRejected(t *testing.T) {
 	}{
 		{
 			name: "WhitespaceOnly",
-			body: map[string]any{"name": "   "},
+			body: map[string]any{"name": "   ", "color": "#10B981"},
 		},
 		{
-			name: "RejectsColor",
-			body: map[string]any{"name": "Working", "color": "#123456"},
+			name: "EmptyColor",
+			body: map[string]any{"name": "Working", "color": ""},
+		},
+		{
+			name: "MissingColor",
+			body: map[string]any{"name": "Working"},
+		},
+		{
+			name: "InvalidColor",
+			body: map[string]any{"name": "Working", "color": "#gggggg"},
 		},
 		{
 			name: "RejectsKey",
-			body: map[string]any{"name": "Working", "key": "other"},
+			body: map[string]any{"name": "Working", "color": "#10B981", "key": "other"},
 		},
 		{
 			name: "RejectsIsDone",
-			body: map[string]any{"name": "Working", "isDone": true},
+			body: map[string]any{"name": "Working", "color": "#10B981", "isDone": true},
 		},
 		{
 			name: "RejectsPosition",
-			body: map[string]any{"name": "Working", "position": 1},
+			body: map[string]any{"name": "Working", "color": "#10B981", "position": 1},
 		},
 	}
 	for _, tc := range tests {
@@ -317,7 +327,8 @@ func TestRenameLane_BoardAPIReflectsNewName(t *testing.T) {
 	}
 
 	resp, body := doJSON(t, ownerClient, http.MethodPatch, ts.URL+"/api/board/"+project.Slug+"/workflow/"+store.DefaultColumnDoing, map[string]any{
-		"name": "Working",
+		"name":  "Working",
+		"color": "#aabbcc",
 	}, nil)
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("rename lane status=%d body=%s", resp.StatusCode, string(body))
@@ -325,8 +336,9 @@ func TestRenameLane_BoardAPIReflectsNewName(t *testing.T) {
 
 	var board struct {
 		ColumnOrder []struct {
-			Key  string `json:"key"`
-			Name string `json:"name"`
+			Key   string `json:"key"`
+			Name  string `json:"name"`
+			Color string `json:"color"`
 		} `json:"columnOrder"`
 	}
 	resp, body = doJSON(t, ownerClient, http.MethodGet, ts.URL+"/api/board/"+project.Slug, nil, &board)
@@ -337,6 +349,9 @@ func TestRenameLane_BoardAPIReflectsNewName(t *testing.T) {
 		if lane.Key == store.DefaultColumnDoing {
 			if lane.Name != "Working" {
 				t.Fatalf("expected lane name %q, got %q", "Working", lane.Name)
+			}
+			if lane.Color != "#aabbcc" {
+				t.Fatalf("expected lane color %q, got %q", "#aabbcc", lane.Color)
 			}
 			return
 		}

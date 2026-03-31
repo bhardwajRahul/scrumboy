@@ -11,6 +11,12 @@ import (
 var columnKeyRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9_]*[a-z0-9])?$`)
 var colorHexRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
+// ValidWorkflowColumnColor reports whether s is a non-empty #RRGGBB hex string.
+func ValidWorkflowColumnColor(s string) bool {
+	s = strings.TrimSpace(s)
+	return s != "" && colorHexRe.MatchString(s)
+}
+
 const (
 	maxWorkflowColumns     = 12
 	defaultWorkflowColor   = "#64748b"
@@ -301,22 +307,30 @@ LIMIT 1`, projectID).Scan(&key); err != nil {
 	return key, nil
 }
 
-func (s *Store) UpdateWorkflowColumnName(ctx context.Context, projectID int64, key, newName string) error {
+// UpdateWorkflowColumn sets the display name and color for a workflow lane. Key, position, is_done, and system are unchanged.
+func (s *Store) UpdateWorkflowColumn(ctx context.Context, projectID int64, key, name, color string) error {
 	key = strings.TrimSpace(key)
-	newName = strings.TrimSpace(newName)
-	if newName == "" || len(newName) > maxWorkflowNameLength {
+	if key == "" {
+		return fmt.Errorf("%w: invalid workflow column key", ErrValidation)
+	}
+	name = strings.TrimSpace(name)
+	color = strings.TrimSpace(color)
+	if name == "" || len(name) > maxWorkflowNameLength {
 		return fmt.Errorf("%w: invalid workflow column name", ErrValidation)
+	}
+	if color == "" || !colorHexRe.MatchString(color) {
+		return fmt.Errorf("%w: invalid workflow column color", ErrValidation)
 	}
 	res, err := s.db.ExecContext(ctx, `
 UPDATE project_workflow_columns
-SET name = ?
-WHERE project_id = ? AND key = ?`, newName, projectID, key)
+SET name = ?, color = ?
+WHERE project_id = ? AND key = ?`, name, color, projectID, key)
 	if err != nil {
-		return fmt.Errorf("update workflow column name: %w", err)
+		return fmt.Errorf("update workflow column: %w", err)
 	}
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("rows affected update workflow column name: %w", err)
+		return fmt.Errorf("rows affected update workflow column: %w", err)
 	}
 	if rowsAffected == 0 {
 		return ErrNotFound

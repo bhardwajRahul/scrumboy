@@ -81,7 +81,7 @@ type storeAPI interface {
 	UpdateProjectDefaultSprintWeeks(ctx context.Context, projectID int64, userID int64, weeks int) error
 	AddWorkflowColumn(ctx context.Context, projectID int64, name string) (store.WorkflowColumn, error)
 	DeleteWorkflowColumn(ctx context.Context, projectID int64, key string) error
-	UpdateWorkflowColumnName(ctx context.Context, projectID int64, key, newName string) error
+	UpdateWorkflowColumn(ctx context.Context, projectID int64, key, name, color string) error
 	GetProjectRole(ctx context.Context, projectID int64, userID int64) (store.ProjectRole, error)
 	CheckProjectRole(ctx context.Context, projectID int64, userID int64, requiredRole store.ProjectRole) error
 	ListProjectMembers(ctx context.Context, projectID int64, userID int64) ([]store.ProjectMember, error)
