@@ -575,6 +575,11 @@ function msToDateTimeLocalStr(ms) {
     const mm = String(d.getMinutes()).padStart(2, "0");
     return `${y}-${m}-${day}T${hh}:${mm}`;
 }
+const DEFAULT_WORKFLOW_LANE_COLOR = "#64748b";
+function normalizeWorkflowLaneColorForInput(color) {
+    const s = color?.trim();
+    return s && /^#[0-9a-fA-F]{6}$/.test(s) ? s : DEFAULT_WORKFLOW_LANE_COLOR;
+}
 function renderWorkflowTabContent() {
     const board = getBoard();
     const workflow = board?.columnOrder ?? [];
@@ -588,7 +593,7 @@ function renderWorkflowTabContent() {
     return `
     <div class="settings-section">
       <div class="settings-section__title">Workflow</div>
-      <div class="settings-section__description muted">Rename lane labels or add a non-done lane inserted immediately before the done lane (whatever its label). Keys stay immutable.</div>
+      <div class="settings-section__description muted">Rename lane labels and colors, or add a non-done lane inserted immediately before the done lane (whatever its label). Keys stay immutable.</div>
       <div class="settings-workflow-create" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px;">
         <label class="field" style="flex:1; min-width:0; margin:0;">
           <div class="field__label">New lane name</div>
@@ -613,6 +618,14 @@ function renderWorkflowTabContent() {
               maxlength="200"
               aria-label="Lane label for ${escapeHTML(lane.key)}"
               style="flex:1; min-width:0;"
+            />
+            <input
+              type="color"
+              class="settings-color-picker"
+              data-workflow-color="${escapeHTML(lane.key)}"
+              value="${escapeHTML(normalizeWorkflowLaneColorForInput(lane.color))}"
+              aria-label="Lane color for ${escapeHTML(lane.key)}"
+              title="Lane color"
             />
             <button class="btn btn--ghost btn--small" type="button" data-workflow-save="${escapeHTML(lane.key)}">Save</button>
             ${lane.isDone ? `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Done lane cannot be deleted">Delete</button>` : `<button class="btn btn--danger btn--small" type="button" data-workflow-delete="${escapeHTML(lane.key)}" ${canDeleteAnyLane ? "" : `disabled aria-disabled="true" title="Workflow must keep at least 2 lanes"`}>Delete</button>`}
@@ -647,32 +660,35 @@ async function addWorkflowLane(name) {
         showToast(err.message || "Failed to add lane");
     }
 }
-async function renameWorkflowLaneLabel(key, name) {
+async function updateWorkflowLane(key, payload) {
     const slug = getSlug();
     if (!slug) {
         showToast("No project available");
         return;
     }
-    const trimmed = name.trim();
+    const trimmed = payload.name.trim();
     if (!trimmed) {
         showToast("Lane name is required");
         return;
     }
-    const currentName = getBoard()?.columnOrder?.find((lane) => lane.key === key)?.name?.trim();
-    if (currentName === trimmed)
+    const color = payload.color.trim();
+    const lane = getBoard()?.columnOrder?.find((l) => l.key === key);
+    const prevColor = (lane?.color ?? DEFAULT_WORKFLOW_LANE_COLOR).toLowerCase();
+    if (trimmed === lane?.name?.trim() && color.toLowerCase() === prevColor) {
         return;
+    }
     try {
         recordLocalMutation();
         await apiFetch(`/api/board/${slug}/workflow/${encodeURIComponent(key)}`, {
             method: "PATCH",
-            body: JSON.stringify({ name: trimmed }),
+            body: JSON.stringify({ name: trimmed, color }),
         });
         await invalidateBoard(slug, getTag(), getSearch(), getSprintIdFromUrl());
         await renderSettingsModal();
-        showToast("Lane label updated");
+        showToast("Lane updated");
     }
     catch (err) {
-        showToast(err.message || "Failed to update lane label");
+        showToast(err.message || "Failed to update lane");
     }
 }
 async function deleteWorkflowLane(key) {
@@ -1341,18 +1357,20 @@ export async function renderSettingsModal(options) {
                 addLane();
             }, { signal });
         }
-        const bindRename = (key) => {
-            const input = document.querySelector(`[data-workflow-name="${key}"]`);
-            if (!input)
+        const saveWorkflowLane = (key) => {
+            const row = document.querySelector(`[data-workflow-key="${key}"]`);
+            const nameInput = row?.querySelector("[data-workflow-name]");
+            const colorInput = row?.querySelector("[data-workflow-color]");
+            if (!nameInput || !colorInput)
                 return;
-            renameWorkflowLaneLabel(key, input.value);
+            updateWorkflowLane(key, { name: nameInput.value, color: colorInput.value });
         };
         document.querySelectorAll("[data-workflow-save]").forEach((btn) => {
             btn.addEventListener("click", () => {
                 const key = btn.getAttribute("data-workflow-save");
                 if (!key)
                     return;
-                bindRename(key);
+                saveWorkflowLane(key);
             }, { signal });
         });
         document.querySelectorAll("[data-workflow-name]").forEach((inputEl) => {
@@ -1363,7 +1381,18 @@ export async function renderSettingsModal(options) {
                 const key = inputEl.getAttribute("data-workflow-name");
                 if (!key)
                     return;
-                bindRename(key);
+                saveWorkflowLane(key);
+            }, { signal });
+        });
+        document.querySelectorAll("[data-workflow-color]").forEach((colorEl) => {
+            colorEl.addEventListener("keydown", (e) => {
+                if (e.key !== "Enter")
+                    return;
+                e.preventDefault();
+                const key = colorEl.getAttribute("data-workflow-color");
+                if (!key)
+                    return;
+                saveWorkflowLane(key);
             }, { signal });
         });
         document.querySelectorAll("[data-workflow-delete]").forEach((btn) => {
