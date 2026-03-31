@@ -32,8 +32,10 @@ type authCapabilities struct {
 }
 
 type identityCapabilities struct {
-	Project string   `json:"project"`
-	Todo    []string `json:"todo"`
+	Project       string   `json:"project"`
+	Todo          []string `json:"todo"`
+	ProjectMember []string `json:"projectMember,omitempty"`
+	AvailableUser []string `json:"availableUser,omitempty"`
 }
 
 type paginationCapabilities struct {
@@ -112,4 +114,25 @@ type mineTagItem struct {
 	Name      string  `json:"name"`
 	Color     *string `json:"color"`
 	CanDelete bool    `json:"canDelete"`
+}
+
+type projectMemberItem struct {
+	ProjectSlug string    `json:"projectSlug"`
+	UserID      int64     `json:"userId"`
+	Email       string    `json:"email"`
+	Name        string    `json:"name"`
+	Image       *string   `json:"image,omitempty"`
+	Role        string    `json:"role"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// availableUserItem is the shape for members.listAvailable only (users not yet in the project).
+// It intentionally omits fields the store does not load for that query (e.g. image).
+type availableUserItem struct {
+	UserID      int64     `json:"userId"`
+	Email       string    `json:"email"`
+	Name        string    `json:"name"`
+	SystemRole  string    `json:"systemRole"`
+	IsBootstrap bool      `json:"isBootstrap"`
+	CreatedAt   time.Time `json:"createdAt"`
 }

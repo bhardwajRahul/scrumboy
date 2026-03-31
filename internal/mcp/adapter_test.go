@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"testing"
 	"time"
@@ -195,6 +196,44 @@ func bootstrapUser(t *testing.T, client *http.Client, baseURL string) {
 	}
 }
 
+func insertProjectScopedTag(t *testing.T, sqlDB *sql.DB, projectID int64, name string, color *string) int64 {
+	t.Helper()
+	nowMs := time.Now().UTC().UnixMilli()
+	var colorArg any
+	if color != nil {
+		colorArg = *color
+	}
+	res, err := sqlDB.Exec(`INSERT INTO tags(user_id, project_id, name, created_at, color) VALUES (NULL, ?, ?, ?, ?)`, projectID, name, nowMs, colorArg)
+	if err != nil {
+		t.Fatalf("insert project-scoped tag: %v", err)
+	}
+	tagID, err := res.LastInsertId()
+	if err != nil {
+		t.Fatalf("project tag last insert id: %v", err)
+	}
+	return tagID
+}
+
+func newSessionClientForUser(t *testing.T, ts *httptest.Server, st *store.Store, userID int64) *http.Client {
+	t.Helper()
+	client := newCookieClient(t, ts)
+	token, expiresAt, err := st.CreateSession(context.Background(), userID, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatalf("parse server url: %v", err)
+	}
+	client.Jar.SetCookies(u, []*http.Cookie{{
+		Name:    "scrumboy_session",
+		Value:   token,
+		Path:    "/",
+		Expires: expiresAt,
+	}})
+	return client
+}
+
 func TestMCPMountDoesNotBreakSPARoutes(t *testing.T) {
 	ts, _, cleanup := newTestServer(t, "full")
 	defer cleanup()
@@ -260,7 +299,7 @@ func TestMCPSystemGetCapabilities_FullPreBootstrap(t *testing.T) {
 		t.Fatalf("expected authenticatedToolsUsable false, got %#v", auth["authenticatedToolsUsable"])
 	}
 	tools := data["implementedTools"].([]any)
-	if len(tools) != 19 || tools[0] != "system.getCapabilities" || tools[1] != "projects.list" || tools[2] != "todos.create" || tools[3] != "todos.get" || tools[4] != "todos.search" || tools[5] != "todos.update" || tools[6] != "todos.delete" || tools[7] != "todos.move" || tools[8] != "sprints.list" || tools[9] != "sprints.get" || tools[10] != "sprints.getActive" || tools[11] != "sprints.create" || tools[12] != "sprints.activate" || tools[13] != "sprints.close" || tools[14] != "sprints.update" || tools[15] != "sprints.delete" || tools[16] != "tags.listProject" || tools[17] != "tags.listMine" || tools[18] != "tags.updateMineColor" {
+	if len(tools) != 22 || tools[0] != "system.getCapabilities" || tools[1] != "projects.list" || tools[2] != "todos.create" || tools[3] != "todos.get" || tools[4] != "todos.search" || tools[5] != "todos.update" || tools[6] != "todos.delete" || tools[7] != "todos.move" || tools[8] != "sprints.list" || tools[9] != "sprints.get" || tools[10] != "sprints.getActive" || tools[11] != "sprints.create" || tools[12] != "sprints.activate" || tools[13] != "sprints.close" || tools[14] != "sprints.update" || tools[15] != "sprints.delete" || tools[16] != "tags.listProject" || tools[17] != "tags.listMine" || tools[18] != "tags.updateMineColor" || tools[19] != "tags.updateProjectColor" || tools[20] != "members.list" || tools[21] != "members.listAvailable" {
 		t.Fatalf("unexpected implementedTools: %#v", tools)
 	}
 	planned := data["plannedTools"].([]any)
@@ -2815,6 +2854,51 @@ func TestMCPTagsUpdateMineColorMalformedColorValidation(t *testing.T) {
 	}
 }
 
+func TestMCPTagsUpdateMineColorRejectsEmptyStringClear(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Tag Empty Clear Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Tag Empty Clear Project")
+
+	doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "todos.create",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"title":       "Tagged todo",
+			"tags":        []string{"backend"},
+		},
+	})
+
+	_, mine := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool":  "tags.listMine",
+		"input": map[string]any{},
+	})
+	tagID := mine["data"].(map[string]any)["items"].([]any)[0].(map[string]any)["tagId"]
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateMineColor",
+		"input": map[string]any{
+			"tagId": tagID,
+			"color": "",
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR, got %#v", errObj["code"])
+	}
+}
+
 func TestMCPTagsUpdateMineColorMalformedInputValidation(t *testing.T) {
 	ts, _, cleanup := newTestServer(t, "full")
 	defer cleanup()
@@ -2879,6 +2963,517 @@ func TestMCPTagsUpdateMineColorCapabilityUnavailableInAnonymousMode(t *testing.T
 	errObj := out["error"].(map[string]any)
 	if errObj["code"] != "CAPABILITY_UNAVAILABLE" {
 		t.Fatalf("expected CAPABILITY_UNAVAILABLE, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPTagsUpdateProjectColorSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Project Tag Color Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Project Tag Color Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "backend", nil)
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateProjectColor",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+			"color":       "#7c3aed",
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	tag := out["data"].(map[string]any)["tag"].(map[string]any)
+	if tag["tagId"] != float64(tagID) || tag["name"] != "backend" {
+		t.Fatalf("unexpected tag response: %#v", tag)
+	}
+	if tag["color"] != "#7c3aed" {
+		t.Fatalf("expected updated color, got %#v", tag["color"])
+	}
+	if _, ok := out["meta"].(map[string]any); !ok {
+		t.Fatalf("expected meta object, got %#v", out["meta"])
+	}
+}
+
+// TestMCPTagsUpdateProjectColorVisibleToOtherMemberViaListProject checks that a project-scoped
+// color change is stored on the shared tag row (tags.color), not as a per-viewer preference:
+// a different project member sees the same color via tags.listProject / ListTagCounts.
+// The maintainer updates color before adding the viewer so the write path is unambiguously the owner session.
+func TestMCPTagsUpdateProjectColorVisibleToOtherMemberViaListProject(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Project Tag Shared Color",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Project Tag Shared Color")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "backend", nil)
+
+	wantColor := "#aabbcc"
+	resp2, _ := doMCP(t, ownerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateProjectColor",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+			"color":       wantColor,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("update project color status=%d", resp2.StatusCode)
+	}
+
+	st := store.New(sqlDB, nil)
+	viewer, err := st.CreateUser(context.Background(), "viewer2@example.com", "password123", "Viewer2")
+	if err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, viewer.ID, store.RoleViewer); err != nil {
+		t.Fatalf("add viewer membership: %v", err)
+	}
+	viewerClient := newSessionClientForUser(t, ts, st, viewer.ID)
+
+	resp3, listOut := doMCP(t, viewerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.listProject",
+		"input": map[string]any{
+			"projectSlug": slug,
+		},
+	})
+	if resp3.StatusCode != http.StatusOK {
+		t.Fatalf("tags.listProject status=%d", resp3.StatusCode)
+	}
+	items := listOut["data"].(map[string]any)["items"].([]any)
+	var found bool
+	for _, it := range items {
+		m := it.(map[string]any)
+		if int64(m["tagId"].(float64)) != tagID {
+			continue
+		}
+		found = true
+		if m["color"] != wantColor {
+			t.Fatalf("viewer expected shared project color %q, got %#v", wantColor, m["color"])
+		}
+	}
+	if !found {
+		t.Fatalf("tag %d not in listProject items: %#v", tagID, items)
+	}
+}
+
+func TestMCPTagsUpdateProjectColorPermissionFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Project Tag Permission Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Project Tag Permission Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "backend", nil)
+
+	st := store.New(sqlDB, nil)
+	viewer, err := st.CreateUser(context.Background(), "viewer@example.com", "password123", "Viewer")
+	if err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, viewer.ID, store.RoleViewer); err != nil {
+		t.Fatalf("add viewer membership: %v", err)
+	}
+	viewerClient := newSessionClientForUser(t, ts, st, viewer.ID)
+
+	resp2, out := doMCP(t, viewerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateProjectColor",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+			"color":       "#7c3aed",
+		},
+	})
+	if resp2.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPTagsUpdateProjectColorWrongProjectNotFound(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Project Tag First",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	resp = doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Project Tag Second",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create second project status=%d", resp.StatusCode)
+	}
+	firstSlug := projectSlugByName(t, sqlDB, "Project Tag First")
+	secondSlug := projectSlugByName(t, sqlDB, "Project Tag Second")
+	secondProjectID := projectIDBySlug(t, sqlDB, secondSlug)
+	tagID := insertProjectScopedTag(t, sqlDB, secondProjectID, "backend", nil)
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateProjectColor",
+		"input": map[string]any{
+			"projectSlug": firstSlug,
+			"tagId":       tagID,
+			"color":       "#7c3aed",
+		},
+	})
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPTagsUpdateProjectColorMalformedColorValidation(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Project Tag Bad Color",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Project Tag Bad Color")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "backend", nil)
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateProjectColor",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+			"color":       "purple",
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPTagsUpdateProjectColorClearSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	initialColor := "#7c3aed"
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Project Tag Clear",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Project Tag Clear")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "backend", &initialColor)
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateProjectColor",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+			"color":       nil,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	tag := out["data"].(map[string]any)["tag"].(map[string]any)
+	if tag["color"] != nil {
+		t.Fatalf("expected cleared project color, got %#v", tag["color"])
+	}
+}
+
+func TestMCPTagsUpdateProjectColorAuthFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Project Tag Auth Failure",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Project Tag Auth Failure")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "backend", nil)
+
+	resp, out := doMCP(t, newStatelessClient(ts), ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateProjectColor",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+			"color":       "#7c3aed",
+		},
+	})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "AUTH_REQUIRED" {
+		t.Fatalf("expected AUTH_REQUIRED, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPTagsUpdateProjectColorCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "tags.updateProjectColor",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"tagId":       1,
+			"color":       "#7c3aed",
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersListSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members List Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members List Project")
+	ownerID := firstUserID(t, sqlDB)
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.list",
+		"input": map[string]any{
+			"projectSlug": slug,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	data := out["data"].(map[string]any)
+	items := data["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected one member, got %d", len(items))
+	}
+	m := items[0].(map[string]any)
+	if m["projectSlug"] != slug {
+		t.Fatalf("projectSlug: %#v", m["projectSlug"])
+	}
+	if int64(m["userId"].(float64)) != ownerID {
+		t.Fatalf("userId: %#v", m["userId"])
+	}
+	if m["email"] != "owner@example.com" {
+		t.Fatalf("email: %#v", m["email"])
+	}
+	if m["role"] != "maintainer" {
+		t.Fatalf("role: %#v", m["role"])
+	}
+	if _, ok := out["meta"].(map[string]any); !ok {
+		t.Fatalf("expected meta object, got %#v", out["meta"])
+	}
+}
+
+func TestMCPMembersListAvailableSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Avail Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Avail Project")
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "other@example.com", "password123", "Other")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.listAvailable",
+		"input": map[string]any{
+			"projectSlug": slug,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	items := out["data"].(map[string]any)["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected one available user, got %d", len(items))
+	}
+	u := items[0].(map[string]any)
+	if int64(u["userId"].(float64)) != other.ID {
+		t.Fatalf("userId: %#v", u["userId"])
+	}
+	if u["email"] != "other@example.com" {
+		t.Fatalf("email: %#v", u["email"])
+	}
+}
+
+func TestMCPMembersListAuthFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Auth Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Auth Project")
+
+	resp2, out := doMCP(t, newStatelessClient(ts), ts.URL+"/mcp", map[string]any{
+		"tool": "members.list",
+		"input": map[string]any{
+			"projectSlug": slug,
+		},
+	})
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "AUTH_REQUIRED" {
+		t.Fatalf("expected AUTH_REQUIRED, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersListCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "members.list",
+		"input": map[string]any{
+			"projectSlug": "demo",
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersListAvailableCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "members.listAvailable",
+		"input": map[string]any{
+			"projectSlug": "demo",
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersListAvailablePermissionFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Perm Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Perm Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	viewer, err := st.CreateUser(context.Background(), "vmem@example.com", "password123", "V")
+	if err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, viewer.ID, store.RoleViewer); err != nil {
+		t.Fatalf("add viewer: %v", err)
+	}
+	viewerClient := newSessionClientForUser(t, ts, st, viewer.ID)
+
+	resp2, out := doMCP(t, viewerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "members.listAvailable",
+		"input": map[string]any{
+			"projectSlug": slug,
+		},
+	})
+	if resp2.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN, got %#v", errObj["code"])
 	}
 }
 

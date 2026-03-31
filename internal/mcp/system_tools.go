@@ -13,8 +13,10 @@ func (a *Adapter) handleSystemGetCapabilities(ctx context.Context, input any) (a
 		Auth:               auth,
 		BootstrapAvailable: bootstrapAvailable,
 		Identity: identityCapabilities{
-			Project: "projectSlug",
-			Todo:    []string{"projectSlug", "localId"},
+			Project:       "projectSlug",
+			Todo:          []string{"projectSlug", "localId"},
+			ProjectMember: []string{"projectSlug", "userId"},
+			AvailableUser: []string{"userId"},
 		},
 		Pagination: paginationCapabilities{
 			DefaultInput:       []string{"limit", "cursor"},
