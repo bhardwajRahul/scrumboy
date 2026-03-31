@@ -1115,7 +1115,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 		return
 	}
 
-	// PATCH /api/board/{slug}/workflow/{key} - rename workflow lane label only.
+	// PATCH /api/board/{slug}/workflow/{key} - update workflow lane label and color.
 	if len(rest) == 3 && rest[1] == "workflow" && r.Method == http.MethodPatch {
 		ctx := s.requestContext(r)
 		userID, ok := store.UserIDFromContext(ctx)
@@ -1135,12 +1135,14 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 		}
 
 		var in struct {
-			Name string `json:"name"`
+			Name  string `json:"name"`
+			Color string `json:"color"`
 		}
 		if err := readJSON(w, r, s.maxBody, &in); err != nil {
 			return
 		}
 		in.Name = strings.TrimSpace(in.Name)
+		in.Color = strings.TrimSpace(in.Color)
 		if in.Name == "" {
 			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name required", map[string]any{"field": "name"})
 			return
@@ -1149,11 +1151,19 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow column name", map[string]any{"field": "name"})
 			return
 		}
-		if err := s.store.UpdateWorkflowColumnName(ctx, project.ID, columnKey, in.Name); err != nil {
+		if in.Color == "" {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "color required", map[string]any{"field": "color"})
+			return
+		}
+		if !store.ValidWorkflowColumnColor(in.Color) {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow column color", map[string]any{"field": "color"})
+			return
+		}
+		if err := s.store.UpdateWorkflowColumn(ctx, project.ID, columnKey, in.Name, in.Color); err != nil {
 			writeStoreErr(w, err, true)
 			return
 		}
-		s.emitRefreshNeeded(project.ID, "workflow_column_renamed")
+		s.emitRefreshNeeded(project.ID, "workflow_column_updated")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
