@@ -11,6 +11,13 @@ import (
 var columnKeyRe = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9_]*[a-z0-9])?$`)
 var colorHexRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
+const (
+	maxWorkflowColumns     = 12
+	defaultWorkflowColor   = "#64748b"
+	maxWorkflowNameLength  = 200
+	maxWorkflowKeyAttempts = 1000
+)
+
 type sqlExecer interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
@@ -37,6 +44,67 @@ func HumanizeColumnKey(key string) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func workflowKeyFromName(name string) string {
+	key := strings.ToLower(strings.TrimSpace(name))
+	key = strings.Join(strings.Fields(key), "_")
+	var b strings.Builder
+	b.Grow(len(key))
+	lastUnderscore := false
+	for _, r := range key {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastUnderscore = false
+		case r == '_':
+			if !lastUnderscore {
+				b.WriteByte('_')
+				lastUnderscore = true
+			}
+		default:
+			if !lastUnderscore {
+				b.WriteByte('_')
+				lastUnderscore = true
+			}
+		}
+	}
+	key = strings.Trim(b.String(), "_")
+	if len(key) > maxSlugLen {
+		key = strings.Trim(key[:maxSlugLen], "_")
+	}
+	if key == "" {
+		return "lane"
+	}
+	return key
+}
+
+func uniqueWorkflowKey(baseKey string, used map[string]struct{}) (string, error) {
+	if _, exists := used[baseKey]; !exists && isValidColumnKey(baseKey) {
+		return baseKey, nil
+	}
+	for i := 2; i <= maxWorkflowKeyAttempts; i++ {
+		suffix := fmt.Sprintf("_%d", i)
+		candidate := baseKey
+		if len(candidate)+len(suffix) > maxSlugLen {
+			candidate = strings.Trim(candidate[:maxSlugLen-len(suffix)], "_")
+		}
+		if candidate == "" {
+			candidate = "lane"
+			if len(candidate)+len(suffix) > maxSlugLen {
+				candidate = candidate[:maxSlugLen-len(suffix)]
+			}
+		}
+		candidate += suffix
+		if !isValidColumnKey(candidate) {
+			continue
+		}
+		if _, exists := used[candidate]; exists {
+			continue
+		}
+		return candidate, nil
+	}
+	return "", fmt.Errorf("%w: could not generate unique workflow column key", ErrConflict)
 }
 
 func defaultWorkflowColumns() []WorkflowColumn {
@@ -179,6 +247,46 @@ ORDER BY position ASC, id ASC`, projectID)
 	return out, nil
 }
 
+func (s *Store) GetProjectWorkflows(ctx context.Context, projectIDs []int64) (map[int64][]WorkflowColumn, error) {
+	out := make(map[int64][]WorkflowColumn, len(projectIDs))
+	if len(projectIDs) == 0 {
+		return out, nil
+	}
+	args := make([]any, 0, len(projectIDs))
+	seen := make(map[int64]struct{}, len(projectIDs))
+	for _, projectID := range projectIDs {
+		if _, ok := seen[projectID]; ok {
+			continue
+		}
+		seen[projectID] = struct{}{}
+		args = append(args, projectID)
+		out[projectID] = []WorkflowColumn{}
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT id, project_id, key, name, color, position, is_done, system
+FROM project_workflow_columns
+WHERE project_id IN `+makePlaceholders(len(args))+`
+ORDER BY project_id ASC, position ASC, id ASC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list workflow columns for projects: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var col WorkflowColumn
+		var isDone, isSystem int
+		if err := rows.Scan(&col.ID, &col.ProjectID, &col.Key, &col.Name, &col.Color, &col.Position, &isDone, &isSystem); err != nil {
+			return nil, fmt.Errorf("scan workflow column for project: %w", err)
+		}
+		col.IsDone = isDone == 1
+		col.System = isSystem == 1
+		out[col.ProjectID] = append(out[col.ProjectID], col)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows workflow columns for projects: %w", err)
+	}
+	return out, nil
+}
+
 func (s *Store) GetWorkflowDoneColumnKey(ctx context.Context, projectID int64) (string, error) {
 	var key string
 	if err := s.db.QueryRowContext(ctx, `
@@ -191,6 +299,262 @@ LIMIT 1`, projectID).Scan(&key); err != nil {
 		return "", fmt.Errorf("get done column key: %w", err)
 	}
 	return key, nil
+}
+
+func (s *Store) UpdateWorkflowColumnName(ctx context.Context, projectID int64, key, newName string) error {
+	key = strings.TrimSpace(key)
+	newName = strings.TrimSpace(newName)
+	if newName == "" || len(newName) > maxWorkflowNameLength {
+		return fmt.Errorf("%w: invalid workflow column name", ErrValidation)
+	}
+	res, err := s.db.ExecContext(ctx, `
+UPDATE project_workflow_columns
+SET name = ?
+WHERE project_id = ? AND key = ?`, newName, projectID, key)
+	if err != nil {
+		return fmt.Errorf("update workflow column name: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected update workflow column name: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (s *Store) AddWorkflowColumn(ctx context.Context, projectID int64, name string) (WorkflowColumn, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > maxWorkflowNameLength {
+		return WorkflowColumn{}, fmt.Errorf("%w: invalid workflow column name", ErrValidation)
+	}
+
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return WorkflowColumn{}, fmt.Errorf("begin add workflow column tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	loadWorkflow := func() ([]WorkflowColumn, error) {
+		rows, err := tx.QueryContext(ctx, `
+SELECT id, project_id, key, name, color, position, is_done, system
+FROM project_workflow_columns
+WHERE project_id = ?
+ORDER BY position ASC, id ASC`, projectID)
+		if err != nil {
+			return nil, fmt.Errorf("list workflow columns for add: %w", err)
+		}
+		defer rows.Close()
+		out := make([]WorkflowColumn, 0, 8)
+		for rows.Next() {
+			var col WorkflowColumn
+			var isDone, isSystem int
+			if err := rows.Scan(&col.ID, &col.ProjectID, &col.Key, &col.Name, &col.Color, &col.Position, &isDone, &isSystem); err != nil {
+				return nil, fmt.Errorf("scan workflow column for add: %w", err)
+			}
+			col.IsDone = isDone == 1
+			col.System = isSystem == 1
+			out = append(out, col)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("rows workflow columns for add: %w", err)
+		}
+		return out, nil
+	}
+
+	workflow, err := loadWorkflow()
+	if err != nil {
+		return WorkflowColumn{}, err
+	}
+	if len(workflow) == 0 {
+		if err := s.ensureDefaultWorkflowColumnsExec(ctx, tx, tx, projectID); err != nil {
+			return WorkflowColumn{}, err
+		}
+		workflow, err = loadWorkflow()
+		if err != nil {
+			return WorkflowColumn{}, err
+		}
+	}
+	if len(workflow) >= maxWorkflowColumns {
+		return WorkflowColumn{}, fmt.Errorf("%w: workflow may have at most %d columns", ErrValidation, maxWorkflowColumns)
+	}
+
+	doneIdx := -1
+	doneCount := 0
+	usedKeys := make(map[string]struct{}, len(workflow))
+	for i, col := range workflow {
+		usedKeys[col.Key] = struct{}{}
+		if col.IsDone {
+			doneIdx = i
+			doneCount++
+		}
+	}
+	if doneCount != 1 || doneIdx < 0 {
+		return WorkflowColumn{}, fmt.Errorf("%w: project workflow must have exactly one done column", ErrValidation)
+	}
+
+	baseKey := workflowKeyFromName(name)
+	key, err := uniqueWorkflowKey(baseKey, usedKeys)
+	if err != nil {
+		return WorkflowColumn{}, err
+	}
+
+	insertPos := doneIdx
+	for i := range workflow {
+		nextPos := i
+		if i >= doneIdx {
+			nextPos = i + 1
+		}
+		if _, err := tx.ExecContext(ctx, `
+UPDATE project_workflow_columns
+SET position = ?
+WHERE id = ?`, nextPos, workflow[i].ID); err != nil {
+			return WorkflowColumn{}, fmt.Errorf("shift workflow column positions: %w", err)
+		}
+	}
+
+	res, err := tx.ExecContext(ctx, `
+INSERT INTO project_workflow_columns(project_id, key, name, color, position, is_done, system)
+VALUES (?, ?, ?, ?, ?, 0, 0)`, projectID, key, name, defaultWorkflowColor, insertPos)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return WorkflowColumn{}, fmt.Errorf("%w: workflow column key already exists", ErrConflict)
+		}
+		return WorkflowColumn{}, fmt.Errorf("insert workflow column: %w", err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return WorkflowColumn{}, fmt.Errorf("last insert id workflow column: %w", err)
+	}
+
+	if err := validateExactlyOneDoneColumn(ctx, tx, projectID); err != nil {
+		return WorkflowColumn{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return WorkflowColumn{}, fmt.Errorf("commit add workflow column tx: %w", err)
+	}
+
+	return WorkflowColumn{
+		ID:        id,
+		ProjectID: projectID,
+		Key:       key,
+		Name:      name,
+		Color:     defaultWorkflowColor,
+		Position:  insertPos,
+		IsDone:    false,
+		System:    false,
+	}, nil
+}
+
+func (s *Store) DeleteWorkflowColumn(ctx context.Context, projectID int64, key string) error {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return fmt.Errorf("%w: invalid workflow column key", ErrValidation)
+	}
+
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin delete workflow column tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	loadWorkflow := func() ([]WorkflowColumn, error) {
+		rows, err := tx.QueryContext(ctx, `
+SELECT id, project_id, key, name, color, position, is_done, system
+FROM project_workflow_columns
+WHERE project_id = ?
+ORDER BY position ASC, id ASC`, projectID)
+		if err != nil {
+			return nil, fmt.Errorf("list workflow columns for delete: %w", err)
+		}
+		defer rows.Close()
+		out := make([]WorkflowColumn, 0, 8)
+		for rows.Next() {
+			var col WorkflowColumn
+			var isDone, isSystem int
+			if err := rows.Scan(&col.ID, &col.ProjectID, &col.Key, &col.Name, &col.Color, &col.Position, &isDone, &isSystem); err != nil {
+				return nil, fmt.Errorf("scan workflow column for delete: %w", err)
+			}
+			col.IsDone = isDone == 1
+			col.System = isSystem == 1
+			out = append(out, col)
+		}
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("rows workflow columns for delete: %w", err)
+		}
+		return out, nil
+	}
+
+	workflow, err := loadWorkflow()
+	if err != nil {
+		return err
+	}
+	if len(workflow) == 0 {
+		if err := s.ensureDefaultWorkflowColumnsExec(ctx, tx, tx, projectID); err != nil {
+			return err
+		}
+		workflow, err = loadWorkflow()
+		if err != nil {
+			return err
+		}
+	}
+
+	targetIdx := -1
+	for i, col := range workflow {
+		if col.Key == key {
+			targetIdx = i
+			break
+		}
+	}
+	if targetIdx < 0 {
+		return ErrNotFound
+	}
+	target := workflow[targetIdx]
+	if target.IsDone {
+		return fmt.Errorf("%w: cannot delete done workflow column", ErrValidation)
+	}
+	if len(workflow) <= 2 {
+		return fmt.Errorf("%w: project workflow must have at least 2 columns", ErrValidation)
+	}
+
+	var todoCount int
+	if err := tx.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM todos
+WHERE project_id = ? AND column_key = ?`, projectID, key).Scan(&todoCount); err != nil {
+		return fmt.Errorf("count todos for workflow column delete: %w", err)
+	}
+	if todoCount > 0 {
+		return fmt.Errorf("%w: workflow column is not empty", ErrConflict)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+DELETE FROM project_workflow_columns
+WHERE id = ?`, target.ID); err != nil {
+		return fmt.Errorf("delete workflow column: %w", err)
+	}
+
+	nextPos := 0
+	for i, col := range workflow {
+		if i == targetIdx {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+UPDATE project_workflow_columns
+SET position = ?
+WHERE id = ?`, nextPos, col.ID); err != nil {
+			return fmt.Errorf("resequence workflow columns after delete: %w", err)
+		}
+		nextPos++
+	}
+
+	if err := validateExactlyOneDoneColumn(ctx, tx, projectID); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit delete workflow column tx: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) ValidateProjectColumnKey(ctx context.Context, projectID int64, columnKey string) (WorkflowColumn, error) {

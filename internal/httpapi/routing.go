@@ -1069,6 +1069,122 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 		return
 	}
 
+	// POST /api/board/{slug}/workflow - add a new non-done lane before done.
+	if len(rest) == 2 && rest[1] == "workflow" && r.Method == http.MethodPost {
+		ctx := s.requestContext(r)
+		userID, ok := store.UserIDFromContext(ctx)
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthorized", nil)
+			return
+		}
+		role, err := s.store.GetProjectRole(ctx, project.ID, userID)
+		if err != nil || !role.HasMinimumRole(store.RoleMaintainer) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "maintainer or higher required", nil)
+			return
+		}
+
+		var in struct {
+			Name string `json:"name"`
+		}
+		if err := readJSON(w, r, s.maxBody, &in); err != nil {
+			return
+		}
+		in.Name = strings.TrimSpace(in.Name)
+		if in.Name == "" {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name required", map[string]any{"field": "name"})
+			return
+		}
+		if len(in.Name) > 200 {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow column name", map[string]any{"field": "name"})
+			return
+		}
+
+		col, err := s.store.AddWorkflowColumn(ctx, project.ID, in.Name)
+		if err != nil {
+			writeStoreErr(w, err, true)
+			return
+		}
+		s.emitRefreshNeeded(project.ID, "workflow_column_added")
+		writeJSON(w, http.StatusCreated, workflowColumnJSON{
+			Key:      col.Key,
+			Name:     col.Name,
+			Color:    col.Color,
+			IsDone:   col.IsDone,
+			Position: col.Position,
+		})
+		return
+	}
+
+	// PATCH /api/board/{slug}/workflow/{key} - rename workflow lane label only.
+	if len(rest) == 3 && rest[1] == "workflow" && r.Method == http.MethodPatch {
+		ctx := s.requestContext(r)
+		userID, ok := store.UserIDFromContext(ctx)
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthorized", nil)
+			return
+		}
+		role, err := s.store.GetProjectRole(ctx, project.ID, userID)
+		if err != nil || !role.HasMinimumRole(store.RoleMaintainer) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "maintainer or higher required", nil)
+			return
+		}
+		columnKey := strings.TrimSpace(rest[2])
+		if columnKey == "" {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow key", map[string]any{"field": "key"})
+			return
+		}
+
+		var in struct {
+			Name string `json:"name"`
+		}
+		if err := readJSON(w, r, s.maxBody, &in); err != nil {
+			return
+		}
+		in.Name = strings.TrimSpace(in.Name)
+		if in.Name == "" {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name required", map[string]any{"field": "name"})
+			return
+		}
+		if len(in.Name) > 200 {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow column name", map[string]any{"field": "name"})
+			return
+		}
+		if err := s.store.UpdateWorkflowColumnName(ctx, project.ID, columnKey, in.Name); err != nil {
+			writeStoreErr(w, err, true)
+			return
+		}
+		s.emitRefreshNeeded(project.ID, "workflow_column_renamed")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// DELETE /api/board/{slug}/workflow/{key} - delete an empty non-done lane.
+	if len(rest) == 3 && rest[1] == "workflow" && r.Method == http.MethodDelete {
+		ctx := s.requestContext(r)
+		userID, ok := store.UserIDFromContext(ctx)
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthorized", nil)
+			return
+		}
+		role, err := s.store.GetProjectRole(ctx, project.ID, userID)
+		if err != nil || !role.HasMinimumRole(store.RoleMaintainer) {
+			writeError(w, http.StatusForbidden, "FORBIDDEN", "maintainer or higher required", nil)
+			return
+		}
+		columnKey := strings.TrimSpace(rest[2])
+		if columnKey == "" {
+			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow key", map[string]any{"field": "key"})
+			return
+		}
+		if err := s.store.DeleteWorkflowColumn(ctx, project.ID, columnKey); err != nil {
+			writeStoreErr(w, err, true)
+			return
+		}
+		s.emitRefreshNeeded(project.ID, "workflow_column_deleted")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	// GET /api/board/{slug}/lanes/{status}
 	if len(rest) == 3 && rest[1] == "lanes" && r.Method == http.MethodGet {
 		columnKey := normalizeLaneKey(rest[2])
@@ -1444,8 +1560,8 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 		var in struct {
 			ToColumnKey string `json:"toColumnKey"`
 			ToStatus    string `json:"toStatus"`
-			AfterID  *int64 `json:"afterId"`
-			BeforeID *int64 `json:"beforeId"`
+			AfterID     *int64 `json:"afterId"`
+			BeforeID    *int64 `json:"beforeId"`
 		}
 		if err := readJSON(w, r, s.maxBody, &in); err != nil {
 			return
@@ -1959,8 +2075,8 @@ func (s *Server) handleTodos(w http.ResponseWriter, r *http.Request, rest []stri
 		var in struct {
 			ToColumnKey string `json:"toColumnKey"`
 			ToStatus    string `json:"toStatus"`
-			AfterID  *int64 `json:"afterId"`
-			BeforeID *int64 `json:"beforeId"`
+			AfterID     *int64 `json:"afterId"`
+			BeforeID    *int64 `json:"beforeId"`
 		}
 		if err := readJSON(w, r, s.maxBody, &in); err != nil {
 			return
