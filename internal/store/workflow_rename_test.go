@@ -23,8 +23,8 @@ func TestRenameLane_UpdatesNamePreservesKey(t *testing.T) {
 		t.Fatalf("CreateTodo: %v", err)
 	}
 
-	if err := st.UpdateWorkflowColumnName(ctx, project.ID, DefaultColumnDoing, "Working"); err != nil {
-		t.Fatalf("UpdateWorkflowColumnName: %v", err)
+	if err := st.UpdateWorkflowColumn(ctx, project.ID, DefaultColumnDoing, "Working", "#10B981"); err != nil {
+		t.Fatalf("UpdateWorkflowColumn: %v", err)
 	}
 
 	workflow, err := st.GetProjectWorkflow(ctx, project.ID)
@@ -91,8 +91,8 @@ func TestRenameLane_BurndownUnaffected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBacklogSize before rename: %v", err)
 	}
-	if err := st.UpdateWorkflowColumnName(ctx, project.ID, DefaultColumnDone, "Shipped"); err != nil {
-		t.Fatalf("UpdateWorkflowColumnName: %v", err)
+	if err := st.UpdateWorkflowColumn(ctx, project.ID, DefaultColumnDone, "Shipped", "#EF4444"); err != nil {
+		t.Fatalf("UpdateWorkflowColumn: %v", err)
 	}
 	after, err := st.GetBacklogSize(ctx, project.ID, ModeFull)
 	if err != nil {
