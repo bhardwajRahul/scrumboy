@@ -36,6 +36,9 @@ type storeAPI interface {
 	ListTagCounts(ctx context.Context, pc *store.ProjectContext) ([]store.TagCount, error)
 	ListUserTags(ctx context.Context, userID int64) ([]store.TagWithColor, error)
 	UpdateTagColor(ctx context.Context, viewerUserID *int64, tagID int64, color *string) error
+	GetProjectScopedTagByID(ctx context.Context, projectID, tagID int64) (store.TagWithColor, error)
+	ListProjectMembers(ctx context.Context, projectID int64, userID int64) ([]store.ProjectMember, error)
+	ListAvailableUsersForProject(ctx context.Context, requesterID, projectID int64) ([]store.User, error)
 }
 
 type Options struct {
@@ -143,6 +146,9 @@ func (a *Adapter) implementedTools() []string {
 		"tags.listProject",
 		"tags.listMine",
 		"tags.updateMineColor",
+		"tags.updateProjectColor",
+		"members.list",
+		"members.listAvailable",
 	}
 }
 

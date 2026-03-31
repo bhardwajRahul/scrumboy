@@ -26,4 +26,7 @@ func (a *Adapter) registerTools() {
 	a.tools["tags.listProject"] = a.handleTagsListProject
 	a.tools["tags.listMine"] = a.handleTagsListMine
 	a.tools["tags.updateMineColor"] = a.handleTagsUpdateMineColor
+	a.tools["tags.updateProjectColor"] = a.handleTagsUpdateProjectColor
+	a.tools["members.list"] = a.handleMembersList
+	a.tools["members.listAvailable"] = a.handleMembersListAvailable
 }
