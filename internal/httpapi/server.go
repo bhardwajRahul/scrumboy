@@ -80,6 +80,7 @@ type storeAPI interface {
 	UpdateProjectName(ctx context.Context, projectID int64, userID int64, name string) error
 	UpdateProjectDefaultSprintWeeks(ctx context.Context, projectID int64, userID int64, weeks int) error
 	AddWorkflowColumn(ctx context.Context, projectID int64, name string) (store.WorkflowColumn, error)
+	DeleteWorkflowColumn(ctx context.Context, projectID int64, key string) error
 	UpdateWorkflowColumnName(ctx context.Context, projectID int64, key, newName string) error
 	GetProjectRole(ctx context.Context, projectID int64, userID int64) (store.ProjectRole, error)
 	CheckProjectRole(ctx context.Context, projectID int64, userID int64, requiredRole store.ProjectRole) error
@@ -229,20 +230,20 @@ func NewServer(st storeAPI, opts Options) *Server {
 	}
 
 	return &Server{
-		store:         st,
-		logger:        logger,
-		maxBody:       maxBody,
-		mode:          mode,
-		hub:           hub,
-		sink:          hub,
+		store:                     st,
+		logger:                    logger,
+		maxBody:                   maxBody,
+		mode:                      mode,
+		hub:                       hub,
+		sink:                      hub,
 		authRateLimit:             authRateLimit,
 		encryptionKey:             encKey,
-		passwordResetAdminLimiter:  passwordResetAdminLimiter,
-		webFS:         webFS,
-		fileSrv:       http.FileServer(http.FS(webFS)),
-		indexHTML:     indexHTML,
-		landingHTML:   landingHTML,
-		swJS:          swJS,
+		passwordResetAdminLimiter: passwordResetAdminLimiter,
+		webFS:                     webFS,
+		fileSrv:                   http.FileServer(http.FS(webFS)),
+		indexHTML:                 indexHTML,
+		landingHTML:               landingHTML,
+		swJS:                      swJS,
 	}
 }
 

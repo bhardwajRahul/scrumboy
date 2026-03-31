@@ -659,6 +659,7 @@ function msToDateTimeLocalStr(ms: number): string {
 function renderWorkflowTabContent(): string {
   const board = getBoard();
   const workflow = board?.columnOrder ?? [];
+  const canDeleteAnyLane = workflow.length > 2;
   if (!getSlug()) {
     return `<div class="settings-section"><div class="muted">No project in context.</div></div>`;
   }
@@ -695,6 +696,7 @@ function renderWorkflowTabContent(): string {
               style="flex:1; min-width:0;"
             />
             <button class="btn btn--ghost btn--small" type="button" data-workflow-save="${escapeHTML(lane.key)}">Save</button>
+            ${lane.isDone ? `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Done lane cannot be deleted">Delete</button>` : `<button class="btn btn--danger btn--small" type="button" data-workflow-delete="${escapeHTML(lane.key)}" ${canDeleteAnyLane ? "" : `disabled aria-disabled="true" title="Workflow must keep at least 2 lanes"`}>Delete</button>`}
           </div>
         `).join("")}
       </div>
@@ -751,6 +753,40 @@ async function renameWorkflowLaneLabel(key: string, name: string): Promise<void>
     showToast("Lane label updated");
   } catch (err: any) {
     showToast(err.message || "Failed to update lane label");
+  }
+}
+
+async function deleteWorkflowLane(key: string): Promise<void> {
+  const slug = getSlug();
+  if (!slug) {
+    showToast("No project available");
+    return;
+  }
+  const lane = getBoard()?.columnOrder?.find((item) => item.key === key);
+  if (!lane) {
+    showToast("Lane not found");
+    return;
+  }
+  if (lane.isDone) {
+    showToast("Done lane cannot be deleted");
+    return;
+  }
+  const confirmed = await showConfirmDialog(
+    `Delete lane "${lane.name}"? Only empty non-done lanes can be deleted.`,
+    "Delete lane?",
+    "Delete"
+  );
+  if (!confirmed) return;
+  try {
+    recordLocalMutation();
+    await apiFetch(`/api/board/${slug}/workflow/${encodeURIComponent(key)}`, {
+      method: "DELETE",
+    });
+    await invalidateBoard(slug, getTag(), getSearch(), getSprintIdFromUrl());
+    await renderSettingsModal();
+    showToast("Lane deleted");
+  } catch (err: any) {
+    showToast(err.message || "Failed to delete lane");
   }
 }
 
@@ -1423,6 +1459,13 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         const key = (inputEl as HTMLElement).getAttribute("data-workflow-name");
         if (!key) return;
         bindRename(key);
+      }, { signal });
+    });
+    document.querySelectorAll("[data-workflow-delete]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = (btn as HTMLElement).getAttribute("data-workflow-delete");
+        if (!key) return;
+        deleteWorkflowLane(key);
       }, { signal });
     });
   }
