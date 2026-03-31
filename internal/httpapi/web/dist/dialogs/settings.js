@@ -575,6 +575,66 @@ function msToDateTimeLocalStr(ms) {
     const mm = String(d.getMinutes()).padStart(2, "0");
     return `${y}-${m}-${day}T${hh}:${mm}`;
 }
+function renderWorkflowTabContent() {
+    const board = getBoard();
+    const workflow = board?.columnOrder ?? [];
+    if (!getSlug()) {
+        return `<div class="settings-section"><div class="muted">No project in context.</div></div>`;
+    }
+    if (workflow.length === 0) {
+        return `<div class="settings-section"><div class="muted">Workflow lanes are unavailable.</div></div>`;
+    }
+    return `
+    <div class="settings-section">
+      <div class="settings-section__title">Workflow</div>
+      <div class="settings-section__description muted">Rename lane labels. Keys stay immutable.</div>
+      <div class="settings-workflow-list">
+        ${workflow.map((lane) => `
+          <div class="settings-workflow-row" data-workflow-key="${escapeHTML(lane.key)}" style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
+            <div class="muted" style="min-width:110px; font-family:monospace;">${escapeHTML(lane.key)}</div>
+            <input
+              class="input"
+              data-workflow-name="${escapeHTML(lane.key)}"
+              value="${escapeHTML(lane.name)}"
+              maxlength="200"
+              aria-label="Lane label for ${escapeHTML(lane.key)}"
+              style="flex:1; min-width:0;"
+            />
+            <button class="btn btn--ghost btn--small" type="button" data-workflow-save="${escapeHTML(lane.key)}">Save</button>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+async function renameWorkflowLaneLabel(key, name) {
+    const slug = getSlug();
+    if (!slug) {
+        showToast("No project available");
+        return;
+    }
+    const trimmed = name.trim();
+    if (!trimmed) {
+        showToast("Lane name is required");
+        return;
+    }
+    const currentName = getBoard()?.columnOrder?.find((lane) => lane.key === key)?.name?.trim();
+    if (currentName === trimmed)
+        return;
+    try {
+        recordLocalMutation();
+        await apiFetch(`/api/board/${slug}/workflow/${encodeURIComponent(key)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ name: trimmed }),
+        });
+        await invalidateBoard(slug, getTag(), getSearch(), getSprintIdFromUrl());
+        await renderSettingsModal();
+        showToast("Lane label updated");
+    }
+    catch (err) {
+        showToast(err.message || "Failed to update lane label");
+    }
+}
 function computeDefaultSprintStart(now) {
     const daysToMonday = (now.getDay() + 6) % 7; // 0=Sun, 1=Mon, ..., 6=Sat
     const monday = new Date(now.getTime());
@@ -759,6 +819,7 @@ export async function renderSettingsModal(options) {
     }
     const myMember = currentUser ? boardMembers.find((m) => m.userId === currentUser.id) : null;
     const showSprintsTab = !!slug && hasProjectAccess && myMember?.role === "maintainer";
+    const showWorkflowTab = !!slug && hasProjectAccess && myMember?.role === "maintainer";
     // Charts tab only applies in durable project board view (not Dashboard/Projects/Temporary Boards, not anonymous mode, not temporary boards)
     const board = getBoard();
     const isTemporaryBoard = !!(board?.project?.expiresAt);
@@ -782,6 +843,9 @@ export async function renderSettingsModal(options) {
         setSettingsActiveTab(hasProjectAccess ? "tag-colors" : "customization");
     }
     else if (!showChartsTab && getSettingsActiveTab() === "charts") {
+        setSettingsActiveTab(hasProjectAccess ? "tag-colors" : "customization");
+    }
+    else if (!showWorkflowTab && getSettingsActiveTab() === "workflow") {
         setSettingsActiveTab(hasProjectAccess ? "tag-colors" : "customization");
     }
     // Fetch full user profile (including avatar) when Profile tab is shown (skip when re-rendering after avatar change)
@@ -1090,19 +1154,23 @@ export async function renderSettingsModal(options) {
     if (showSprintsTab && getSettingsActiveTab() === "sprints") {
         sprintsHTML = await renderSprintsTabContent();
     }
+    const workflowHTML = showWorkflowTab && getSettingsActiveTab() === "workflow"
+        ? renderWorkflowTabContent()
+        : "";
     destroyBurndownChart();
     contentEl.innerHTML = `
     <div class="settings-tabs">
       ${showProfileTab ? `<button class="settings-tab ${getSettingsActiveTab() === "profile" ? "settings-tab--active" : ""}" data-tab="profile">Profile</button>` : ``}
       ${showUsersTab ? `<button class="settings-tab ${getSettingsActiveTab() === "users" ? "settings-tab--active" : ""}" data-tab="users">Users</button>` : ``}
       ${showSprintsTab ? `<button class="settings-tab ${getSettingsActiveTab() === "sprints" ? "settings-tab--active" : ""}" data-tab="sprints">Sprints</button>` : ``}
+      ${showWorkflowTab ? `<button class="settings-tab ${getSettingsActiveTab() === "workflow" ? "settings-tab--active" : ""}" data-tab="workflow">Workflow</button>` : ``}
       <button class="settings-tab ${getSettingsActiveTab() === "customization" ? "settings-tab--active" : ""}" data-tab="customization">Customization</button>
       <button class="settings-tab ${getSettingsActiveTab() === "tag-colors" ? "settings-tab--active" : ""}" data-tab="tag-colors">Tag Colors</button>
       ${showChartsTab ? `<button class="settings-tab ${getSettingsActiveTab() === "charts" ? "settings-tab--active" : ""}" data-tab="charts">Charts</button>` : ``}
       <button class="settings-tab ${getSettingsActiveTab() === "backup" ? "settings-tab--active" : ""}" data-tab="backup">Backup</button>
     </div>
     <div class="settings-tab-content" id="settingsTabContent">
-      ${getSettingsActiveTab() === "profile" ? profileHTML : getSettingsActiveTab() === "users" ? usersHTML : getSettingsActiveTab() === "sprints" ? sprintsHTML : getSettingsActiveTab() === "customization" ? customizationHTML : getSettingsActiveTab() === "tag-colors" ? tagColorsContent : getSettingsActiveTab() === "charts" ? chartsContent : getSettingsActiveTab() === "backup" ? renderBackupTabHTML() : ""}
+      ${getSettingsActiveTab() === "profile" ? profileHTML : getSettingsActiveTab() === "users" ? usersHTML : getSettingsActiveTab() === "sprints" ? sprintsHTML : getSettingsActiveTab() === "workflow" ? workflowHTML : getSettingsActiveTab() === "customization" ? customizationHTML : getSettingsActiveTab() === "tag-colors" ? tagColorsContent : getSettingsActiveTab() === "charts" ? chartsContent : getSettingsActiveTab() === "backup" ? renderBackupTabHTML() : ""}
     </div>
   `;
     // Abort previous listeners before attaching new ones
@@ -1182,6 +1250,33 @@ export async function renderSettingsModal(options) {
         setTimeout(() => {
             setupBackupTab(signal);
         }, 0);
+    }
+    if (getSettingsActiveTab() === "workflow") {
+        const bindRename = (key) => {
+            const input = document.querySelector(`[data-workflow-name="${key}"]`);
+            if (!input)
+                return;
+            renameWorkflowLaneLabel(key, input.value);
+        };
+        document.querySelectorAll("[data-workflow-save]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const key = btn.getAttribute("data-workflow-save");
+                if (!key)
+                    return;
+                bindRename(key);
+            }, { signal });
+        });
+        document.querySelectorAll("[data-workflow-name]").forEach((inputEl) => {
+            inputEl.addEventListener("keydown", (e) => {
+                if (e.key !== "Enter")
+                    return;
+                e.preventDefault();
+                const key = inputEl.getAttribute("data-workflow-name");
+                if (!key)
+                    return;
+                bindRename(key);
+            }, { signal });
+        });
     }
     // Setup logout button — use form POST so browser processes Set-Cookie from document response
     // (fetch/XHR responses don't always clear cookies reliably across browsers)

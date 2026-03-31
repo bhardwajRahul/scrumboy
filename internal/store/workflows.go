@@ -193,6 +193,29 @@ LIMIT 1`, projectID).Scan(&key); err != nil {
 	return key, nil
 }
 
+func (s *Store) UpdateWorkflowColumnName(ctx context.Context, projectID int64, key, newName string) error {
+	key = strings.TrimSpace(key)
+	newName = strings.TrimSpace(newName)
+	if newName == "" || len(newName) > 200 {
+		return fmt.Errorf("%w: invalid workflow column name", ErrValidation)
+	}
+	res, err := s.db.ExecContext(ctx, `
+UPDATE project_workflow_columns
+SET name = ?
+WHERE project_id = ? AND key = ?`, newName, projectID, key)
+	if err != nil {
+		return fmt.Errorf("update workflow column name: %w", err)
+	}
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected update workflow column name: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) ValidateProjectColumnKey(ctx context.Context, projectID int64, columnKey string) (WorkflowColumn, error) {
 	return validateProjectColumnKeyQueryer(ctx, s.db, projectID, columnKey)
 }

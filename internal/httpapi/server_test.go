@@ -89,6 +89,40 @@ func doJSON(t *testing.T, client *http.Client, method, url string, body any, out
 	return resp, b
 }
 
+func newCookieClient(t *testing.T) *http.Client {
+	t.Helper()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookie jar: %v", err)
+	}
+	return &http.Client{Jar: jar}
+}
+
+func bootstrapUserClient(t *testing.T, client *http.Client, baseURL, name, email, password string) map[string]any {
+	t.Helper()
+	var user map[string]any
+	resp, body := doJSON(t, client, http.MethodPost, baseURL+"/api/auth/bootstrap", map[string]any{
+		"name":     name,
+		"email":    email,
+		"password": password,
+	}, &user)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("bootstrap status=%d body=%s", resp.StatusCode, string(body))
+	}
+	return user
+}
+
+func loginUserClient(t *testing.T, client *http.Client, baseURL, email, password string) {
+	t.Helper()
+	resp, body := doJSON(t, client, http.MethodPost, baseURL+"/api/auth/login", map[string]any{
+		"email":    email,
+		"password": password,
+	}, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login status=%d body=%s", resp.StatusCode, string(body))
+	}
+}
+
 func TestAPI_CreateMoveAndFetchBoard(t *testing.T) {
 	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
 	defer cleanup()
@@ -161,6 +195,153 @@ func TestAPI_CreateMoveAndFetchBoard(t *testing.T) {
 	if len(board.Columns["IN_PROGRESS"]) != 1 || board.Columns["IN_PROGRESS"][0].ID != todo.ID {
 		t.Fatalf("unexpected board by id: %+v", board.Columns)
 	}
+}
+
+func TestRenameLane_RequiresMaintainer(t *testing.T) {
+	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t)
+	owner := bootstrapUserClient(t, ownerClient, ts.URL, "Owner", "owner@example.com", "password123")
+	ownerID := int64(owner["id"].(float64))
+
+	st := store.New(sqlDB, nil)
+	ctxOwner := store.WithUserID(context.Background(), ownerID)
+	project, err := st.CreateProject(ctxOwner, "rename-lane-auth")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	contributor, err := st.CreateUser(context.Background(), "contrib@example.com", "password123", "Contributor")
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := st.AddProjectMember(ctxOwner, ownerID, project.ID, contributor.ID, store.RoleContributor); err != nil {
+		t.Fatalf("AddProjectMember: %v", err)
+	}
+
+	contributorClient := newCookieClient(t)
+	loginUserClient(t, contributorClient, ts.URL, "contrib@example.com", "password123")
+
+	resp, body := doJSON(t, contributorClient, http.MethodPatch, ts.URL+"/api/board/"+project.Slug+"/workflow/"+store.DefaultColumnDoing, map[string]any{
+		"name": "Working",
+	}, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d body=%s", resp.StatusCode, string(body))
+	}
+}
+
+func TestRenameLane_NonexistentKeyReturns404(t *testing.T) {
+	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t)
+	owner := bootstrapUserClient(t, ownerClient, ts.URL, "Owner", "owner@example.com", "password123")
+	ownerID := int64(owner["id"].(float64))
+
+	st := store.New(sqlDB, nil)
+	project, err := st.CreateProject(store.WithUserID(context.Background(), ownerID), "rename-lane-404")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	resp, body := doJSON(t, ownerClient, http.MethodPatch, ts.URL+"/api/board/"+project.Slug+"/workflow/not_a_lane", map[string]any{
+		"name": "Working",
+	}, nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", resp.StatusCode, string(body))
+	}
+}
+
+func TestRenameLane_EmptyNameRejected(t *testing.T) {
+	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t)
+	owner := bootstrapUserClient(t, ownerClient, ts.URL, "Owner", "owner@example.com", "password123")
+	ownerID := int64(owner["id"].(float64))
+
+	st := store.New(sqlDB, nil)
+	project, err := st.CreateProject(store.WithUserID(context.Background(), ownerID), "rename-lane-400")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		body map[string]any
+	}{
+		{
+			name: "WhitespaceOnly",
+			body: map[string]any{"name": "   "},
+		},
+		{
+			name: "RejectsColor",
+			body: map[string]any{"name": "Working", "color": "#123456"},
+		},
+		{
+			name: "RejectsKey",
+			body: map[string]any{"name": "Working", "key": "other"},
+		},
+		{
+			name: "RejectsIsDone",
+			body: map[string]any{"name": "Working", "isDone": true},
+		},
+		{
+			name: "RejectsPosition",
+			body: map[string]any{"name": "Working", "position": 1},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, body := doJSON(t, ownerClient, http.MethodPatch, ts.URL+"/api/board/"+project.Slug+"/workflow/"+store.DefaultColumnDoing, tc.body, nil)
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("expected 400, got %d body=%s", resp.StatusCode, string(body))
+			}
+		})
+	}
+}
+
+func TestRenameLane_BoardAPIReflectsNewName(t *testing.T) {
+	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t)
+	owner := bootstrapUserClient(t, ownerClient, ts.URL, "Owner", "owner@example.com", "password123")
+	ownerID := int64(owner["id"].(float64))
+
+	st := store.New(sqlDB, nil)
+	project, err := st.CreateProject(store.WithUserID(context.Background(), ownerID), "rename-lane-board")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	resp, body := doJSON(t, ownerClient, http.MethodPatch, ts.URL+"/api/board/"+project.Slug+"/workflow/"+store.DefaultColumnDoing, map[string]any{
+		"name": "Working",
+	}, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("rename lane status=%d body=%s", resp.StatusCode, string(body))
+	}
+
+	var board struct {
+		ColumnOrder []struct {
+			Key  string `json:"key"`
+			Name string `json:"name"`
+		} `json:"columnOrder"`
+	}
+	resp, body = doJSON(t, ownerClient, http.MethodGet, ts.URL+"/api/board/"+project.Slug, nil, &board)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("get board status=%d body=%s", resp.StatusCode, string(body))
+	}
+	for _, lane := range board.ColumnOrder {
+		if lane.Key == store.DefaultColumnDoing {
+			if lane.Name != "Working" {
+				t.Fatalf("expected lane name %q, got %q", "Working", lane.Name)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected lane %q in board response", store.DefaultColumnDoing)
 }
 
 func TestFullMode_MultiProjectBehavior(t *testing.T) {
