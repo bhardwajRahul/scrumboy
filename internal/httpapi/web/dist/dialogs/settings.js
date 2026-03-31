@@ -587,7 +587,20 @@ function renderWorkflowTabContent() {
     return `
     <div class="settings-section">
       <div class="settings-section__title">Workflow</div>
-      <div class="settings-section__description muted">Rename lane labels. Keys stay immutable.</div>
+      <div class="settings-section__description muted">Rename lane labels or add a non-done lane inserted immediately before the done lane (whatever its label). Keys stay immutable.</div>
+      <div class="settings-workflow-create" style="display:flex; gap:12px; align-items:flex-end; margin-bottom:16px;">
+        <label class="field" style="flex:1; min-width:0; margin:0;">
+          <div class="field__label">New lane name</div>
+          <input
+            class="input"
+            data-workflow-new-name
+            maxlength="200"
+            placeholder="e.g. Review"
+            aria-label="New workflow lane name"
+          />
+        </label>
+        <button class="btn btn--small" type="button" data-workflow-add>Add Lane</button>
+      </div>
       <div class="settings-workflow-list">
         ${workflow.map((lane) => `
           <div class="settings-workflow-row" data-workflow-key="${escapeHTML(lane.key)}" style="display:flex; gap:12px; align-items:center; margin-bottom:12px;">
@@ -606,6 +619,31 @@ function renderWorkflowTabContent() {
       </div>
     </div>
   `;
+}
+async function addWorkflowLane(name) {
+    const slug = getSlug();
+    if (!slug) {
+        showToast("No project available");
+        return;
+    }
+    const trimmed = name.trim();
+    if (!trimmed) {
+        showToast("Lane name is required");
+        return;
+    }
+    try {
+        recordLocalMutation();
+        await apiFetch(`/api/board/${slug}/workflow`, {
+            method: "POST",
+            body: JSON.stringify({ name: trimmed }),
+        });
+        await invalidateBoard(slug, getTag(), getSearch(), getSprintIdFromUrl());
+        await renderSettingsModal();
+        showToast("Lane added");
+    }
+    catch (err) {
+        showToast(err.message || "Failed to add lane");
+    }
 }
 async function renameWorkflowLaneLabel(key, name) {
     const slug = getSlug();
@@ -1252,6 +1290,24 @@ export async function renderSettingsModal(options) {
         }, 0);
     }
     if (getSettingsActiveTab() === "workflow") {
+        const addInput = document.querySelector("[data-workflow-new-name]");
+        const addLane = () => {
+            if (!addInput)
+                return;
+            addWorkflowLane(addInput.value);
+        };
+        const addBtn = document.querySelector("[data-workflow-add]");
+        if (addBtn) {
+            addBtn.addEventListener("click", addLane, { signal });
+        }
+        if (addInput) {
+            addInput.addEventListener("keydown", (e) => {
+                if (e.key !== "Enter")
+                    return;
+                e.preventDefault();
+                addLane();
+            }, { signal });
+        }
         const bindRename = (key) => {
             const input = document.querySelector(`[data-workflow-name="${key}"]`);
             if (!input)
