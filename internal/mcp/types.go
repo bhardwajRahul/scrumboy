@@ -116,6 +116,19 @@ type mineTagItem struct {
 	CanDelete bool    `json:"canDelete"`
 }
 
+type boardProjectItem struct {
+	ProjectSlug string `json:"projectSlug"`
+	Name        string `json:"name"`
+	Role        string `json:"role,omitempty"`
+}
+
+type boardColumnItem struct {
+	Key    string     `json:"key"`
+	Name   string     `json:"name"`
+	IsDone bool       `json:"isDone"`
+	Items  []todoItem `json:"items"`
+}
+
 type projectMemberItem struct {
 	ProjectSlug string    `json:"projectSlug"`
 	UserID      int64     `json:"userId"`
@@ -124,6 +137,19 @@ type projectMemberItem struct {
 	Image       *string   `json:"image,omitempty"`
 	Role        string    `json:"role"`
 	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// membersAddInput is the input for members.add and members.updateRole (projectSlug + userId + canonical role only).
+type membersAddInput struct {
+	ProjectSlug string `json:"projectSlug"`
+	UserID      int64  `json:"userId"`
+	Role        string `json:"role"`
+}
+
+// membersRemoveInput is the input for members.remove (projectSlug + userId only).
+type membersRemoveInput struct {
+	ProjectSlug string `json:"projectSlug"`
+	UserID      int64  `json:"userId"`
 }
 
 // availableUserItem is the shape for members.listAvailable only (users not yet in the project).

@@ -14,10 +14,21 @@ type updateMineTagColorInput struct {
 	Color *string `json:"color"`
 }
 
+// deleteMineTagInput is the input for tags.deleteMine (tagId only; mine-scope / user library).
+type deleteMineTagInput struct {
+	TagID int64 `json:"tagId"`
+}
+
 type updateProjectTagColorInput struct {
 	ProjectSlug string  `json:"projectSlug"`
 	TagID       int64   `json:"tagId"`
 	Color       *string `json:"color"`
+}
+
+// deleteProjectTagInput is the input for tags.deleteProject (projectSlug + tagId; project-scoped rows only).
+type deleteProjectTagInput struct {
+	ProjectSlug string `json:"projectSlug"`
+	TagID       int64  `json:"tagId"`
 }
 
 func (a *Adapter) handleTagsListProject(ctx context.Context, input any) (any, map[string]any, *adapterError) {
@@ -169,6 +180,62 @@ func (a *Adapter) handleTagsUpdateMineColor(ctx context.Context, input any) (any
 	}, map[string]any{}, nil
 }
 
+func (a *Adapter) handleTagsDeleteMine(ctx context.Context, input any) (any, map[string]any, *adapterError) {
+	auth, bootstrapAvailable, err := a.authState(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	switch {
+	case a.mode == "anonymous":
+		return nil, nil, newAdapterError(http.StatusForbidden, CodeCapabilityUnavailable, "tags.deleteMine is unavailable in anonymous mode", nil)
+	case bootstrapAvailable:
+		return nil, nil, newAdapterError(http.StatusForbidden, CodeCapabilityUnavailable, "tags.deleteMine is unavailable before bootstrap", nil)
+	case !auth.Authenticated:
+		return nil, nil, newAdapterError(http.StatusUnauthorized, CodeAuthRequired, "Sign-in required for this tool", nil)
+	}
+
+	var in deleteMineTagInput
+	if err := decodeInput(input, &in); err != nil {
+		return nil, nil, newAdapterError(http.StatusBadRequest, CodeValidationError, "invalid input", map[string]any{"detail": err.Error()})
+	}
+	if in.TagID <= 0 {
+		return nil, nil, newAdapterError(http.StatusBadRequest, CodeValidationError, "invalid tagId", map[string]any{"field": "tagId"})
+	}
+
+	userID, ok := store.UserIDFromContext(ctx)
+	if !ok {
+		return nil, nil, newAdapterError(http.StatusUnauthorized, CodeAuthRequired, "Sign-in required for this tool", nil)
+	}
+
+	tags, tagsErr := a.store.ListUserTags(ctx, userID)
+	if tagsErr != nil {
+		return nil, nil, mapStoreError(tagsErr)
+	}
+	if _, found := findMineTag(tags, in.TagID); !found {
+		return nil, nil, newAdapterError(http.StatusNotFound, CodeNotFound, "not found", nil)
+	}
+
+	if err := a.store.DeleteTag(ctx, userID, in.TagID, false); err != nil {
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			return nil, nil, newAdapterError(http.StatusNotFound, CodeNotFound, "not found", nil)
+		case errors.Is(err, store.ErrUnauthorized):
+			return nil, nil, newAdapterError(http.StatusForbidden, CodeForbidden, err.Error(), nil)
+		case errors.Is(err, store.ErrConflict):
+			return nil, nil, newAdapterError(http.StatusConflict, CodeConflict, err.Error(), nil)
+		default:
+			return nil, nil, mapStoreError(err)
+		}
+	}
+
+	return map[string]any{
+		"deleted": map[string]any{
+			"tagId": in.TagID,
+		},
+	}, map[string]any{}, nil
+}
+
 func (a *Adapter) handleTagsUpdateProjectColor(ctx context.Context, input any) (any, map[string]any, *adapterError) {
 	auth, bootstrapAvailable, err := a.authState(ctx)
 	if err != nil {
@@ -241,6 +308,72 @@ func (a *Adapter) handleTagsUpdateProjectColor(ctx context.Context, input any) (
 	// Tag existence in project scope was already verified above; if it disappears
 	// here, treat it as an internal inconsistency rather than weakening the contract.
 	return nil, nil, newAdapterError(http.StatusInternalServerError, CodeInternal, "internal error", map[string]any{"detail": "updated project tag not found in post-read"})
+}
+
+func (a *Adapter) handleTagsDeleteProject(ctx context.Context, input any) (any, map[string]any, *adapterError) {
+	auth, bootstrapAvailable, err := a.authState(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	switch {
+	case a.mode == "anonymous":
+		return nil, nil, newAdapterError(http.StatusForbidden, CodeCapabilityUnavailable, "tags.deleteProject is unavailable in anonymous mode", nil)
+	case bootstrapAvailable:
+		return nil, nil, newAdapterError(http.StatusForbidden, CodeCapabilityUnavailable, "tags.deleteProject is unavailable before bootstrap", nil)
+	case !auth.Authenticated:
+		return nil, nil, newAdapterError(http.StatusUnauthorized, CodeAuthRequired, "Sign-in required for this tool", nil)
+	}
+
+	var in deleteProjectTagInput
+	if err := decodeInput(input, &in); err != nil {
+		return nil, nil, newAdapterError(http.StatusBadRequest, CodeValidationError, "invalid input", map[string]any{"detail": err.Error()})
+	}
+	if in.ProjectSlug == "" {
+		return nil, nil, newAdapterError(http.StatusBadRequest, CodeValidationError, "missing projectSlug", map[string]any{"field": "projectSlug"})
+	}
+	if in.TagID <= 0 {
+		return nil, nil, newAdapterError(http.StatusBadRequest, CodeValidationError, "invalid tagId", map[string]any{"field": "tagId"})
+	}
+
+	pc, pcErr := a.store.GetProjectContextBySlug(ctx, in.ProjectSlug, a.storeMode())
+	if pcErr != nil {
+		return nil, nil, mapStoreError(pcErr)
+	}
+	userID, ok := store.UserIDFromContext(ctx)
+	if !ok {
+		return nil, nil, newAdapterError(http.StatusUnauthorized, CodeAuthRequired, "Sign-in required for this tool", nil)
+	}
+	if !pc.Role.HasMinimumRole(store.RoleMaintainer) {
+		return nil, nil, newAdapterError(http.StatusForbidden, CodeForbidden, "maintainer or higher required", nil)
+	}
+
+	if _, tagErr := a.store.GetProjectScopedTagByID(ctx, pc.Project.ID, in.TagID); tagErr != nil {
+		return nil, nil, mapStoreError(tagErr)
+	}
+
+	p := pc.Project
+	isAnonymousBoard := p.ExpiresAt != nil && p.CreatorUserID == nil
+
+	if err := a.store.DeleteTag(ctx, userID, in.TagID, isAnonymousBoard); err != nil {
+		switch {
+		case errors.Is(err, store.ErrNotFound):
+			return nil, nil, newAdapterError(http.StatusNotFound, CodeNotFound, "not found", nil)
+		case errors.Is(err, store.ErrUnauthorized):
+			return nil, nil, newAdapterError(http.StatusForbidden, CodeForbidden, err.Error(), nil)
+		case errors.Is(err, store.ErrConflict):
+			return nil, nil, newAdapterError(http.StatusConflict, CodeConflict, err.Error(), nil)
+		default:
+			return nil, nil, mapStoreError(err)
+		}
+	}
+
+	return map[string]any{
+		"deleted": map[string]any{
+			"projectSlug": in.ProjectSlug,
+			"tagId":       in.TagID,
+		},
+	}, map[string]any{}, nil
 }
 
 func findMineTag(tags []store.TagWithColor, tagID int64) (store.TagWithColor, bool) {

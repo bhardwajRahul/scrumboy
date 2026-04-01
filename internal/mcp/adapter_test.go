@@ -184,6 +184,18 @@ ORDER BY t.rank ASC, t.id ASC
 	return out
 }
 
+func boardColumnByKey(t *testing.T, cols []any, key string) map[string]any {
+	t.Helper()
+	for _, col := range cols {
+		m := col.(map[string]any)
+		if m["key"] == key {
+			return m
+		}
+	}
+	t.Fatalf("column %q not found in %#v", key, cols)
+	return nil
+}
+
 func bootstrapUser(t *testing.T, client *http.Client, baseURL string) {
 	t.Helper()
 	resp := doJSON(t, client, http.MethodPost, baseURL+"/api/auth/bootstrap", map[string]any{
@@ -299,12 +311,11 @@ func TestMCPSystemGetCapabilities_FullPreBootstrap(t *testing.T) {
 		t.Fatalf("expected authenticatedToolsUsable false, got %#v", auth["authenticatedToolsUsable"])
 	}
 	tools := data["implementedTools"].([]any)
-	if len(tools) != 22 || tools[0] != "system.getCapabilities" || tools[1] != "projects.list" || tools[2] != "todos.create" || tools[3] != "todos.get" || tools[4] != "todos.search" || tools[5] != "todos.update" || tools[6] != "todos.delete" || tools[7] != "todos.move" || tools[8] != "sprints.list" || tools[9] != "sprints.get" || tools[10] != "sprints.getActive" || tools[11] != "sprints.create" || tools[12] != "sprints.activate" || tools[13] != "sprints.close" || tools[14] != "sprints.update" || tools[15] != "sprints.delete" || tools[16] != "tags.listProject" || tools[17] != "tags.listMine" || tools[18] != "tags.updateMineColor" || tools[19] != "tags.updateProjectColor" || tools[20] != "members.list" || tools[21] != "members.listAvailable" {
+	if len(tools) != 28 || tools[0] != "system.getCapabilities" || tools[1] != "projects.list" || tools[2] != "todos.create" || tools[3] != "todos.get" || tools[4] != "todos.search" || tools[5] != "todos.update" || tools[6] != "todos.delete" || tools[7] != "todos.move" || tools[8] != "sprints.list" || tools[9] != "sprints.get" || tools[10] != "sprints.getActive" || tools[11] != "sprints.create" || tools[12] != "sprints.activate" || tools[13] != "sprints.close" || tools[14] != "sprints.update" || tools[15] != "sprints.delete" || tools[16] != "tags.listProject" || tools[17] != "tags.listMine" || tools[18] != "tags.updateMineColor" || tools[19] != "tags.deleteMine" || tools[20] != "tags.updateProjectColor" || tools[21] != "tags.deleteProject" || tools[22] != "members.list" || tools[23] != "members.listAvailable" || tools[24] != "members.add" || tools[25] != "members.updateRole" || tools[26] != "members.remove" || tools[27] != "board.get" {
 		t.Fatalf("unexpected implementedTools: %#v", tools)
 	}
-	planned := data["plannedTools"].([]any)
-	if len(planned) != 1 || planned[0] != "board.get" {
-		t.Fatalf("unexpected plannedTools: %#v", planned)
+	if _, ok := data["plannedTools"]; ok {
+		t.Fatalf("expected plannedTools omitted once board.get is implemented, got %#v", data["plannedTools"])
 	}
 }
 
@@ -2756,6 +2767,269 @@ func TestMCPTagsUpdateMineColorSuccess(t *testing.T) {
 	}
 }
 
+func TestMCPTagsDeleteMineSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Tag Delete Mine Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Tag Delete Mine Project")
+
+	doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "todos.create",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"title":       "Tagged todo",
+			"tags":        []string{"deleteme"},
+		},
+	})
+
+	_, mine := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool":  "tags.listMine",
+		"input": map[string]any{},
+	})
+	var tagID int64
+	for _, it := range mine["data"].(map[string]any)["items"].([]any) {
+		m := it.(map[string]any)
+		if m["name"] == "deleteme" {
+			tagID = int64(m["tagId"].(float64))
+			break
+		}
+	}
+	if tagID == 0 {
+		t.Fatalf("tag deleteme not in listMine: %#v", mine)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteMine",
+		"input": map[string]any{
+			"tagId": tagID,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	if out["ok"] != true {
+		t.Fatalf("expected ok=true")
+	}
+	del := out["data"].(map[string]any)["deleted"].(map[string]any)
+	if int64(del["tagId"].(float64)) != tagID {
+		t.Fatalf("deleted tagId: %#v", del["tagId"])
+	}
+	if _, ok := out["meta"].(map[string]any); !ok {
+		t.Fatalf("expected meta object")
+	}
+
+	_, mine2 := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool":  "tags.listMine",
+		"input": map[string]any{},
+	})
+	for _, it := range mine2["data"].(map[string]any)["items"].([]any) {
+		m := it.(map[string]any)
+		if int64(m["tagId"].(float64)) == tagID {
+			t.Fatalf("tag still in listMine after delete")
+		}
+	}
+}
+
+func TestMCPTagsDeleteMineValidationInvalidTagId(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Tag Del Val Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteMine",
+		"input": map[string]any{
+			"tagId": float64(0),
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR")
+	}
+}
+
+func TestMCPTagsDeleteMineValidationUnknownField(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Tag Del UF Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteMine",
+		"input": map[string]any{
+			"tagId":         float64(1),
+			"projectSlug":   "nope",
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR")
+	}
+}
+
+func TestMCPTagsDeleteMineAuthFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Tag Del Auth Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Tag Del Auth Project")
+
+	doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "todos.create",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"title":       "t",
+			"tags":        []string{"x"},
+		},
+	})
+	_, mine := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool":  "tags.listMine",
+		"input": map[string]any{},
+	})
+	tagID := mine["data"].(map[string]any)["items"].([]any)[0].(map[string]any)["tagId"]
+
+	resp2, out := doMCP(t, newStatelessClient(ts), ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteMine",
+		"input": map[string]any{
+			"tagId": tagID,
+		},
+	})
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "AUTH_REQUIRED" {
+		t.Fatalf("expected AUTH_REQUIRED")
+	}
+}
+
+func TestMCPTagsDeleteMineCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteMine",
+		"input": map[string]any{
+			"tagId": float64(1),
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE")
+	}
+}
+
+func TestMCPTagsDeleteMineCapabilityUnavailableBeforeBootstrap(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteMine",
+		"input": map[string]any{
+			"tagId": float64(1),
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE")
+	}
+}
+
+func TestMCPTagsDeleteMineNotInViewerLibraryNotFound(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Tag Del Other Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Tag Del Other Project")
+
+	doMCP(t, ownerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "todos.create",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"title":       "t",
+			"tags":        []string{"owneronly"},
+		},
+	})
+	_, mine := doMCP(t, ownerClient, ts.URL+"/mcp", map[string]any{
+		"tool":  "tags.listMine",
+		"input": map[string]any{},
+	})
+	var tagID int64
+	for _, it := range mine["data"].(map[string]any)["items"].([]any) {
+		m := it.(map[string]any)
+		if m["name"] == "owneronly" {
+			tagID = int64(m["tagId"].(float64))
+			break
+		}
+	}
+	if tagID == 0 {
+		t.Fatalf("expected owner tag")
+	}
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "tagdelother@example.com", "password123", "O")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	otherClient := newSessionClientForUser(t, ts, st, other.ID)
+
+	resp2, out := doMCP(t, otherClient, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteMine",
+		"input": map[string]any{
+			"tagId": tagID,
+		},
+	})
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND for non-owner mine-scope precheck, got %#v", out["error"])
+	}
+}
+
 func TestMCPTagsUpdateMineColorClearSuccess(t *testing.T) {
 	ts, sqlDB, cleanup := newTestServer(t, "full")
 	defer cleanup()
@@ -3159,6 +3433,295 @@ func TestMCPTagsUpdateProjectColorWrongProjectNotFound(t *testing.T) {
 	}
 }
 
+func TestMCPTagsDeleteProjectSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Del Proj Tag Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Del Proj Tag Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "scoped-del", nil)
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	if out["ok"] != true {
+		t.Fatalf("expected ok=true")
+	}
+	del := out["data"].(map[string]any)["deleted"].(map[string]any)
+	if del["projectSlug"] != slug || int64(del["tagId"].(float64)) != tagID {
+		t.Fatalf("deleted: %#v", del)
+	}
+	if _, ok := out["meta"].(map[string]any); !ok {
+		t.Fatalf("expected meta object")
+	}
+}
+
+func TestMCPTagsDeleteProjectWrongProjectNotFound(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Del PT First",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	resp = doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Del PT Second",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create second project status=%d", resp.StatusCode)
+	}
+	firstSlug := projectSlugByName(t, sqlDB, "Del PT First")
+	secondSlug := projectSlugByName(t, sqlDB, "Del PT Second")
+	secondProjectID := projectIDBySlug(t, sqlDB, secondSlug)
+	tagID := insertProjectScopedTag(t, sqlDB, secondProjectID, "xdel", nil)
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": firstSlug,
+			"tagId":       tagID,
+		},
+	})
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND")
+	}
+}
+
+func TestMCPTagsDeleteProjectUserOwnedTagNotFound(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Del PT User Tag Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Del PT User Tag Project")
+
+	doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "todos.create",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"title":       "t",
+			"tags":        []string{"userownedtag"},
+		},
+	})
+
+	var userTagID int64
+	if err := sqlDB.QueryRow(`SELECT id FROM tags WHERE name = 'userownedtag' AND user_id IS NOT NULL`).Scan(&userTagID); err != nil {
+		t.Fatalf("query user-owned tag: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       userTagID,
+		},
+	})
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND for user-owned tag id")
+	}
+}
+
+func TestMCPTagsDeleteProjectValidationInvalidTagId(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Del PT Val Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Del PT Val Project")
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       float64(0),
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR")
+	}
+}
+
+func TestMCPTagsDeleteProjectValidationUnknownField(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Del PT UF Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Del PT UF Project")
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       float64(1),
+			"tagName":     "nope",
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR")
+	}
+}
+
+func TestMCPTagsDeleteProjectAuthFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Del PT Auth Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Del PT Auth Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "authdel", nil)
+
+	resp2, out := doMCP(t, newStatelessClient(ts), ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+		},
+	})
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "AUTH_REQUIRED" {
+		t.Fatalf("expected AUTH_REQUIRED")
+	}
+}
+
+func TestMCPTagsDeleteProjectCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"tagId":       float64(1),
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE")
+	}
+}
+
+func TestMCPTagsDeleteProjectCapabilityUnavailableBeforeBootstrap(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"tagId":       float64(1),
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE")
+	}
+}
+
+func TestMCPTagsDeleteProjectPermissionFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Del PT Perm Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Del PT Perm Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	tagID := insertProjectScopedTag(t, sqlDB, projectID, "perm-del", nil)
+
+	st := store.New(sqlDB, nil)
+	viewer, err := st.CreateUser(context.Background(), "delptview@example.com", "password123", "V")
+	if err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, viewer.ID, store.RoleViewer); err != nil {
+		t.Fatalf("add viewer: %v", err)
+	}
+	viewerClient := newSessionClientForUser(t, ts, st, viewer.ID)
+
+	resp2, out := doMCP(t, viewerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "tags.deleteProject",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tagId":       tagID,
+		},
+	})
+	if resp2.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN")
+	}
+}
+
 func TestMCPTagsUpdateProjectColorMalformedColorValidation(t *testing.T) {
 	ts, sqlDB, cleanup := newTestServer(t, "full")
 	defer cleanup()
@@ -3327,6 +3890,63 @@ func TestMCPMembersListSuccess(t *testing.T) {
 	}
 }
 
+func TestMCPMembersListNormalizesLegacyStoredRoles(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members List Legacy Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members List Legacy Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "listleg@example.com", "password123", "Leg")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, other.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+	if _, err := sqlDB.Exec(`UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?`, "owner", projectID, ownerID); err != nil {
+		t.Fatalf("legacy owner: %v", err)
+	}
+	if _, err := sqlDB.Exec(`UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?`, "editor", projectID, other.ID); err != nil {
+		t.Fatalf("legacy editor: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.list",
+		"input": map[string]any{
+			"projectSlug": slug,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	items := out["data"].(map[string]any)["items"].([]any)
+	if len(items) != 2 {
+		t.Fatalf("expected 2 members, got %d", len(items))
+	}
+	byUser := make(map[int64]string)
+	for _, it := range items {
+		m := it.(map[string]any)
+		byUser[int64(m["userId"].(float64))] = m["role"].(string)
+	}
+	if byUser[ownerID] != "maintainer" {
+		t.Fatalf("owner row: want maintainer, got %q", byUser[ownerID])
+	}
+	if byUser[other.ID] != "contributor" {
+		t.Fatalf("editor row: want contributor, got %q", byUser[other.ID])
+	}
+}
+
 func TestMCPMembersListAvailableSuccess(t *testing.T) {
 	ts, sqlDB, cleanup := newTestServer(t, "full")
 	defer cleanup()
@@ -3474,6 +4094,1323 @@ func TestMCPMembersListAvailablePermissionFailure(t *testing.T) {
 	errObj := out["error"].(map[string]any)
 	if errObj["code"] != "FORBIDDEN" {
 		t.Fatalf("expected FORBIDDEN, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersAddSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Add Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Add Project")
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "memberadd@example.com", "password123", "Member Add")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.add",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "contributor",
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	if out["ok"] != true {
+		t.Fatalf("expected ok=true, got %#v", out["ok"])
+	}
+	data := out["data"].(map[string]any)
+	m := data["member"].(map[string]any)
+	if m["projectSlug"] != slug {
+		t.Fatalf("projectSlug: %#v", m["projectSlug"])
+	}
+	if int64(m["userId"].(float64)) != other.ID {
+		t.Fatalf("userId: %#v", m["userId"])
+	}
+	if m["email"] != "memberadd@example.com" {
+		t.Fatalf("email: %#v", m["email"])
+	}
+	if m["role"] != "contributor" {
+		t.Fatalf("role: %#v", m["role"])
+	}
+	if _, ok := out["meta"].(map[string]any); !ok {
+		t.Fatalf("expected meta object, got %#v", out["meta"])
+	}
+}
+
+func TestMCPMembersAddDuplicateConflict(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Dup Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Dup Project")
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "memberdup@example.com", "password123", "Dup")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	body := map[string]any{
+		"tool": "members.add",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "viewer",
+		},
+	}
+	resp2, _ := doMCP(t, client, ts.URL+"/mcp", body)
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("first add: expected 200, got %d", resp2.StatusCode)
+	}
+	resp3, out := doMCP(t, client, ts.URL+"/mcp", body)
+	if resp3.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp3.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "CONFLICT" {
+		t.Fatalf("expected CONFLICT, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersAddUnsupportedRole(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Role Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Role Project")
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "badrole@example.com", "password123", "Bad")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.add",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "owner",
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersAddUserNotFound(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members NF User Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members NF User Project")
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.add",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      int64(999999999),
+			"role":        "contributor",
+		},
+	})
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersAddAuthFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Add Auth Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Add Auth Project")
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "addauth@example.com", "password123", "A")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	resp2, out := doMCP(t, newStatelessClient(ts), ts.URL+"/mcp", map[string]any{
+		"tool": "members.add",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "contributor",
+		},
+	})
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "AUTH_REQUIRED" {
+		t.Fatalf("expected AUTH_REQUIRED, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersAddCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "members.add",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"userId":      float64(1),
+			"role":        "contributor",
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersAddCapabilityUnavailableBeforeBootstrap(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "members.add",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"userId":      float64(1),
+			"role":        "contributor",
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersAddPermissionFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Add Perm Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Add Perm Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	viewer, err := st.CreateUser(context.Background(), "vadd@example.com", "password123", "VAdd")
+	if err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, viewer.ID, store.RoleViewer); err != nil {
+		t.Fatalf("add viewer: %v", err)
+	}
+	target, err := st.CreateUser(context.Background(), "targetadd@example.com", "password123", "T")
+	if err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	viewerClient := newSessionClientForUser(t, ts, st, viewer.ID)
+
+	resp2, out := doMCP(t, viewerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "members.add",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      target.ID,
+			"role":        "contributor",
+		},
+	})
+	if resp2.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPMembersUpdateRoleSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Update Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Update Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "uprole@example.com", "password123", "UpRole")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, other.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "viewer",
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	if out["ok"] != true {
+		t.Fatalf("expected ok=true")
+	}
+	m := out["data"].(map[string]any)["member"].(map[string]any)
+	if m["role"] != "viewer" {
+		t.Fatalf("role: %#v", m["role"])
+	}
+	if int64(m["userId"].(float64)) != other.ID {
+		t.Fatalf("userId: %#v", m["userId"])
+	}
+	if _, ok := out["meta"].(map[string]any); !ok {
+		t.Fatalf("expected meta object")
+	}
+}
+
+func TestMCPMembersUpdateRoleUnchangedNoOp(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members NoOp Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members NoOp Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "noop@example.com", "password123", "NoOp")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, other.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "contributor",
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	m := out["data"].(map[string]any)["member"].(map[string]any)
+	if m["role"] != "contributor" {
+		t.Fatalf("role: %#v", m["role"])
+	}
+}
+
+func TestMCPMembersUpdateRoleUnsupportedRole(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members UR Role Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members UR Role Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "urrole@example.com", "password123", "U")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, other.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "owner",
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR")
+	}
+}
+
+func TestMCPMembersUpdateRoleTargetNotMember(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members UR NF Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members UR NF Project")
+
+	st := store.New(sqlDB, nil)
+	loner, err := st.CreateUser(context.Background(), "notmember@example.com", "password123", "N")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      loner.ID,
+			"role":        "viewer",
+		},
+	})
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND")
+	}
+}
+
+func TestMCPMembersUpdateRoleAuthFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members UR Auth Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members UR Auth Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "urauth@example.com", "password123", "U")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), firstUserID(t, sqlDB), projectID, other.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	resp2, out := doMCP(t, newStatelessClient(ts), ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "viewer",
+		},
+	})
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "AUTH_REQUIRED" {
+		t.Fatalf("expected AUTH_REQUIRED")
+	}
+}
+
+func TestMCPMembersUpdateRoleCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"userId":      float64(1),
+			"role":        "contributor",
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE")
+	}
+}
+
+func TestMCPMembersUpdateRoleCapabilityUnavailableBeforeBootstrap(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"userId":      float64(1),
+			"role":        "contributor",
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE")
+	}
+}
+
+func TestMCPMembersUpdateRolePermissionFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members UR Perm Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members UR Perm Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	viewer, err := st.CreateUser(context.Background(), "urview@example.com", "password123", "V")
+	if err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, viewer.ID, store.RoleViewer); err != nil {
+		t.Fatalf("add viewer: %v", err)
+	}
+	target, err := st.CreateUser(context.Background(), "urtarget@example.com", "password123", "T")
+	if err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, target.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add target: %v", err)
+	}
+
+	viewerClient := newSessionClientForUser(t, ts, st, viewer.ID)
+
+	resp2, out := doMCP(t, viewerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      target.ID,
+			"role":        "viewer",
+		},
+	})
+	if resp2.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN")
+	}
+}
+
+func TestMCPMembersUpdateRoleSelfDemotionConflict(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Self Demo Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Self Demo Project")
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      ownerID,
+			"role":        "contributor",
+		},
+	})
+	if resp2.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CONFLICT" {
+		t.Fatalf("expected CONFLICT")
+	}
+}
+
+func TestMCPMembersUpdateRoleLastMaintainerDemotionConflict(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Last M Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Last M Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	m2, err := st.CreateUser(context.Background(), "lastm2@example.com", "password123", "M2")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, m2.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add m2: %v", err)
+	}
+	// Align with store TestUpdateProjectMemberRole_LastMaintainerCannotDemoteToViewer setup.
+	r1, _ := doMCP(t, ownerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{"projectSlug": slug, "userId": m2.ID, "role": "maintainer"},
+	})
+	if r1.StatusCode != http.StatusOK {
+		t.Fatalf("mcp promote m2: %d", r1.StatusCode)
+	}
+	r2, _ := doMCP(t, ownerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{"projectSlug": slug, "userId": m2.ID, "role": "contributor"},
+	})
+	if r2.StatusCode != http.StatusOK {
+		t.Fatalf("mcp demote m2: %d", r2.StatusCode)
+	}
+	r3, _ := doMCP(t, ownerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{"projectSlug": slug, "userId": m2.ID, "role": "maintainer"},
+	})
+	if r3.StatusCode != http.StatusOK {
+		t.Fatalf("mcp re-promote m2: %d", r3.StatusCode)
+	}
+	m2Client := newSessionClientForUser(t, ts, st, m2.ID)
+	r4, _ := doMCP(t, m2Client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{"projectSlug": slug, "userId": ownerID, "role": "contributor"},
+	})
+	if r4.StatusCode != http.StatusOK {
+		t.Fatalf("mcp demote owner: %d", r4.StatusCode)
+	}
+	// m2 is now the only maintainer; self-demotion to viewer must fail (ErrConflict, last-maintainer path in store).
+	resp2, out := doMCP(t, m2Client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      m2.ID,
+			"role":        "viewer",
+		},
+	})
+	if resp2.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CONFLICT" {
+		t.Fatalf("expected CONFLICT, got %#v", out["error"])
+	}
+}
+
+func TestMCPMembersUpdateRoleLegacyOutputNormalization(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members UR Legacy Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members UR Legacy Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "urlegacy@example.com", "password123", "L")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, other.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+	if _, err := sqlDB.Exec(`UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?`, "owner", projectID, other.ID); err != nil {
+		t.Fatalf("legacy role: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+			"role":        "maintainer",
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	m := out["data"].(map[string]any)["member"].(map[string]any)
+	if m["role"] != "maintainer" {
+		t.Fatalf("expected normalized maintainer, got %#v", m["role"])
+	}
+}
+
+func TestMCPMembersRemoveSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members Remove Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members Remove Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "rmuser@example.com", "password123", "Rm")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, other.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.remove",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	if out["ok"] != true {
+		t.Fatalf("expected ok=true")
+	}
+	rem := out["data"].(map[string]any)["removed"].(map[string]any)
+	if rem["projectSlug"] != slug || int64(rem["userId"].(float64)) != other.ID {
+		t.Fatalf("removed: %#v", rem)
+	}
+	if _, ok := out["meta"].(map[string]any); !ok {
+		t.Fatalf("expected meta object")
+	}
+}
+
+func TestMCPMembersRemoveTargetNotMember(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members RM NF Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members RM NF Project")
+
+	st := store.New(sqlDB, nil)
+	loner, err := st.CreateUser(context.Background(), "rmnf@example.com", "password123", "N")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.remove",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      loner.ID,
+		},
+	})
+	if resp2.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "NOT_FOUND" {
+		t.Fatalf("expected NOT_FOUND")
+	}
+}
+
+func TestMCPMembersRemoveAuthFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members RM Auth Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members RM Auth Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	other, err := st.CreateUser(context.Background(), "rmauth@example.com", "password123", "A")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), firstUserID(t, sqlDB), projectID, other.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add member: %v", err)
+	}
+
+	resp2, out := doMCP(t, newStatelessClient(ts), ts.URL+"/mcp", map[string]any{
+		"tool": "members.remove",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      other.ID,
+		},
+	})
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "AUTH_REQUIRED" {
+		t.Fatalf("expected AUTH_REQUIRED")
+	}
+}
+
+func TestMCPMembersRemoveCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "members.remove",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"userId":      float64(1),
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE")
+	}
+}
+
+func TestMCPMembersRemoveCapabilityUnavailableBeforeBootstrap(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "members.remove",
+		"input": map[string]any{
+			"projectSlug": "demo",
+			"userId":      float64(1),
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE")
+	}
+}
+
+func TestMCPMembersRemovePermissionFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members RM Perm Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members RM Perm Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	viewer, err := st.CreateUser(context.Background(), "rmview@example.com", "password123", "V")
+	if err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, viewer.ID, store.RoleViewer); err != nil {
+		t.Fatalf("add viewer: %v", err)
+	}
+	target, err := st.CreateUser(context.Background(), "rmtarget@example.com", "password123", "T")
+	if err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, target.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add target: %v", err)
+	}
+
+	viewerClient := newSessionClientForUser(t, ts, st, viewer.ID)
+
+	resp2, out := doMCP(t, viewerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "members.remove",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      target.ID,
+		},
+	})
+	if resp2.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "FORBIDDEN" {
+		t.Fatalf("expected FORBIDDEN")
+	}
+}
+
+func TestMCPMembersRemoveLastMaintainerValidation(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members RM Last M Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members RM Last M Project")
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.remove",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      ownerID,
+		},
+	})
+	if resp2.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp2.StatusCode)
+	}
+	if out["error"].(map[string]any)["code"] != "VALIDATION_ERROR" {
+		t.Fatalf("expected VALIDATION_ERROR, got %#v", out["error"])
+	}
+}
+
+func TestMCPMembersRemoveSelfSuccessWhenNotLastMaintainer(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	ownerClient := newCookieClient(t, ts)
+	bootstrapUser(t, ownerClient, ts.URL)
+	ownerID := firstUserID(t, sqlDB)
+	resp := doJSON(t, ownerClient, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Members RM Self Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Members RM Self Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+
+	st := store.New(sqlDB, nil)
+	m2, err := st.CreateUser(context.Background(), "rmself2@example.com", "password123", "S2")
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if err := st.AddProjectMember(context.Background(), ownerID, projectID, m2.ID, store.RoleContributor); err != nil {
+		t.Fatalf("add m2: %v", err)
+	}
+	r1, _ := doMCP(t, ownerClient, ts.URL+"/mcp", map[string]any{
+		"tool": "members.updateRole",
+		"input": map[string]any{"projectSlug": slug, "userId": m2.ID, "role": "maintainer"},
+	})
+	if r1.StatusCode != http.StatusOK {
+		t.Fatalf("promote m2: %d", r1.StatusCode)
+	}
+
+	m2Client := newSessionClientForUser(t, ts, st, m2.ID)
+	resp2, out := doMCP(t, m2Client, ts.URL+"/mcp", map[string]any{
+		"tool": "members.remove",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"userId":      m2.ID,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	rem := out["data"].(map[string]any)["removed"].(map[string]any)
+	if int64(rem["userId"].(float64)) != m2.ID {
+		t.Fatalf("removed userId: %#v", rem["userId"])
+	}
+}
+
+func TestMCPBoardGetSuccess(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Board Get Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+
+	slug := projectSlugByName(t, sqlDB, "Board Get Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	ownerID := firstUserID(t, sqlDB)
+	st := store.New(sqlDB, nil)
+	ctx := store.WithUserID(context.Background(), ownerID)
+	if _, err := st.CreateTodo(ctx, projectID, store.CreateTodoInput{
+		Title:     "Backlog todo",
+		ColumnKey: store.DefaultColumnBacklog,
+		Tags:      []string{"bug"},
+	}, store.ModeFull); err != nil {
+		t.Fatalf("create backlog todo: %v", err)
+	}
+	if _, err := st.CreateTodo(ctx, projectID, store.CreateTodoInput{
+		Title:     "Doing todo",
+		ColumnKey: store.DefaultColumnDoing,
+	}, store.ModeFull); err != nil {
+		t.Fatalf("create doing todo: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "board.get",
+		"input": map[string]any{
+			"projectSlug": slug,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+
+	data := out["data"].(map[string]any)
+	project := data["project"].(map[string]any)
+	if project["projectSlug"] != slug || project["name"] != "Board Get Project" || project["role"] != "maintainer" {
+		t.Fatalf("unexpected project shape: %#v", project)
+	}
+	if _, ok := project["projectId"]; ok {
+		t.Fatalf("board project should not expose projectId: %#v", project)
+	}
+
+	columns := data["columns"].([]any)
+	backlog := boardColumnByKey(t, columns, store.DefaultColumnBacklog)
+	items := backlog["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected one backlog item, got %#v", items)
+	}
+	item := items[0].(map[string]any)
+	if item["projectSlug"] != slug || item["title"] != "Backlog todo" || item["columnKey"] != store.DefaultColumnBacklog {
+		t.Fatalf("unexpected board todo item: %#v", item)
+	}
+	if _, ok := item["id"]; ok {
+		t.Fatalf("board item should not expose global todo id: %#v", item)
+	}
+
+	if _, ok := out["meta"].(map[string]any); !ok {
+		t.Fatalf("expected meta object, got %#v", out["meta"])
+	}
+}
+
+func TestMCPBoardGetPerColumnPagination(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Board Page Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+
+	slug := projectSlugByName(t, sqlDB, "Board Page Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	ownerID := firstUserID(t, sqlDB)
+	st := store.New(sqlDB, nil)
+	ctx := store.WithUserID(context.Background(), ownerID)
+	for i := 0; i < 3; i++ {
+		if _, err := st.CreateTodo(ctx, projectID, store.CreateTodoInput{
+			Title:     "Paged todo",
+			ColumnKey: store.DefaultColumnBacklog,
+		}, store.ModeFull); err != nil {
+			t.Fatalf("create todo %d: %v", i, err)
+		}
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "board.get",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"limit":       2,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	meta := out["meta"].(map[string]any)
+	hasMoreByColumn := meta["hasMoreByColumn"].(map[string]any)
+	nextCursorByColumn := meta["nextCursorByColumn"].(map[string]any)
+	totalCountByColumn := meta["totalCountByColumn"].(map[string]any)
+	if hasMoreByColumn[store.DefaultColumnBacklog] != true {
+		t.Fatalf("expected backlog hasMore=true, got %#v", hasMoreByColumn)
+	}
+	cursor, ok := nextCursorByColumn[store.DefaultColumnBacklog].(string)
+	if !ok || cursor == "" {
+		t.Fatalf("expected opaque backlog cursor, got %#v", nextCursorByColumn[store.DefaultColumnBacklog])
+	}
+	if int(totalCountByColumn[store.DefaultColumnBacklog].(float64)) != 3 {
+		t.Fatalf("expected totalCount 3, got %#v", totalCountByColumn[store.DefaultColumnBacklog])
+	}
+
+	resp3, out2 := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "board.get",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"limit":       2,
+			"cursorByColumn": map[string]any{
+				store.DefaultColumnBacklog: cursor,
+			},
+		},
+	})
+	if resp3.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 on follow-up page, got %d", resp3.StatusCode)
+	}
+	backlog := boardColumnByKey(t, out2["data"].(map[string]any)["columns"].([]any), store.DefaultColumnBacklog)
+	if len(backlog["items"].([]any)) != 1 {
+		t.Fatalf("expected one remaining backlog item, got %#v", backlog["items"])
+	}
+}
+
+func TestMCPBoardGetFilters(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Board Filter Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+
+	slug := projectSlugByName(t, sqlDB, "Board Filter Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	ownerID := firstUserID(t, sqlDB)
+	st := store.New(sqlDB, nil)
+	ctx := store.WithUserID(context.Background(), ownerID)
+	if _, err := st.CreateTodo(ctx, projectID, store.CreateTodoInput{
+		Title:     "Fix login bug",
+		ColumnKey: store.DefaultColumnBacklog,
+		Tags:      []string{"bug"},
+	}, store.ModeFull); err != nil {
+		t.Fatalf("create matching todo: %v", err)
+	}
+	if _, err := st.CreateTodo(ctx, projectID, store.CreateTodoInput{
+		Title:     "Fix login copy",
+		ColumnKey: store.DefaultColumnBacklog,
+		Tags:      []string{"docs"},
+	}, store.ModeFull); err != nil {
+		t.Fatalf("create non-matching todo: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "board.get",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"tag":         "bug",
+			"search":      "login",
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	backlog := boardColumnByKey(t, out["data"].(map[string]any)["columns"].([]any), store.DefaultColumnBacklog)
+	items := backlog["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["title"] != "Fix login bug" {
+		t.Fatalf("unexpected filtered items: %#v", items)
+	}
+}
+
+func TestMCPBoardGetSprintFilter(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Board Sprint Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+
+	slug := projectSlugByName(t, sqlDB, "Board Sprint Project")
+	projectID := projectIDBySlug(t, sqlDB, slug)
+	ownerID := firstUserID(t, sqlDB)
+	st := store.New(sqlDB, nil)
+	ctx := store.WithUserID(context.Background(), ownerID)
+	sp, err := st.CreateSprint(ctx, projectID, "Sprint 1", time.UnixMilli(1000), time.UnixMilli(2000))
+	if err != nil {
+		t.Fatalf("create sprint: %v", err)
+	}
+	if _, err := st.CreateTodo(ctx, projectID, store.CreateTodoInput{
+		Title:     "In sprint",
+		ColumnKey: store.DefaultColumnBacklog,
+		SprintID:  &sp.ID,
+	}, store.ModeFull); err != nil {
+		t.Fatalf("create sprint todo: %v", err)
+	}
+	if _, err := st.CreateTodo(ctx, projectID, store.CreateTodoInput{
+		Title:     "Outside sprint",
+		ColumnKey: store.DefaultColumnBacklog,
+	}, store.ModeFull); err != nil {
+		t.Fatalf("create unscheduled todo: %v", err)
+	}
+
+	resp2, out := doMCP(t, client, ts.URL+"/mcp", map[string]any{
+		"tool": "board.get",
+		"input": map[string]any{
+			"projectSlug": slug,
+			"sprintId":    sp.ID,
+		},
+	})
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp2.StatusCode)
+	}
+	backlog := boardColumnByKey(t, out["data"].(map[string]any)["columns"].([]any), store.DefaultColumnBacklog)
+	items := backlog["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["title"] != "In sprint" {
+		t.Fatalf("unexpected sprint-filtered items: %#v", items)
+	}
+}
+
+func TestMCPBoardGetAuthFailure(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	client := newCookieClient(t, ts)
+	bootstrapUser(t, client, ts.URL)
+	resp := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{
+		"name": "Board Auth Project",
+	}, &map[string]any{})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create project status=%d", resp.StatusCode)
+	}
+	slug := projectSlugByName(t, sqlDB, "Board Auth Project")
+
+	resp2, out := doMCP(t, newStatelessClient(ts), ts.URL+"/mcp", map[string]any{
+		"tool": "board.get",
+		"input": map[string]any{
+			"projectSlug": slug,
+		},
+	})
+	if resp2.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", resp2.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "AUTH_REQUIRED" {
+		t.Fatalf("expected AUTH_REQUIRED, got %#v", errObj["code"])
+	}
+}
+
+func TestMCPBoardGetCapabilityUnavailableInAnonymousMode(t *testing.T) {
+	ts, _, cleanup := newTestServer(t, "anonymous")
+	defer cleanup()
+
+	resp, out := doMCP(t, ts.Client(), ts.URL+"/mcp", map[string]any{
+		"tool": "board.get",
+		"input": map[string]any{
+			"projectSlug": "demo",
+		},
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", resp.StatusCode)
+	}
+	errObj := out["error"].(map[string]any)
+	if errObj["code"] != "CAPABILITY_UNAVAILABLE" {
+		t.Fatalf("expected CAPABILITY_UNAVAILABLE, got %#v", errObj["code"])
 	}
 }
 
