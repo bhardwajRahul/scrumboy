@@ -317,6 +317,31 @@ type TagWithColor struct {
 	CanDelete bool    // Computed per tag_id from role/ownership; never from name groups
 }
 
+// GetProjectScopedTagByID resolves a project-scoped tag by tag_id and project_id.
+// It returns only tags with user_id IS NULL, so callers can safely distinguish
+// project-scoped mutation targets from user-owned tags.
+func (s *Store) GetProjectScopedTagByID(ctx context.Context, projectID, tagID int64) (TagWithColor, error) {
+	var (
+		twc   TagWithColor
+		color sql.NullString
+	)
+	err := s.db.QueryRowContext(ctx, `
+SELECT id, name, color
+FROM tags
+WHERE id = ? AND project_id = ? AND user_id IS NULL
+`, tagID, projectID).Scan(&twc.TagID, &twc.Name, &color)
+	if err == sql.ErrNoRows {
+		return TagWithColor{}, fmt.Errorf("%w: tag not found", ErrNotFound)
+	}
+	if err != nil {
+		return TagWithColor{}, fmt.Errorf("get project-scoped tag: %w", err)
+	}
+	if color.Valid && color.String != "" {
+		twc.Color = &color.String
+	}
+	return twc, nil
+}
+
 // ListUserTags returns all tags owned by user (cross-project tag library).
 // All are user-owned so CanDelete = true for every row.
 func (s *Store) ListUserTags(ctx context.Context, userID int64) ([]TagWithColor, error) {
@@ -534,7 +559,8 @@ ON CONFLICT(user_id, tag_id) DO UPDATE SET color = excluded.color`, *viewerUserI
 		}
 		return nil
 	} else if tagProjectID.Valid {
-		// Board-scoped tag: update tags.color directly (board-wide color)
+		// Board-scoped tag: update tags.color directly (board-wide color).
+		// viewerUserID is not used for this branch; the shared column is updated for all viewers.
 		if color == nil || *color == "" {
 			// Remove color
 			_, err := s.db.ExecContext(ctx, `UPDATE tags SET color = NULL WHERE id = ?`, tagID)
