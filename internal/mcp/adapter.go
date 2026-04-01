@@ -36,9 +36,16 @@ type storeAPI interface {
 	ListTagCounts(ctx context.Context, pc *store.ProjectContext) ([]store.TagCount, error)
 	ListUserTags(ctx context.Context, userID int64) ([]store.TagWithColor, error)
 	UpdateTagColor(ctx context.Context, viewerUserID *int64, tagID int64, color *string) error
+	DeleteTag(ctx context.Context, userID int64, tagID int64, isAnonymousBoard bool) error
 	GetProjectScopedTagByID(ctx context.Context, projectID, tagID int64) (store.TagWithColor, error)
 	ListProjectMembers(ctx context.Context, projectID int64, userID int64) ([]store.ProjectMember, error)
 	ListAvailableUsersForProject(ctx context.Context, requesterID, projectID int64) ([]store.User, error)
+	AddProjectMember(ctx context.Context, requesterID, projectID, targetUserID int64, role store.ProjectRole) error
+	UpdateProjectMemberRole(ctx context.Context, requesterID, projectID, targetUserID int64, role store.ProjectRole) error
+	RemoveProjectMember(ctx context.Context, requesterID, projectID, targetUserID int64) error
+	GetProjectWorkflow(ctx context.Context, projectID int64) ([]store.WorkflowColumn, error)
+	CountTodosForBoardLane(ctx context.Context, projectID int64, columnKey string, tagFilter string, searchFilter string, sprintFilter store.SprintFilter) (int, error)
+	UpdateBoardActivity(ctx context.Context, projectID int64) error
 }
 
 type Options struct {
@@ -146,16 +153,20 @@ func (a *Adapter) implementedTools() []string {
 		"tags.listProject",
 		"tags.listMine",
 		"tags.updateMineColor",
+		"tags.deleteMine",
 		"tags.updateProjectColor",
+		"tags.deleteProject",
 		"members.list",
 		"members.listAvailable",
+		"members.add",
+		"members.updateRole",
+		"members.remove",
+		"board.get",
 	}
 }
 
 func (a *Adapter) plannedTools() []string {
-	return []string{
-		"board.get",
-	}
+	return nil
 }
 
 func (a *Adapter) storeMode() store.Mode {
