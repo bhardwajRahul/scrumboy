@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -270,6 +271,73 @@ func TestMCPMountDoesNotBreakSPARoutes(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected /mcp 200, got %d", resp.StatusCode)
 	}
+}
+
+// Invalid Bearer must not fall back to a valid session cookie (strict Bearer semantics).
+func TestMCP_InvalidBearerDoesNotFallBackToSessionCookie(t *testing.T) {
+	ts, sqlDB, cleanup := newTestServer(t, "full")
+	defer cleanup()
+
+	bootstrapUser(t, newCookieClient(t, ts), ts.URL)
+	st := store.New(sqlDB, nil)
+	userID := firstUserID(t, sqlDB)
+	client := newSessionClientForUser(t, ts, st, userID)
+
+	authz := "Bearer sb_" + strings.Repeat("A", 43)
+
+	t.Run("GET", func(t *testing.T) {
+		req, err := http.NewRequest(http.MethodGet, ts.URL+"/mcp", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", authz)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("GET status=%d want 401", resp.StatusCode)
+		}
+		var out map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatal(err)
+		}
+		errObj := out["error"].(map[string]any)
+		if errObj["code"] != "AUTH_REQUIRED" {
+			t.Fatalf("expected AUTH_REQUIRED, got %#v", errObj["code"])
+		}
+	})
+
+	t.Run("POST", func(t *testing.T) {
+		body := map[string]any{"tool": "projects.list", "input": map[string]any{}}
+		var buf bytes.Buffer
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			t.Fatal(err)
+		}
+		req, err := http.NewRequest(http.MethodPost, ts.URL+"/mcp", &buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", authz)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("POST status=%d want 401", resp.StatusCode)
+		}
+		var out map[string]any
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			t.Fatal(err)
+		}
+		errObj := out["error"].(map[string]any)
+		if errObj["code"] != "AUTH_REQUIRED" {
+			t.Fatalf("expected AUTH_REQUIRED, got %#v", errObj["code"])
+		}
+	})
 }
 
 func TestMCPSystemGetCapabilities_FullPreBootstrap(t *testing.T) {
