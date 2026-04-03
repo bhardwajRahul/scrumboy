@@ -162,6 +162,8 @@ export interface AuthStatusResponse {
   user?: User | null;
   bootstrapAvailable?: boolean;
   mode?: 'anonymous' | 'full';
+  oidcEnabled?: boolean;
+  localAuthEnabled?: boolean;
 }
 
 export interface BoardResponse extends Board {

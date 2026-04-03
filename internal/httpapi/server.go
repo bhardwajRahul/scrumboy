@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"scrumboy/internal/httpapi/ratelimit"
+	"scrumboy/internal/oidc"
 	"scrumboy/internal/store"
 	"scrumboy/internal/version"
 )
@@ -24,6 +25,8 @@ type Options struct {
 	// EncryptionKey is the HMAC secret for password reset tokens. Required for admin password reset.
 	// Set from SCRUMBOY_ENCRYPTION_KEY (base64). If unset, password reset endpoints return 503.
 	EncryptionKey []byte
+
+	OIDCService *oidc.Service // nil when OIDC is not configured
 }
 
 type Server struct {
@@ -38,6 +41,7 @@ type Server struct {
 	authRateLimit *ratelimit.Limiter
 
 	encryptionKey []byte // for password reset tokens; nil if not configured
+	oidcService   *oidc.Service // nil when OIDC is not configured
 
 	passwordResetAdminLimiter *ratelimit.Limiter // 10 resets/min per admin
 
@@ -72,6 +76,9 @@ type storeAPI interface {
 	CreateUserAPIToken(ctx context.Context, userID int64, name *string) (id int64, plaintext string, createdAt time.Time, err error)
 	ListUserAPITokens(ctx context.Context, userID int64) ([]store.APITokenMeta, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID int64) error
+
+	GetUserByOIDCIdentity(ctx context.Context, issuer, subject string) (store.User, error)
+	CreateUserOIDC(ctx context.Context, configuredIssuer, issuer, subject, email, name string) (store.User, error)
 
 	ListProjects(ctx context.Context) ([]store.ProjectListEntry, error)
 	GetProject(ctx context.Context, projectID int64) (store.Project, error)
@@ -244,6 +251,7 @@ func NewServer(st storeAPI, opts Options) *Server {
 		sink:                      hub,
 		authRateLimit:             authRateLimit,
 		encryptionKey:             encKey,
+		oidcService:               opts.OIDCService,
 		passwordResetAdminLimiter: passwordResetAdminLimiter,
 		webFS:                     webFS,
 		fileSrv:                   http.FileServer(http.FS(webFS)),

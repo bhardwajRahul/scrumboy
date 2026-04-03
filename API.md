@@ -231,6 +231,19 @@ curl -b cookies.txt -X POST http://localhost:8080/mcp \
   -d '{"tool":"projects.list","input":{}}'
 ```
 
+### OIDC login (optional)
+
+When the server is configured with OIDC environment variables (`SCRUMBOY_OIDC_ISSUER`, `SCRUMBOY_OIDC_CLIENT_ID`, `SCRUMBOY_OIDC_CLIENT_SECRET`, `SCRUMBOY_OIDC_REDIRECT_URL`), two additional endpoints become available:
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/auth/oidc/login?return_to=/` | Redirects browser to the IdP authorization endpoint |
+| `GET` | `/api/auth/oidc/callback?code=...&state=...` | Handles the IdP callback, creates a session, and redirects to `return_to` |
+
+These are browser-redirect endpoints, not JSON APIs. After successful OIDC login, the user receives a standard `scrumboy_session` cookie. MCP and REST access work identically to password-based sessions.
+
+`GET /api/auth/status` includes `oidcEnabled` (bool) and `localAuthEnabled` (bool) when OIDC is configured.
+
 ### API access tokens (REST)
 
 Manage opaque MCP/API tokens while logged in (session cookie). Mutating endpoints require `X-Scrumboy: 1` like other `/api` writes.

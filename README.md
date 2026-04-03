@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.8.0-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.9.0-blue" alt="version" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   </a>
@@ -53,6 +53,27 @@ Note: `scrumboy.env` is not a standard KEY=value file — it contains only the r
 - If an existing database already has 2FA-enabled users, startup fails without this key.
 
 Generate a key with: `openssl rand -base64 32`
+
+### OIDC / SSO login (optional)
+
+Scrumboy supports OpenID Connect for single sign-on with any standards-compliant provider (Keycloak, Authentik, Auth0, Entra ID, etc.). OIDC is enabled by setting all four required environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `SCRUMBOY_OIDC_ISSUER` | Issuer URL (e.g. `https://auth.example.com/realms/main`) |
+| `SCRUMBOY_OIDC_CLIENT_ID` | OAuth client ID |
+| `SCRUMBOY_OIDC_CLIENT_SECRET` | Confidential client secret |
+| `SCRUMBOY_OIDC_REDIRECT_URL` | Full callback URL registered at IdP (e.g. `https://scrumboy.example.com/api/auth/oidc/callback`) |
+
+Optional:
+
+| Variable | Description |
+|----------|-------------|
+| `SCRUMBOY_OIDC_LOCAL_AUTH_DISABLED` | Set to `true` to disable local password login when OIDC is configured (SSO-only mode) |
+
+Local password authentication remains available by default alongside OIDC. After successful OIDC login, the user receives a standard Scrumboy session cookie. The IdP must return a verified email (`email_verified: true`). HTTPS is recommended when using OIDC to ensure session cookies are `Secure`.
+
+See [`docs/oidc.md`](docs/oidc.md) for full setup details, constraints, and troubleshooting.
 
 ### TLS / HTTPS (optional)
 
