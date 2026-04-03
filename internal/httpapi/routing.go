@@ -353,6 +353,18 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 		return
 	}
 
+	// GET /api/auth/oidc/login, GET /api/auth/oidc/callback
+	if len(rest) == 2 && rest[0] == "oidc" {
+		switch rest[1] {
+		case "login":
+			s.handleOIDCLogin(w, r)
+			return
+		case "callback":
+			s.handleOIDCCallback(w, r)
+			return
+		}
+	}
+
 	if len(rest) != 1 {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
 		return
@@ -388,7 +400,8 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 			writeInternal(w, err)
 			return
 		}
-		bootstrapAvailable := n == 0
+		localAuthEnabled := s.oidcService == nil || !s.oidcService.Config().LocalAuthDisabled
+		bootstrapAvailable := n == 0 && localAuthEnabled
 
 		var user any = nil
 		// Fetch full user record to include isBootstrap flag
@@ -402,16 +415,23 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 			}
 		}
 
-		writeJSON(w, http.StatusOK, map[string]any{
+		resp := map[string]any{
 			"user":               user,
 			"bootstrapAvailable": bootstrapAvailable,
 			"mode":               "full",
-		})
+		}
+		resp["oidcEnabled"] = s.oidcService != nil
+		resp["localAuthEnabled"] = localAuthEnabled
+		writeJSON(w, http.StatusOK, resp)
 		return
 
 	case "bootstrap":
 		// Auth endpoints (except status) are not available in anonymous mode.
 		if s.mode == "anonymous" {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
+			return
+		}
+		if s.oidcService != nil && s.oidcService.Config().LocalAuthDisabled {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
 			return
 		}
@@ -455,6 +475,10 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 	case "login":
 		// Auth endpoints (except status) are not available in anonymous mode.
 		if s.mode == "anonymous" {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
+			return
+		}
+		if s.oidcService != nil && s.oidcService.Config().LocalAuthDisabled {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
 			return
 		}
