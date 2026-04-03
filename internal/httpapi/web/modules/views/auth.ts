@@ -2,10 +2,22 @@ import { app } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
 import { showToast, getAppVersion, escapeHTML, redirectAfterAuth } from '../utils.js';
 
-export function renderAuth(opts: { next?: string; bootstrap?: boolean } = {}): void {
+export function renderAuth(opts: { next?: string; bootstrap?: boolean; oidcEnabled?: boolean; localAuthEnabled?: boolean } = {}): void {
   const next = opts.next || (window.location.pathname + window.location.search);
   const bootstrapAvailable = !!opts.bootstrap;
+  const oidcEnabled = !!opts.oidcEnabled;
+  const localAuthEnabled = opts.localAuthEnabled !== false;
   const version = getAppVersion();
+
+  const ssoButtonHTML = oidcEnabled
+    ? `<a class="btn btn--sso" href="/api/auth/oidc/login?return_to=${encodeURIComponent(next)}">Continue with SSO</a>`
+    : '';
+
+  const showLocalForm = localAuthEnabled;
+  const dividerHTML = oidcEnabled && showLocalForm
+    ? `<div class="auth-divider"><span>or</span></div>`
+    : '';
+
   app.innerHTML = `
     <div class="page page--auth">
       <div class="topbar">
@@ -22,6 +34,9 @@ export function renderAuth(opts: { next?: string; bootstrap?: boolean } = {}): v
           <div class="muted" style="margin-bottom: 12px;">
             Authentication is enabled for this instance. Anonymous boards remain shareable by URL; durable projects require sign-in.
           </div>
+          ${ssoButtonHTML}
+          ${dividerHTML}
+          ${showLocalForm ? `
           <form id="authForm" class="stack">
             ${bootstrapAvailable ? `<input class="input" id="authName" placeholder="Name" maxlength="200" autocomplete="name" required />` : ``}
             <input class="input" id="authEmail" placeholder="Email" maxlength="200" autocomplete="email" required />
@@ -38,6 +53,7 @@ export function renderAuth(opts: { next?: string; bootstrap?: boolean } = {}): v
                 : `<button class="btn" type="submit" id="loginBtn">Login</button>`}
             </div>
           </form>
+          ` : ''}
         </div>
       </div>
       ${version ? `<div class="app-version">v${escapeHTML(version)}</div>` : ''}
@@ -61,6 +77,19 @@ export function renderAuth(opts: { next?: string; bootstrap?: boolean } = {}): v
       pwToggle.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
       pwToggle.setAttribute("title", isPassword ? "Hide password" : "Show password");
     });
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const oidcError = params.get('oidc_error');
+  if (oidcError) {
+    const msgs: Record<string, string> = {
+      state_invalid: 'Login session expired or invalid. Please try again.',
+      provider: 'The identity provider returned an error.',
+      token: 'Authentication failed. Please try again.',
+      email: 'A verified email address is required.',
+    };
+    showToast(msgs[oidcError] || 'Authentication failed.');
+    window.history.replaceState({}, '', window.location.pathname);
   }
 
   if (bootstrapAvailable) {

@@ -186,7 +186,7 @@ func (s *Store) AuthenticateUser(ctx context.Context, email, password string) (U
 	}
 	var (
 		u                User
-		pwHash           string
+		pwHash           sql.NullString
 		isBootstrap      bool
 		systemRoleStr    string
 		createdAtMs      int64
@@ -200,7 +200,7 @@ func (s *Store) AuthenticateUser(ctx context.Context, email, password string) (U
 		}
 		return User{}, fmt.Errorf("auth user: %w", err)
 	}
-	if bcrypt.CompareHashAndPassword([]byte(pwHash), []byte(password)) != nil {
+	if !pwHash.Valid || bcrypt.CompareHashAndPassword([]byte(pwHash.String), []byte(password)) != nil {
 		return User{}, ErrUnauthorized
 	}
 	u.IsBootstrap = isBootstrap
@@ -655,6 +655,134 @@ func (s *Store) UpdateUserRole(ctx context.Context, requesterID, targetUserID in
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit update role tx: %w", err)
+	}
+	return nil
+}
+
+// GetUserByOIDCIdentity returns the user linked to the given (issuer, subject) pair.
+// Returns ErrNotFound if no such identity exists.
+func (s *Store) GetUserByOIDCIdentity(ctx context.Context, issuer, subject string) (User, error) {
+	var (
+		u                User
+		isBootstrap      bool
+		systemRoleStr    string
+		createdAt        int64
+		twoFactorEnabled bool
+		image            sql.NullString
+	)
+	err := s.db.QueryRowContext(ctx, `
+SELECT u.id, u.email, u.name, u.image, u.is_bootstrap, u.system_role, u.created_at, u.two_factor_enabled
+FROM user_oidc_identities oi
+JOIN users u ON u.id = oi.user_id
+WHERE oi.issuer = ? AND oi.subject = ?
+`, issuer, subject).Scan(&u.ID, &u.Email, &u.Name, &image, &isBootstrap, &systemRoleStr, &createdAt, &twoFactorEnabled)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return User{}, ErrNotFound
+		}
+		return User{}, fmt.Errorf("get user by oidc identity: %w", err)
+	}
+	if image.Valid {
+		u.Image = &image.String
+	}
+	u.IsBootstrap = isBootstrap
+	if role, ok := ParseSystemRole(systemRoleStr); ok {
+		u.SystemRole = role
+	} else {
+		u.SystemRole = SystemRoleUser
+	}
+	u.CreatedAt = time.UnixMilli(createdAt).UTC()
+	u.TwoFactorEnabled = twoFactorEnabled
+	return u, nil
+}
+
+// CreateUserOIDC creates a new user from an OIDC login and links the identity.
+// If CountUsers==0 AND issuer==configuredIssuer, the user becomes owner (plan section I).
+// configuredIssuer is the canonical issuer from config; ownership is only granted
+// when the identity's issuer matches it, preventing a misconfigured or rogue issuer
+// from claiming the first-owner slot.
+// Returns ErrConflict if the email is already taken by another user.
+func (s *Store) CreateUserOIDC(ctx context.Context, configuredIssuer, issuer, subject, email, name string) (User, error) {
+	email = normalizeEmail(email)
+	if email == "" || !strings.Contains(email, "@") {
+		return User{}, fmt.Errorf("%w: invalid email", ErrValidation)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = email
+	}
+
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return User{}, fmt.Errorf("begin create oidc user tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
+		return User{}, fmt.Errorf("count users: %w", err)
+	}
+
+	role := SystemRoleUser
+	isBootstrap := false
+	if n == 0 && issuer == configuredIssuer {
+		role = SystemRoleOwner
+		isBootstrap = true
+	}
+
+	nowMs := time.Now().UTC().UnixMilli()
+
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO users(email, name, password_hash, is_bootstrap, system_role, created_at) VALUES (?, ?, NULL, ?, ?, ?)`,
+		email, name, isBootstrap, role.String(), nowMs)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
+			return User{}, ErrConflict
+		}
+		return User{}, fmt.Errorf("insert oidc user: %w", err)
+	}
+	userID, err := res.LastInsertId()
+	if err != nil {
+		return User{}, fmt.Errorf("last insert id oidc user: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO user_oidc_identities(user_id, issuer, subject, email_at_login, created_at) VALUES (?, ?, ?, ?, ?)`,
+		userID, issuer, subject, email, nowMs); err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return User{}, ErrConflict
+		}
+		return User{}, fmt.Errorf("insert oidc identity: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return User{}, fmt.Errorf("commit create oidc user tx: %w", err)
+	}
+
+	return User{
+		ID:          userID,
+		Email:       email,
+		Name:        name,
+		IsBootstrap: isBootstrap,
+		SystemRole:  role,
+		CreatedAt:   time.UnixMilli(nowMs).UTC(),
+	}, nil
+}
+
+// UpdateUserOIDCProfile updates email and name for an existing user on OIDC login.
+func (s *Store) UpdateUserOIDCProfile(ctx context.Context, userID int64, email, name string) error {
+	email = normalizeEmail(email)
+	name = strings.TrimSpace(name)
+	if email == "" {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE users SET email = ?, name = ? WHERE id = ?`, email, name, userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed: users.email") {
+			return ErrConflict
+		}
+		return fmt.Errorf("update oidc profile: %w", err)
 	}
 	return nil
 }

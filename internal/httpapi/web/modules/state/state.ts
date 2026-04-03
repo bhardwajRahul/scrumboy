@@ -30,6 +30,8 @@ export interface State {
   // Internal properties
   _authStatusChecked?: boolean;
   _bootstrapAvailable?: boolean;
+  _oidcEnabled?: boolean;
+  _localAuthEnabled?: boolean;
   projectsTab?: string;
   settingsActiveTab?: string;
   // DOM objects require "lib": ["DOM"] in tsconfig.json
