@@ -88,6 +88,14 @@ export function getBootstrapAvailable(): boolean | undefined {
   return current._bootstrapAvailable;
 }
 
+export function getOidcEnabled(): boolean {
+  return !!current._oidcEnabled;
+}
+
+export function getLocalAuthEnabled(): boolean {
+  return current._localAuthEnabled !== false;
+}
+
 export function getProjectsTab(): string | undefined {
   return current.projectsTab;
 }

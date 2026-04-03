@@ -1,7 +1,7 @@
 import { apiFetch } from './api.js';
 import { renderAuth, renderResetPassword, renderProjects, renderDashboard, renderBoard, renderNotFound, stopBoardEvents } from './views/index.js';
-import { getAuthStatusChecked, getUser, getBootstrapAvailable, getAuthStatusAvailable, getBoard } from './state/selectors.js';
-import { setAuthStatusChecked, setAuthStatusAvailable, setUser, setBootstrapAvailable, setRoute, setTag, setSearch, setSlug, setProjectId, setBoard, resetUserScopedState, setTagColors, setOpenTodoSegment, hydrateDashboardTodoSortFromServer } from './state/mutations.js';
+import { getAuthStatusChecked, getUser, getBootstrapAvailable, getAuthStatusAvailable, getBoard, getOidcEnabled, getLocalAuthEnabled } from './state/selectors.js';
+import { setAuthStatusChecked, setAuthStatusAvailable, setUser, setBootstrapAvailable, setOidcEnabled, setLocalAuthEnabled, setRoute, setTag, setSearch, setSlug, setProjectId, setBoard, resetUserScopedState, setTagColors, setOpenTodoSegment, hydrateDashboardTodoSortFromServer } from './state/mutations.js';
 import type { Board } from './types.js';
 import { RouteName, AuthStatusResponse, User } from './types.js';
 import { loadUserTheme } from './theme.js';
@@ -92,6 +92,8 @@ async function routeOnce(): Promise<void> {
     
     setUser(newUser);
     setBootstrapAvailable(!!(st && st.bootstrapAvailable));
+    setOidcEnabled(!!(st && st.oidcEnabled));
+    setLocalAuthEnabled(st && st.localAuthEnabled !== false);
     
     // Load full profile (including avatar) when logged in; /api/auth/status omits image to keep it lean
     if (newUser) {
@@ -174,7 +176,7 @@ async function routeOnce(): Promise<void> {
   if (getUser() == null && getAuthStatusChecked() && getAuthStatusAvailable()) {
     if (r.name === "projects" || r.name === "dashboard" || r.name === "boardBySlug") {
       console.log("Router: showing auth UI (not logged in)");
-      renderAuth({ next: window.location.pathname + window.location.search, bootstrap: getBootstrapAvailable() });
+      renderAuth({ next: window.location.pathname + window.location.search, bootstrap: getBootstrapAvailable(), oidcEnabled: getOidcEnabled(), localAuthEnabled: getLocalAuthEnabled() });
       return;
     }
   }
@@ -218,7 +220,7 @@ async function routeOnce(): Promise<void> {
       console.error("Router: error rendering board:", err);
       if (err && (err as Error & { status?: number }).status === 401) {
         // Only show auth UI for 401s (entry points). Resource endpoints should generally return 404 when unauthenticated.
-        renderAuth({ next: window.location.pathname + window.location.search, bootstrap: false });
+        renderAuth({ next: window.location.pathname + window.location.search, bootstrap: false, oidcEnabled: getOidcEnabled(), localAuthEnabled: getLocalAuthEnabled() });
         return;
       }
       throw err;

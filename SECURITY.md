@@ -33,6 +33,15 @@ User passwords are hashed with **bcrypt** before being written to the database.
 - No plaintext passwords or session tokens are stored. Sensitive credentials are stored only in hashed form as described above.
 - Backup/export features may include project and user data; they do not include password hashes or session token hashes in a form that would allow authentication. Handle exported data according to your own data policies.
 
+### OIDC (OpenID Connect)
+
+- When configured, Scrumboy acts as an OIDC confidential client using the Authorization Code flow with PKCE (S256).
+- Token exchange and ID token validation happen server-side; the browser never sees access tokens or ID tokens.
+- After successful OIDC login, the user receives a standard `scrumboy_session` cookie (same session infrastructure as password login).
+- Identity is linked via the stable `(issuer, subject)` pair from the ID token, not email alone.
+- OIDC state and PKCE verifiers are stored in-memory with a short TTL; they are not persisted to the database.
+- Verified email is required; login is denied if the `email_verified` claim is not `true`.
+
 ### Deployment and configuration
 
 - Use HTTPS in production. Session cookies should be set with appropriate flags (e.g. `Secure`, `SameSite`) when the app is served over HTTPS.
@@ -40,4 +49,4 @@ User passwords are hashed with **bcrypt** before being written to the database.
 
 ---
 
-*Last updated: February 2026*
+*Last updated: April 2026*

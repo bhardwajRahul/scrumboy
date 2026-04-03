@@ -98,6 +98,14 @@ export function setBootstrapAvailable(available: boolean | undefined): void {
   current._bootstrapAvailable = available;
 }
 
+export function setOidcEnabled(enabled: boolean): void {
+  current._oidcEnabled = enabled;
+}
+
+export function setLocalAuthEnabled(enabled: boolean): void {
+  current._localAuthEnabled = enabled;
+}
+
 export function setProjectsTab(tab: string | undefined): void {
   current.projectsTab = tab;
 }

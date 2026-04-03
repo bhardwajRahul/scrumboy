@@ -16,6 +16,7 @@ import (
 	"scrumboy/internal/httpapi"
 	"scrumboy/internal/mcp"
 	"scrumboy/internal/migrate"
+	"scrumboy/internal/oidc"
 	"scrumboy/internal/projectcolor"
 	"scrumboy/internal/store"
 )
@@ -73,12 +74,25 @@ func main() {
 		logger.Printf("backfilled dominant colors for %d projects", n)
 	}
 
+	var oidcSvc *oidc.Service
+	if cfg.OIDCEnabled() {
+		oidcSvc = oidc.New(oidc.Config{
+			IssuerCanonical:   cfg.OIDCIssuerCanonical,
+			ClientID:          cfg.OIDCClientID,
+			ClientSecret:      cfg.OIDCClientSecret,
+			RedirectURL:       cfg.OIDCRedirectURL,
+			LocalAuthDisabled: cfg.OIDCLocalAuthDisabled,
+		})
+		logger.Printf("OIDC enabled (issuer: %s)", cfg.OIDCIssuerCanonical)
+	}
+
 	srv := httpapi.NewServer(st, httpapi.Options{
 		Logger:         logger,
 		MaxRequestBody: cfg.MaxRequestBodyBytes,
 		ScrumboyMode:   cfg.ScrumboyMode,
 		MCPHandler:     mcp.New(st, mcp.Options{Mode: cfg.ScrumboyMode}),
 		EncryptionKey:  encKey,
+		OIDCService:    oidcSvc,
 	})
 
 	httpServer := &http.Server{
