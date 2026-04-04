@@ -39,7 +39,8 @@ export type KeyActionId =
   | "projectsList7"
   | "projectsList8"
   | "projectsList9"
-  | "cycleMainNavTabs";
+  | "cycleMainNavTabs"
+  | "cycleMainNavTabsReverse";
 
 export interface KeybindingDeps {
   openSettings: () => void | Promise<void>;
@@ -95,6 +96,7 @@ export const DEFAULT_KEY_CHORDS: Record<KeyActionId, string> = {
   projectsList8: "8",
   projectsList9: "9",
   cycleMainNavTabs: "tab",
+  cycleMainNavTabsReverse: "shift+tab",
 };
 
 export interface KeyActionMeta {
@@ -111,6 +113,11 @@ export const KEY_ACTION_LIST: KeyActionMeta[] = [
   {
     id: "cycleMainNavTabs",
     label: "Cycle Dashboard / Projects / Temporary",
+    contexts: ["dashboard", "projects"],
+  },
+  {
+    id: "cycleMainNavTabsReverse",
+    label: "Cycle Dashboard / Projects / Temporary (reverse)",
     contexts: ["dashboard", "projects"],
   },
   { id: "createProject", label: "Create project", contexts: ["projects"] },
@@ -416,7 +423,8 @@ export function executeAction(actionId: KeyActionId): void {
       if (deps) void Promise.resolve(deps.openSettings());
       return;
     }
-    case "cycleMainNavTabs": {
+    case "cycleMainNavTabs":
+    case "cycleMainNavTabsReverse": {
       if (view !== "dashboard" && view !== "projects") return;
       const route = getRoute();
       const tab = getProjectsTab();
@@ -428,7 +436,8 @@ export function executeAction(actionId: KeyActionId): void {
       } else {
         return;
       }
-      const next = (idx + 1) % 3;
+      const delta = actionId === "cycleMainNavTabsReverse" ? 2 : 1;
+      const next = (idx + delta) % 3;
       const persistProjectsTab = (value: "projects" | "temporary"): void => {
         setProjectsTab(value);
         localStorage.setItem("projectsTab", value);
@@ -535,6 +544,18 @@ function onGlobalKeydown(ev: KeyboardEvent): void {
   const chord = chordFromKeyboardEvent(ev);
   if (!chord) return;
 
+  // --- Escape: search blur MUST run before isModalOpen() check ---
+  if (chord === "escape") {
+    const active = document.activeElement;
+    if (active && (active as HTMLElement).id === "searchInput") {
+      ev.preventDefault();
+      (active as HTMLElement).blur();
+      const clearBtn = document.getElementById("searchClear");
+      if (clearBtn) clearBtn.click();
+      return;
+    }
+  }
+
   if (isModalOpen()) {
     return;
   }
@@ -542,7 +563,7 @@ function onGlobalKeydown(ev: KeyboardEvent): void {
   if (ev.repeat) return;
 
   const view = getCurrentView();
-  const tabCyclesMainNav = chord === "tab" && (view === "dashboard" || view === "projects");
+  const tabCyclesMainNav = (chord === "tab" || chord === "shift+tab") && (view === "dashboard" || view === "projects");
   if (tabCyclesMainNav) {
     if (isTypingInTextField()) return;
   } else if (shouldBlockForFocus()) {
@@ -566,7 +587,8 @@ function onGlobalKeydown(ev: KeyboardEvent): void {
   }
   if (tryExec("openSettings")) return;
   if (view === "dashboard" || view === "projects") {
-    if (tryExec("cycleMainNavTabs")) return;
+    if (chord === "tab" && tryExec("cycleMainNavTabs")) return;
+    if (chord === "shift+tab" && tryExec("cycleMainNavTabsReverse")) return;
   }
   if (view === "projects") {
     if (tryExec("createProject")) return;

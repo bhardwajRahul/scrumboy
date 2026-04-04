@@ -43,6 +43,7 @@ import {
   chordFromKeyboardEvent,
   formatChordForDisplay,
   getResolvedChordForAction,
+  isTypingInTextField,
   reloadKeybindingsFromStorage,
   saveKeybindingOverride,
   setKeybindingsCaptureListening,
@@ -211,6 +212,36 @@ function invalidateSettingsProfileRefetch(): void {
 function invalidateChartCache(): void {
   cachedRealBurndownData = null;
   cachedRealBurndownURL = null;
+}
+
+/**
+ * Single source of truth for all settings tab switches (click + keyboard).
+ * Handles workflow dirty checks, cache invalidation, re-render, and dialog height fix.
+ */
+async function switchSettingsTab(tabName: string): Promise<void> {
+  if (tabName === getSettingsActiveTab()) return;
+  if (getSettingsActiveTab() === "workflow" && isWorkflowDraftDirty()) {
+    const discard = await showConfirmDialog(
+      "You have unsaved changes. Discard them?",
+      "Unsaved changes",
+      "Discard"
+    );
+    if (!discard) return;
+    resetWorkflowDraftToBaseline();
+  }
+  if (tabName === "workflow") {
+    invalidateWorkflowLaneCountsCache();
+    clearWorkflowDraftState();
+  }
+  setSettingsActiveTab(tabName);
+  await renderSettingsModal();
+  const dialog = document.getElementById("settingsDialog");
+  if (dialog && (dialog as HTMLDialogElement).open) {
+    const currentHeight = (dialog as HTMLElement).style.height;
+    (dialog as HTMLElement).style.height = "auto";
+    void (dialog as HTMLElement).offsetHeight;
+    (dialog as HTMLElement).style.height = currentHeight || "";
+  }
 }
 
 // Invalidate sprints cache when sprints are created/activated/closed (so Charts tab shows fresh list)
@@ -1033,7 +1064,7 @@ async function renderSprintsTabContent(): Promise<string> {
       minute: "2-digit",
     });
     const listHTML = sprints.length === 0
-      ? "<div class='muted'>No sprints yet. Create one below.</div>"
+      ? "<div class='muted'>No sprints yet. Create one above.</div>"
       : sprints.map((sp) => {
           const isEditing = editingSprintId === sp.id;
           const dateRange = `${formatDate(sp.plannedStartAt)} – ${formatDate(sp.plannedEndAt)}`;
@@ -1639,39 +1670,30 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
     contentEl.classList.remove("settings-content--profile");
   }
 
-  // Setup tab switching
+  // Setup tab switching (click)
   document.querySelectorAll(".settings-tab").forEach(tab => {
-    tab.addEventListener("click", async (e) => {
+    tab.addEventListener("click", (e) => {
       const tabName = (e.target as HTMLElement).getAttribute("data-tab");
-      if (!tabName || tabName === getSettingsActiveTab()) return;
-      if (getSettingsActiveTab() === "workflow" && isWorkflowDraftDirty()) {
-        const discard = await showConfirmDialog(
-          "You have unsaved changes. Discard them?",
-          "Unsaved changes",
-          "Discard"
-        );
-        if (!discard) return;
-        resetWorkflowDraftToBaseline();
-      }
-      if (tabName === "workflow") {
-        invalidateWorkflowLaneCountsCache();
-        clearWorkflowDraftState();
-      }
-      setSettingsActiveTab(tabName);
-      await renderSettingsModal();
-      // Force dialog to recalculate height after content change
-      const dialog = document.getElementById("settingsDialog");
-      if (dialog && (dialog as HTMLDialogElement).open) {
-        // Reset height to force recalculation
-        const currentHeight = (dialog as HTMLElement).style.height;
-        (dialog as HTMLElement).style.height = "auto";
-        // Force a reflow
-        void (dialog as HTMLElement).offsetHeight;
-        // Reset to let CSS take over
-        (dialog as HTMLElement).style.height = currentHeight || "";
-      }
+      if (tabName) void switchSettingsTab(tabName);
     }, { signal });
   });
+
+  // Setup tab switching (keyboard: Tab cycles visible tabs)
+  const settingsDlgForKeyboard = document.getElementById("settingsDialog");
+  if (settingsDlgForKeyboard) {
+    settingsDlgForKeyboard.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab" || e.shiftKey) return;
+      if (isTypingInTextField()) return;
+      e.preventDefault();
+      const tabs = Array.from(settingsDlgForKeyboard.querySelectorAll(".settings-tab[data-tab]")) as HTMLElement[];
+      if (tabs.length === 0) return;
+      const current = getSettingsActiveTab();
+      const idx = tabs.findIndex((t) => t.getAttribute("data-tab") === current);
+      const next = (idx + 1) % tabs.length;
+      const nextTab = tabs[next].getAttribute("data-tab");
+      if (nextTab) void switchSettingsTab(nextTab);
+    }, { signal });
+  }
 
   // Setup backup tab if it's active
   if (getSettingsActiveTab() === "backup") {
