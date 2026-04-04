@@ -78,6 +78,8 @@ type storeAPI interface {
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID int64) error
 
 	GetUserByOIDCIdentity(ctx context.Context, issuer, subject string) (store.User, error)
+	GetUserByEmail(ctx context.Context, email string) (store.User, error)
+	LinkOIDCIdentity(ctx context.Context, userID int64, issuer, subject, email string) error
 	CreateUserOIDC(ctx context.Context, configuredIssuer, issuer, subject, email, name string) (store.User, error)
 
 	ListProjects(ctx context.Context) ([]store.ProjectListEntry, error)
