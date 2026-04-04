@@ -3,6 +3,14 @@
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** unless noted below.
 
 
+## [3.9.4] - 2026-04-04
+
+### Fixes
+
+- **OIDC / SSO - account linking for existing users** — When a user signs in with **Continue with SSO** and the IdP returns a **verified** email that already matches a **`users`** row (e.g. bootstrap owner or admin-created account from before OIDC), Scrumboy now **links** the **`(issuer, subject)`** identity in **`user_oidc_identities`** to that user instead of failing with a duplicate-email conflict. Local password hashes are unchanged; SSO and password login can both work for the same account when local auth remains enabled. Integration test **`TestOIDCAutoLinkExistingUser`** covers the full callback flow; the test **fake IdP** now relays **`nonce`** from authorize → token so end-to-end OIDC tests match real providers.
+
+---
+
 ## [3.9.3] - 2026-04-05
 
 ### Improvements
@@ -12,6 +20,14 @@
 - **Main navigation** — **Shift+Tab** cycles **Dashboard → Projects → Temporary** in reverse (**Tab** still cycles forward). Tab vs Shift+Tab are dispatched explicitly by chord so the two actions cannot both run.
 - **Dashboard** — Initial dashboard load also fetches **`/api/projects`** so chip counts stay correct on a direct **`/dashboard`** visit; failed project fetch does not wipe an existing in-memory list.
 - **Projects / Dashboard chips** — **Temporary** vs **Temporary Boards** label uses one shared helper (**`temporaryBoardsNavLabel`**, **767px** breakpoint) so dashboard and projects stay aligned.
+
+---
+
+## [3.9.2] - (no release)
+
+### Note
+
+- **Version number skipped in git** — There is no commit in this repository that sets **`internal/version/version.go`** to **3.9.2**, and no **`README`** / **`CHANGELOG`** reference to **3.9.2** before this note. After **3.9.1**, the next bump was **3.9.3** (commit **`2c5b576`**, *multiple UX enhancements…*). No separate user-facing changes are recorded under **3.9.2**; see **3.9.1** (OIDC **`dist/`** rebuild) and **3.9.3** (UX items above) for work in that window.
 
 ---
 
