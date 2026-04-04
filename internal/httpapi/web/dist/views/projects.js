@@ -5,6 +5,7 @@ import { escapeHTML, showToast, renderUserAvatar } from '../utils.js';
 import { getProjectsTab, getProjectView, getUser, } from '../state/selectors.js';
 import { setProjects, setProjectsTab, setProjectView, setSettingsActiveTab, } from '../state/mutations.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
+import { temporaryBoardsNavLabel } from '../nav-labels.js';
 // Symbol for idempotent listener attachment
 const BOUND_FLAG = Symbol('bound');
 // Board prefetch cache for Projects → Board navigation (hover to prefetch, click to use)
@@ -349,7 +350,7 @@ export async function renderProjects() {
     const temporaryBoards = projects.filter((p) => !!p.expiresAt);
     const activeList = getProjectsTab() === "temporary" ? temporaryBoards : durableProjects;
     const emptyMsg = getProjectsTab() === "temporary" ? "No temporary boards yet." : "No projects yet.";
-    const temporaryLabel = window.innerWidth <= 767 ? "Temporary" : "Temporary Boards";
+    const temporaryLabel = temporaryBoardsNavLabel();
     const tabsHTML = `
     <div class="chips" style="margin-top: 10px; margin-bottom: 12px;">
       <button class="chip" id="dashboardTabBtn" type="button">

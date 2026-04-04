@@ -3,8 +3,9 @@ import { apiFetch } from '../api.js';
 import { navigate } from '../router.js';
 import { escapeHTML, renderUserAvatar, sanitizeHexColor } from '../utils.js';
 import { getDashboardLoading, getDashboardNextCursor, getDashboardSummary, getDashboardTodos, getDashboardTodoSort, getProjects, getUser, } from '../state/selectors.js';
-import { appendDashboardTodos, setDashboardLoading, setDashboardNextCursor, setDashboardTodoSort, setProjectsTab, setSettingsActiveTab, setDashboardSummary, setDashboardTodos, } from '../state/mutations.js';
+import { appendDashboardTodos, setDashboardLoading, setDashboardNextCursor, setDashboardTodoSort, setProjects, setProjectsTab, setSettingsActiveTab, setDashboardSummary, setDashboardTodos, } from '../state/mutations.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
+import { temporaryBoardsNavLabel } from '../nav-labels.js';
 const BOUND_FLAG = Symbol('bound');
 const DASHBOARD_SORT_HINT = "Order matches each project's board: column, then drag order. Projects appear in a fixed order (not alphabetical or by activity).";
 function dashboardTodosQueryString() {
@@ -40,7 +41,7 @@ function renderTopTabs() {
     const projects = getProjects() || [];
     const durableProjects = projects.filter((p) => !p.expiresAt);
     const temporaryBoards = projects.filter((p) => !!p.expiresAt);
-    const temporaryLabel = window.innerWidth <= 767 ? "Temporary" : "Temporary Boards";
+    const temporaryLabel = temporaryBoardsNavLabel();
     return `
     <div class="chips" style="margin-top: 10px;">
       <button class="chip chip--active" id="dashboardTabBtn" type="button">Dashboard</button>
@@ -473,13 +474,17 @@ export async function renderDashboard() {
     setDashboardLoading(true);
     try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const [summary, todosResp] = await Promise.all([
+        const [summary, todosResp, projects] = await Promise.all([
             apiFetch(`/api/dashboard/summary?tz=${encodeURIComponent(tz)}`),
             apiFetch(`/api/dashboard/todos?${dashboardTodosQueryString()}`),
+            apiFetch("/api/projects").catch(() => null),
         ]);
         setDashboardSummary(summary);
         setDashboardTodos(todosResp.items || []);
         setDashboardNextCursor(todosResp.nextCursor || null);
+        if (projects) {
+            setProjects(projects);
+        }
     }
     catch (err) {
         const e = err;

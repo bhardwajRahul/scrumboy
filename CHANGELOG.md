@@ -3,6 +3,18 @@
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** unless noted below.
 
 
+## [3.9.3] - 2026-04-05
+
+### Improvements
+
+- **Board search (Escape)** — While the search field is focused, **Esc** blurs it and, when there is text, clears the query using the same path as the clear control (**`setSearchParam("")`** + board reload). Escape handling runs **before** the global modal gate so search dismisses consistently.
+- **Settings** — **Tab** cycles the visible settings tabs (wrapped); **Shift+Tab** is left for normal focus. Tab switching goes through a single **`switchSettingsTab`** helper (workflow dirty confirm, cache invalidation, re-render). Sprints tab empty copy now says **Create one above** (the form is above the list).
+- **Main navigation** — **Shift+Tab** cycles **Dashboard → Projects → Temporary** in reverse (**Tab** still cycles forward). Tab vs Shift+Tab are dispatched explicitly by chord so the two actions cannot both run.
+- **Dashboard** — Initial dashboard load also fetches **`/api/projects`** so chip counts stay correct on a direct **`/dashboard`** visit; failed project fetch does not wipe an existing in-memory list.
+- **Projects / Dashboard chips** — **Temporary** vs **Temporary Boards** label uses one shared helper (**`temporaryBoardsNavLabel`**, **767px** breakpoint) so dashboard and projects stay aligned.
+
+---
+
 ## [3.9.1] - 2026-04-04
 
 ### Fixes
