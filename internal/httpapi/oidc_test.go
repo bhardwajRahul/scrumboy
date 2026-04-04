@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +35,9 @@ type fakeIdP struct {
 	email      string
 	emailVer   bool
 	name       string
+
+	mu     sync.Mutex
+	nonces map[string]string // auth code → nonce
 }
 
 func newFakeIdP(t *testing.T) *fakeIdP {
@@ -91,10 +95,21 @@ func (f *fakeIdP) handleJWKS(w http.ResponseWriter, r *http.Request) {
 
 func (f *fakeIdP) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
+	nonce := r.URL.Query().Get("nonce")
 	redir := r.URL.Query().Get("redirect_uri")
+
+	code := "code-" + state[:8]
+
+	f.mu.Lock()
+	if f.nonces == nil {
+		f.nonces = make(map[string]string)
+	}
+	f.nonces[code] = nonce
+	f.mu.Unlock()
+
 	u, _ := url.Parse(redir)
 	q := u.Query()
-	q.Set("code", "test-auth-code")
+	q.Set("code", code)
 	q.Set("state", state)
 	u.RawQuery = q.Encode()
 	http.Redirect(w, r, u.String(), http.StatusFound)
@@ -110,10 +125,11 @@ func (f *fakeIdP) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nonce := r.FormValue("nonce")
-	if nonce == "" {
-		nonce = "fallback"
-	}
+	code := r.FormValue("code")
+	f.mu.Lock()
+	nonce := f.nonces[code]
+	delete(f.nonces, code)
+	f.mu.Unlock()
 
 	now := time.Now()
 	claims := map[string]any{
@@ -327,6 +343,115 @@ func TestOIDCCallbackInvalidState(t *testing.T) {
 	loc := resp.Header.Get("Location")
 	if !strings.Contains(loc, "oidc_error=state_invalid") {
 		t.Errorf("expected oidc_error=state_invalid, got Location=%q", loc)
+	}
+}
+
+// newTestOIDCServerWithStore is like newTestOIDCServer but also returns the
+// store so tests can pre-create local users before exercising the OIDC flow.
+func newTestOIDCServerWithStore(t *testing.T, idp *fakeIdP) (*httptest.Server, *store.Store, func()) {
+	t.Helper()
+
+	dir := t.TempDir()
+	sqlDB, err := db.Open(filepath.Join(dir, "app.db"), db.Options{
+		BusyTimeout: 5000,
+		JournalMode: "WAL",
+		Synchronous: "FULL",
+	})
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := migrate.Apply(context.Background(), sqlDB); err != nil {
+		_ = sqlDB.Close()
+		t.Fatalf("migrate: %v", err)
+	}
+
+	st := store.New(sqlDB, nil)
+
+	oidcSvc := oidc.New(oidc.Config{
+		IssuerCanonical: idp.issuer,
+		ClientID:        idp.clientID,
+		ClientSecret:    "test-secret",
+		RedirectURL:     "http://placeholder/api/auth/oidc/callback",
+	})
+
+	srv := NewServer(st, Options{
+		MaxRequestBody: 1 << 20,
+		ScrumboyMode:   "full",
+		OIDCService:    oidcSvc,
+	})
+	ts := httptest.NewServer(srv)
+
+	oidcSvc2 := oidc.New(oidc.Config{
+		IssuerCanonical: idp.issuer,
+		ClientID:        idp.clientID,
+		ClientSecret:    "test-secret",
+		RedirectURL:     ts.URL + "/api/auth/oidc/callback",
+	})
+	srv.oidcService = oidcSvc2
+
+	return ts, st, func() {
+		ts.Close()
+		_ = sqlDB.Close()
+	}
+}
+
+// TestOIDCAutoLinkExistingUser verifies that when a pre-existing local-password
+// user tries OIDC login with a matching verified email, the identity is
+// auto-linked and login succeeds (instead of failing with a conflict error).
+func TestOIDCAutoLinkExistingUser(t *testing.T) {
+	idp := newFakeIdP(t)
+	defer idp.close()
+
+	ts, st, cleanup := newTestOIDCServerWithStore(t, idp)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Bootstrap the owner with the same email the IdP will provide.
+	_, err := st.BootstrapUser(ctx, idp.email, "Password123!", "Alice Local")
+	if err != nil {
+		t.Fatalf("bootstrap: %v", err)
+	}
+
+	// Follow the full OIDC flow: login redirect → IdP authorize → callback.
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar}
+
+	resp, err := client.Get(ts.URL + "/api/auth/oidc/login?return_to=/")
+	if err != nil {
+		t.Fatalf("oidc login: %v", err)
+	}
+	resp.Body.Close()
+
+	// After the full redirect chain the user should land on "/" with a session
+	// cookie, NOT on "/?oidc_error=token".
+	finalURL := resp.Request.URL.String()
+	if strings.Contains(finalURL, "oidc_error") {
+		t.Fatalf("expected successful login, got redirect to %s", finalURL)
+	}
+
+	// Verify the session is live: GET /api/auth/status should return the user.
+	var status map[string]any
+	doJSON(t, client, "GET", ts.URL+"/api/auth/status", nil, &status)
+	user, ok := status["user"].(map[string]any)
+	if !ok || user == nil {
+		t.Fatalf("expected authenticated user in status, got %v", status)
+	}
+	if user["email"] != idp.email {
+		t.Errorf("expected email=%s, got %v", idp.email, user["email"])
+	}
+
+	// A second OIDC login with the same identity should succeed (identity
+	// already linked, no conflict).
+	jar2, _ := cookiejar.New(nil)
+	client2 := &http.Client{Jar: jar2}
+	resp2, err := client2.Get(ts.URL + "/api/auth/oidc/login?return_to=/")
+	if err != nil {
+		t.Fatalf("second oidc login: %v", err)
+	}
+	resp2.Body.Close()
+	if strings.Contains(resp2.Request.URL.String(), "oidc_error") {
+		t.Fatalf("second login failed: %s", resp2.Request.URL.String())
 	}
 }
 
