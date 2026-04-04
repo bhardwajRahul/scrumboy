@@ -16,13 +16,15 @@ import {
   setDashboardLoading,
   setDashboardNextCursor,
   setDashboardTodoSort,
+  setProjects,
   setProjectsTab,
   setSettingsActiveTab,
   setDashboardSummary,
   setDashboardTodos,
 } from '../state/mutations.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
-import { DashboardProject, DashboardSummary, DashboardTodo, DashboardTodosResponse, SprintSectionInfo } from '../types.js';
+import { DashboardProject, DashboardSummary, DashboardTodo, DashboardTodosResponse, Project, SprintSectionInfo } from '../types.js';
+import { temporaryBoardsNavLabel } from '../nav-labels.js';
 
 const BOUND_FLAG = Symbol('bound');
 
@@ -65,7 +67,7 @@ function renderTopTabs(): string {
   const projects = getProjects() || [];
   const durableProjects = projects.filter((p: any) => !p.expiresAt);
   const temporaryBoards = projects.filter((p: any) => !!p.expiresAt);
-  const temporaryLabel = window.innerWidth <= 767 ? "Temporary" : "Temporary Boards";
+  const temporaryLabel = temporaryBoardsNavLabel();
   return `
     <div class="chips" style="margin-top: 10px;">
       <button class="chip chip--active" id="dashboardTabBtn" type="button">Dashboard</button>
@@ -531,13 +533,17 @@ export async function renderDashboard(): Promise<void> {
   setDashboardLoading(true);
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const [summary, todosResp] = await Promise.all([
+    const [summary, todosResp, projects] = await Promise.all([
       apiFetch<DashboardSummary>(`/api/dashboard/summary?tz=${encodeURIComponent(tz)}`),
       apiFetch<DashboardTodosResponse>(`/api/dashboard/todos?${dashboardTodosQueryString()}`),
+      apiFetch<Project[]>("/api/projects").catch(() => null),
     ]);
     setDashboardSummary(summary);
     setDashboardTodos(todosResp.items || []);
     setDashboardNextCursor(todosResp.nextCursor || null);
+    if (projects) {
+      setProjects(projects);
+    }
   } catch (err: unknown) {
     const e = err as Error & { data?: { error?: { details?: { detail?: string } } } };
     if (e?.data?.error?.details?.detail) {
