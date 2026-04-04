@@ -769,6 +769,62 @@ func (s *Store) CreateUserOIDC(ctx context.Context, configuredIssuer, issuer, su
 	}, nil
 }
 
+// GetUserByEmail returns the user with the given email (normalized to lowercase).
+// Returns ErrNotFound if no such user exists.
+func (s *Store) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	email = normalizeEmail(email)
+	if email == "" {
+		return User{}, ErrNotFound
+	}
+	var (
+		u                User
+		isBootstrap      bool
+		systemRoleStr    string
+		createdAt        int64
+		twoFactorEnabled bool
+		image            sql.NullString
+	)
+	err := s.db.QueryRowContext(ctx, `SELECT id, email, name, image, is_bootstrap, system_role, created_at, two_factor_enabled FROM users WHERE email = ?`, email).
+		Scan(&u.ID, &u.Email, &u.Name, &image, &isBootstrap, &systemRoleStr, &createdAt, &twoFactorEnabled)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return User{}, ErrNotFound
+		}
+		return User{}, fmt.Errorf("get user by email: %w", err)
+	}
+	if image.Valid {
+		u.Image = &image.String
+	}
+	u.IsBootstrap = isBootstrap
+	if role, ok := ParseSystemRole(systemRoleStr); ok {
+		u.SystemRole = role
+	} else {
+		u.SystemRole = SystemRoleUser
+	}
+	u.CreatedAt = time.UnixMilli(createdAt).UTC()
+	u.TwoFactorEnabled = twoFactorEnabled
+	return u, nil
+}
+
+// LinkOIDCIdentity links an existing user to an OIDC identity by inserting a
+// row in user_oidc_identities. This enables pre-existing local-password users
+// to log in via SSO without creating a duplicate account.
+// Returns ErrConflict if the (issuer, subject) pair is already linked.
+func (s *Store) LinkOIDCIdentity(ctx context.Context, userID int64, issuer, subject, email string) error {
+	email = normalizeEmail(email)
+	nowMs := time.Now().UTC().UnixMilli()
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO user_oidc_identities(user_id, issuer, subject, email_at_login, created_at) VALUES (?, ?, ?, ?, ?)`,
+		userID, issuer, subject, email, nowMs)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return ErrConflict
+		}
+		return fmt.Errorf("link oidc identity: %w", err)
+	}
+	return nil
+}
+
 // UpdateUserOIDCProfile updates email and name for an existing user on OIDC login.
 func (s *Store) UpdateUserOIDCProfile(ctx context.Context, userID int64, email, name string) error {
 	email = normalizeEmail(email)

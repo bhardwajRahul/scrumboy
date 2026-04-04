@@ -66,12 +66,28 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		u, err = s.store.CreateUserOIDC(ctx, configuredIssuer, result.Issuer, result.Subject, result.Email, result.Name)
 		if err != nil {
 			if errors.Is(err, store.ErrConflict) {
-				s.logger.Printf("oidc: login aborted: email already in use by existing user (OIDC identity not linked), sub=%s", result.Subject)
+				// Email already belongs to a local-password user. Auto-link
+				// the OIDC identity so pre-existing users can log in via SSO
+				// without creating a duplicate account. The IdP email is
+				// already verified (HandleCallback enforces email_verified).
+				existing, lookupErr := s.store.GetUserByEmail(ctx, result.Email)
+				if lookupErr != nil {
+					s.logger.Printf("oidc: auto-link lookup failed for %s: %v", result.Email, lookupErr)
+					http.Redirect(w, r, "/?oidc_error=token", http.StatusFound)
+					return
+				}
+				if linkErr := s.store.LinkOIDCIdentity(ctx, existing.ID, result.Issuer, result.Subject, result.Email); linkErr != nil {
+					s.logger.Printf("oidc: auto-link failed for user %d: %v", existing.ID, linkErr)
+					http.Redirect(w, r, "/?oidc_error=token", http.StatusFound)
+					return
+				}
+				s.logger.Printf("oidc: auto-linked existing user %d (%s) to OIDC identity sub=%s", existing.ID, result.Email, result.Subject)
+				u = existing
 			} else {
 				s.logger.Printf("oidc: create user: %v", err)
+				http.Redirect(w, r, "/?oidc_error=token", http.StatusFound)
+				return
 			}
-			http.Redirect(w, r, "/?oidc_error=token", http.StatusFound)
-			return
 		}
 	}
 
