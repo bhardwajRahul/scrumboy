@@ -2243,6 +2243,48 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   margin-top: calc(48px * var(--ui-scale));
 }
 
+/* Lazy-load: mobile uses same ▼ affordance as board lanes; desktop keeps text button */
+.dashboard-load-more {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: var(--s-12);
+}
+
+.dashboard-load-more__desktop {
+  display: none;
+}
+
+.dashboard-load-more__mobile {
+  display: block;
+  cursor: pointer;
+  font-size: var(--fs-13);
+  color: var(--muted);
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.dashboard-load-more__mobile:active {
+  opacity: 0.6;
+}
+
+.dashboard-load-more__mobile[data-loading="1"] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@media (min-width: 621px) {
+  .dashboard-load-more__desktop {
+    display: inline-flex;
+  }
+
+  .dashboard-load-more__mobile {
+    display: none;
+  }
+}
+
 .dashboard-stats {
   display: none;
 }
@@ -3142,6 +3184,8 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
     /* For centering */
     opacity: 0.5;
     /* Dim non-active tabs */
+    /* Rounded outer edge for all lanes (custom keys are not covered by [data-tab] presets below) */
+    border-radius: var(--radius-8) 0 0 8px;
   }
 
   .mobile-tab__text {
@@ -3153,35 +3197,31 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
     /* Remove any default margins */
   }
 
-  /* Apply status-based background colors to mobile tabs (lowercase keys from API) */
+  /* Default lane tab colors when workflow has no inline color: keys match store/API column_key
+     (see DefaultColumn* in internal/store/types.go, defaultWorkflowColumns in workflows.go). */
   .mobile-tab[data-tab="backlog"] {
     background: #9CA3AF;
     color: #ffffff;
-    border-radius: var(--radius-8) 0 0 8px;
   }
 
   .mobile-tab[data-tab="not_started"] {
     background: #F59E0B;
     color: #ffffff;
-    border-radius: var(--radius-8) 0 0 8px;
   }
 
   .mobile-tab[data-tab="doing"] {
     background: #10B981;
     color: #ffffff;
-    border-radius: var(--radius-8) 0 0 8px;
   }
 
   .mobile-tab[data-tab="testing"] {
     background: #3B82F6;
     color: #ffffff;
-    border-radius: var(--radius-8) 0 0 8px;
   }
 
   .mobile-tab[data-tab="done"] {
     background: #EF4444;
     color: #ffffff;
-    border-radius: var(--radius-8) 0 0 8px;
   }
 
   .mobile-tab:hover {
@@ -3392,6 +3432,11 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   border-color: #10B981;
 }
 
+/* API column_key is `doing`; todo.status is DOING → card--doing on render */
+.card--doing {
+  border-color: #10B981;
+}
+
 .card--testing {
   border-color: #3B82F6;
 }
@@ -3409,6 +3454,10 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
 }
 
 .card--in_progress:hover {
+  border-color: #10B981;
+}
+
+.card--doing:hover {
   border-color: #10B981;
 }
 
