@@ -16,14 +16,17 @@ let activeSortables: any[] = [];
 let boardColumns: Array<{ key: string; title: string; color?: string }> = columnsSpec();
 let mobileTabIntroGlowTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Board column specification
+/**
+ * Fallback column list when the board API omits `columnOrder` (should be rare).
+ * Keys MUST match store/API workflow keys (`internal/store` DefaultColumn*).
+ */
 export function columnsSpec(): Array<{ key: string; title: string; color?: string }> {
   return [
-    { key: "BACKLOG", title: "Backlog", color: undefined },
-    { key: "NOT_STARTED", title: "Not Started", color: undefined },
-    { key: "IN_PROGRESS", title: "In Progress", color: undefined },
-    { key: "TESTING", title: "Testing", color: undefined },
-    { key: "DONE", title: "Done", color: undefined },
+    { key: "backlog", title: "Backlog", color: undefined },
+    { key: "not_started", title: "Not Started", color: undefined },
+    { key: "doing", title: "In Progress", color: undefined },
+    { key: "testing", title: "Testing", color: undefined },
+    { key: "done", title: "Done", color: undefined },
   ];
 }
 
@@ -31,7 +34,14 @@ export function setDnDColumns(columns: Array<{ key: string; title: string; color
   boardColumns = columns.length > 0 ? columns : columnsSpec();
 }
 
-const LANE_CARD_CLASSES = ['card--backlog', 'card--not_started', 'card--in_progress', 'card--testing', 'card--done'];
+const LANE_CARD_CLASSES = ['card--backlog', 'card--not_started', 'card--in_progress', 'card--doing', 'card--testing', 'card--done'];
+
+/** Maps workflow column_key to existing card border CSS suffix (legacy `in_progress` vs API `doing`). */
+function cardClassSuffixForLaneKey(key: string): string {
+  const k = key.toLowerCase();
+  if (k === "doing") return "in_progress";
+  return k;
+}
 
 function updateCardColorOptimistic(card: Element, targetKey: string, targetColor?: string): void {
   const btn = (card instanceof HTMLButtonElement ? card : card.querySelector('button.card')) as HTMLElement | null;
@@ -43,7 +53,7 @@ function updateCardColorOptimistic(card: Element, targetKey: string, targetColor
     btn.style.borderColor = targetColor;
   } else {
     btn.style.borderColor = '';
-    btn.classList.add(`card--${targetKey.toLowerCase()}`);
+    btn.classList.add(`card--${cardClassSuffixForLaneKey(targetKey)}`);
   }
 }
 

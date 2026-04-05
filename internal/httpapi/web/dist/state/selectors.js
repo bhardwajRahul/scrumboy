@@ -105,11 +105,11 @@ export function getDashboardTodoSort() {
 }
 export function getBoardLaneMeta() {
     return current.boardLaneMeta ?? {
-        BACKLOG: { hasMore: false, nextCursor: null, loading: false },
-        NOT_STARTED: { hasMore: false, nextCursor: null, loading: false },
-        IN_PROGRESS: { hasMore: false, nextCursor: null, loading: false },
-        TESTING: { hasMore: false, nextCursor: null, loading: false },
-        DONE: { hasMore: false, nextCursor: null, loading: false },
+        backlog: { hasMore: false, nextCursor: null, loading: false },
+        not_started: { hasMore: false, nextCursor: null, loading: false },
+        doing: { hasMore: false, nextCursor: null, loading: false },
+        testing: { hasMore: false, nextCursor: null, loading: false },
+        done: { hasMore: false, nextCursor: null, loading: false },
     };
 }
 /** Display count for a lane: total in lane when paged (totalCount), else columns length. */

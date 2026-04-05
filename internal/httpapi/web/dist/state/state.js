@@ -7,7 +7,7 @@ let _current = {
     search: "",
     openTodoSegment: null,
     editingTodo: null,
-    mobileTab: "BACKLOG",
+    mobileTab: "backlog",
     availableTags: [],
     availableTagsMap: {},
     autocompleteSuggestion: null,
@@ -33,7 +33,13 @@ let _current = {
         }
         return 'activity';
     })(),
-    boardLaneMeta: { BACKLOG: { hasMore: false, nextCursor: null, loading: false }, NOT_STARTED: { hasMore: false, nextCursor: null, loading: false }, IN_PROGRESS: { hasMore: false, nextCursor: null, loading: false }, TESTING: { hasMore: false, nextCursor: null, loading: false }, DONE: { hasMore: false, nextCursor: null, loading: false } },
+    boardLaneMeta: {
+        backlog: { hasMore: false, nextCursor: null, loading: false },
+        not_started: { hasMore: false, nextCursor: null, loading: false },
+        doing: { hasMore: false, nextCursor: null, loading: false },
+        testing: { hasMore: false, nextCursor: null, loading: false },
+        done: { hasMore: false, nextCursor: null, loading: false },
+    },
 };
 // DEPRECATED: Direct access to current is deprecated. Use selectors/mutations instead.
 // This export will be removed after circular dependency cleanup in a future phase.
