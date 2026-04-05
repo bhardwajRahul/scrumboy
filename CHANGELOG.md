@@ -3,6 +3,24 @@
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** unless noted below.
 
 
+## [3.11.6] - 2026-04-05
+
+### Fixes
+
+- **Board (mobile)** — Lane tab **rounded corners** apply to **all** workflow keys via a generic **`.mobile-tab`** rule (not only the five built-in `[data-tab="…"]` presets). **Workflow color** changes from Settings update **mobile tabs and tab drop zones** on in-place board refresh (shared **`mobile-lane-tabs`** helpers); **`initDnD`** runs after the strip is final so Sortable targets stay valid. In-place sync uses **key→element maps** instead of repeated DOM scans.
+- **Board (workflow keys)** — Client fallback **`columnsSpec()`** and default **lane meta / mobile tab** state use the same **canonical column keys** as the store/API (**`backlog`**, **`doing`**, etc.). **Legacy `mobileTab_*` localStorage** values (uppercase) map to current keys. **`.card--doing`** matches API todo **`DOING`** border styling; optimistic drag styling maps **`doing`** → existing **`in_progress`** card classes.
+
+### Improvements
+
+- **Board** — **`data-tab` / `data-status` / `data-column`** (and similar) use **`escapeHTML`** on lane keys in full render and incremental updates for parity with rebuild paths.
+- **Dashboard** — **Load more**: mobile uses the same **▼** affordance as board lanes (centered); desktop keeps a ghost **Load more** button; **`aria-busy`** and clearer **`aria-label`**; glyph as explicit **Unicode** (**`\u25BC`**) in source.
+
+### Tests
+
+- **`internal/httpapi/web_assets_test.go`** — Asserts **CSS** preset selectors match canonical default keys, **`columnsSpec`** keys, **`buildMobileTabsInnerHtml`** structure (tabs + drop zones), board sync helpers, and **`.card--doing`**. Comments note these are **embedded-source checks**, not browser/E2E coverage (manual QA still required for DnD and workflow mutations).
+
+---
+
 ## [3.11.5] - 2026-04-05
 
 ### Features

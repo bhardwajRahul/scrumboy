@@ -117,10 +117,11 @@ function renderDashboardContent() {
     const leftColumnMarkup = hasTodos
         ? `<div class="dashboard-todo-groups">${renderDashboardTodoGroups(todos, projectsByProjectId)}</div>
        ${nextCursor
-            ? `<div style="margin-top: 12px;">
-                <button class="btn" id="dashboardLoadMoreBtn" type="button" ${loading ? 'disabled' : ''}>
+            ? `<div class="dashboard-load-more" data-dashboard-load-more>
+                <button class="btn btn--ghost btn--small dashboard-load-more__desktop" id="dashboardLoadMoreBtn" type="button" ${loading ? 'disabled' : ''}>
                   ${loading ? 'Loading...' : 'Load more'}
                 </button>
+                <span class="dashboard-load-more__mobile" id="dashboardLoadMoreMobile" role="button" tabindex="0" aria-busy="${loading ? 'true' : 'false'}" aria-label="${loading ? 'Loading more' : 'Load more'}" ${loading ? 'data-loading="1"' : ''}>\u25BC</span>
               </div>`
             : ''}`
         : `<div class="muted" style="margin-top: 48px;">No todos assigned to you.</div>`;
@@ -447,11 +448,11 @@ function bindDashboardSort() {
     sel[BOUND_FLAG] = true;
 }
 function bindLoadMore() {
-    const loadMoreBtn = document.getElementById('dashboardLoadMoreBtn');
-    if (!loadMoreBtn || loadMoreBtn[BOUND_FLAG]) {
+    const wrap = document.querySelector('[data-dashboard-load-more]');
+    if (!wrap || wrap[BOUND_FLAG]) {
         return;
     }
-    loadMoreBtn.addEventListener('click', async () => {
+    const run = async () => {
         if (getDashboardLoading() || !getDashboardNextCursor()) {
             return;
         }
@@ -467,8 +468,19 @@ function bindLoadMore() {
             setDashboardLoading(false);
             renderDashboardContent();
         }
+    };
+    const loadMoreBtn = document.getElementById('dashboardLoadMoreBtn');
+    const loadMoreMobile = document.getElementById('dashboardLoadMoreMobile');
+    loadMoreBtn?.addEventListener('click', run);
+    loadMoreMobile?.addEventListener('click', run);
+    loadMoreMobile?.addEventListener('keydown', (e) => {
+        const ke = e;
+        if (ke.key === 'Enter' || ke.key === ' ') {
+            ke.preventDefault();
+            void run();
+        }
     });
-    loadMoreBtn[BOUND_FLAG] = true;
+    wrap[BOUND_FLAG] = true;
 }
 export async function renderDashboard() {
     renderLoadingShell();
