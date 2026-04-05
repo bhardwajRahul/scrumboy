@@ -11,6 +11,7 @@ import { openTodoDialog } from '../dialogs/todo.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
 import { initDnD, columnsSpec, setDnDColumns, dragInProgress, dragJustEnded } from '../features/drag-drop.js';
 import { setContextMenuStatus, setContextMenuRole } from '../features/context-menu-button.js';
+import { applyMobileLaneTabStyles, buildMobileTabsInnerHtml, mobileLaneTabStyleAttrForHtml, } from './mobile-lane-tabs.js';
 import { registerBoardRefresher, registerSprintsRefresher, invalidateBoard, getBoardLimitPerLaneFloor, resetBoardLimitPerLaneFloor } from '../orchestration/board-refresh.js';
 import { normalizeSprints } from '../sprints.js';
 import { emit, on, off } from '../events.js';
@@ -68,7 +69,25 @@ function getBoardColumns(board) {
     if (order && order.length > 0) {
         return order.map((c) => ({ key: c.key, title: c.name, color: c.color, isDone: !!c.isDone }));
     }
-    return columnsSpec().map((c) => ({ key: c.key, title: c.title, isDone: c.key === "DONE", color: undefined }));
+    return columnsSpec().map((c) => ({ key: c.key, title: c.title, isDone: c.key === "done", color: undefined }));
+}
+/** Older builds stored uppercase `mobileTab_${slug}` values; workflow column_key is store-shaped (lowercase). */
+const LEGACY_MOBILE_TAB_KEYS = {
+    BACKLOG: "backlog",
+    NOT_STARTED: "not_started",
+    IN_PROGRESS: "doing",
+    TESTING: "testing",
+    DONE: "done",
+};
+function resolveMobileTabKeyFromStorage(saved, cols) {
+    if (!saved || cols.length === 0)
+        return null;
+    if (cols.some((c) => c.key === saved))
+        return saved;
+    const mapped = LEGACY_MOBILE_TAB_KEYS[saved];
+    if (mapped && cols.some((c) => c.key === mapped))
+        return mapped;
+    return null;
 }
 /** Lane body tint when workflow provides a color (custom keys + themed columns; CSS fallback uses data-column only in light mode). */
 function laneColumnTintClassAndStyle(c) {
@@ -1175,20 +1194,107 @@ function checkMobileLoadMoreVisibility() {
     mobileLoadMoreHandlers.forEach((fn) => fn());
 }
 // Update mobile tabs display
+function bindMobileTabClickHandlersIfNeeded() {
+    const mobileTabsEl = document.getElementById("mobileTabs");
+    if (!mobileTabsEl)
+        return;
+    mobileTabsEl.querySelectorAll("[data-tab]").forEach((el) => {
+        if (!el[BOUND_FLAG]) {
+            el.addEventListener("click", (e) => {
+                e.preventDefault();
+                const tab = el.getAttribute("data-tab");
+                if (tab) {
+                    setMobileTab(tab);
+                    const slug = getSlug();
+                    if (slug) {
+                        localStorage.setItem(`mobileTab_${slug}`, tab);
+                    }
+                    updateMobileTabs();
+                }
+            });
+            el[BOUND_FLAG] = true;
+        }
+    });
+}
+/** If the active lane was removed or is unknown, fall back to the first column. */
+function ensureMobileTabForBoard(board) {
+    const cols = getBoardColumns(board);
+    if (cols.length === 0)
+        return;
+    const keys = new Set(cols.map((c) => c.key));
+    const cur = getMobileTab();
+    if (!cur || !keys.has(cur)) {
+        const next = cols[0].key;
+        setMobileTab(next);
+        const slug = getSlug();
+        if (slug)
+            localStorage.setItem(`mobileTab_${slug}`, next);
+    }
+}
+/**
+ * Keeps mobile tab buttons and drop overlays in sync with workflow (colors, labels, counts).
+ * Rebuilds the strip when lane count/order changes; otherwise updates styles in place.
+ */
+function syncMobileLaneTabsStrip(board) {
+    const mobileTabsEl = document.getElementById("mobileTabs");
+    if (!mobileTabsEl)
+        return;
+    const boardCols = getBoardColumns(board);
+    const existingTabs = mobileTabsEl.querySelectorAll(":scope > .mobile-tab");
+    const orderMatch = existingTabs.length === boardCols.length &&
+        boardCols.every((c, i) => existingTabs[i]?.getAttribute("data-tab") === c.key);
+    if (!orderMatch) {
+        mobileTabsEl.innerHTML = buildMobileTabsInnerHtml(boardCols, {
+            activeTabKey: getMobileTab(),
+            laneLabel: (key) => {
+                const col = boardCols.find((c) => c.key === key);
+                const title = col?.title ?? "";
+                return `${title} ${getLaneDisplayCount(key)}`;
+            },
+        });
+        bindMobileTabClickHandlersIfNeeded();
+        return;
+    }
+    const tabByKey = new Map();
+    mobileTabsEl.querySelectorAll(":scope > .mobile-tab").forEach((el) => {
+        const k = el.getAttribute("data-tab");
+        if (k)
+            tabByKey.set(k, el);
+    });
+    const dropByKey = new Map();
+    const dropContainer = document.getElementById("mobileTabDropZones");
+    if (dropContainer) {
+        dropContainer.querySelectorAll(".mobile-tab-drop").forEach((el) => {
+            const k = el.getAttribute("data-status");
+            if (k)
+                dropByKey.set(k, el);
+        });
+    }
+    boardCols.forEach((c) => {
+        const tab = tabByKey.get(c.key);
+        if (!tab)
+            return;
+        applyMobileLaneTabStyles(tab, c, "tab");
+        const textSpan = tab.querySelector(".mobile-tab__text");
+        const label = `${c.title} ${getLaneDisplayCount(c.key)}`;
+        if (textSpan)
+            textSpan.textContent = label;
+        else
+            tab.textContent = label;
+        const drop = dropByKey.get(c.key);
+        if (drop)
+            applyMobileLaneTabStyles(drop, c, "drop");
+    });
+}
 function updateMobileTabs() {
     const board = getBoard();
-    const boardCols = board ? getBoardColumns(board) : columnsSpec().map((c) => ({ key: c.key, title: c.title, isDone: c.key === "DONE" }));
-    const firstKey = boardCols[0]?.key || "BACKLOG";
+    const boardCols = board ? getBoardColumns(board) : columnsSpec().map((c) => ({ key: c.key, title: c.title, isDone: c.key === "done" }));
+    const firstKey = boardCols[0]?.key || "backlog";
     const slug = getSlug();
     if (!getMobileTab()) {
-        // Try to restore last tab for this project from localStorage
-        const savedTab = slug ? localStorage.getItem(`mobileTab_${slug}`) : null;
-        if (savedTab && boardCols.some((c) => c.key === savedTab)) {
-            setMobileTab(savedTab);
-        }
-        else {
-            setMobileTab(firstKey);
-        }
+        const raw = slug ? localStorage.getItem(`mobileTab_${slug}`) : null;
+        const resolved = resolveMobileTabKeyFromStorage(raw, boardCols);
+        setMobileTab((resolved ?? firstKey));
     }
     // Update tab active states
     const tabs = document.querySelectorAll(".mobile-tab");
@@ -1280,6 +1386,7 @@ function updateBoardContent(board, tag, search, sprintId) {
         return;
     }
     setBoard(board);
+    ensureMobileTabForBoard(board);
     // Update tag colors from board data
     const tagColors = { ...getTagColors() };
     board.tags.forEach(t => {
@@ -1340,16 +1447,17 @@ function updateBoardContent(board, tag, search, sprintId) {
             const showLoadMore = laneMeta?.hasMore && !laneMeta?.loading;
             const displayCount = getLaneDisplayCount(c.key);
             const laneTint = laneColumnTintClassAndStyle(c);
+            const dk = escapeHTML(c.key);
             return `
-          <section class="col ${isMobileActive ? "col--mobile-active" : ""}${laneTint.extraClass}" data-column="${c.key}"${laneTint.styleAttr}>
+          <section class="col ${isMobileActive ? "col--mobile-active" : ""}${laneTint.extraClass}" data-column="${dk}"${laneTint.styleAttr}>
             <div class="col__head col__head--${c.key.toLowerCase()}" ${c.color ? `style="background:${escapeHTML(c.color)};"` : ""}>
               <span class="col__title">${escapeHTML(c.title)}</span>
-              <span class="col__count" data-count-for="${c.key}">${displayCount}</span>
+              <span class="col__count" data-count-for="${dk}">${displayCount}</span>
             </div>
-            <div class="col__list" data-status="${c.key}" id="list_${c.key}">
+            <div class="col__list" data-status="${dk}" id="list_${c.key}">
               ${todos.map((t) => renderTodoCard(t, c.color, membersByUserId, cardOpts)).join("")}
             </div>
-            ${showLoadMore ? `<div class="col__load-more" data-load-more="${c.key}"><button class="btn btn--ghost btn--small col__load-more--desktop" type="button">Load more</button><span class="col__load-more--mobile" role="button" tabindex="0" aria-label="Load more">▼</span></div>` : ""}
+            ${showLoadMore ? `<div class="col__load-more" data-load-more="${dk}"><button class="btn btn--ghost btn--small col__load-more--desktop" type="button">Load more</button><span class="col__load-more--mobile" role="button" tabindex="0" aria-label="Load more">▼</span></div>` : ""}
           </section>
         `;
         })
@@ -1365,37 +1473,13 @@ function updateBoardContent(board, tag, search, sprintId) {
             }
         }
     }
+    syncMobileLaneTabsStrip(board);
+    updateMobileTabs();
+    // DnD must run after mobile tab strip DOM is final (Sortable binds #tab_drop_* inside #mobileTabDropZones).
     if (currentUserProjectRole === "maintainer" || isAnonymousBoard(board)) {
         initDnD();
     }
     initMobileLoadMoreVisibility();
-    // Update mobile tabs
-    updateMobileTabs();
-    // Update mobile tab counts
-    const mobileTabsEl = document.getElementById("mobileTabs");
-    if (mobileTabsEl) {
-        const boardCols = getBoardColumns(board);
-        const tabLabels = {};
-        boardCols.forEach((c) => { tabLabels[c.key] = c.title; });
-        mobileTabsEl.querySelectorAll(".mobile-tab").forEach((tab) => {
-            const tabKey = tab.getAttribute("data-tab");
-            if (tabKey && tabLabels[tabKey]) {
-                const count = getLaneDisplayCount(tabKey);
-                const textSpan = tab.querySelector(".mobile-tab__text");
-                if (textSpan) {
-                    textSpan.textContent = `${tabLabels[tabKey]} ${count}`;
-                }
-                else {
-                    // Fallback if span doesn't exist yet
-                    tab.textContent = `${tabLabels[tabKey]} ${count}`;
-                }
-                // Re-apply active class if needed
-                if (tabKey === getMobileTab()) {
-                    tab.classList.add("mobile-tab--active");
-                }
-            }
-        });
-    }
     lastUpdateBoardContentBoard = board;
     lastUpdateBoardContentTag = tag;
     lastUpdateBoardContentSearch = search;
@@ -1422,20 +1506,14 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     }
     // Restore saved mobile tab for this project
     const initialCols = getBoardColumns(board);
-    const firstColKey = initialCols[0]?.key || "BACKLOG";
+    const firstColKey = initialCols[0]?.key || "backlog";
     const slug = getSlug();
     if (slug) {
-        const savedTab = localStorage.getItem(`mobileTab_${slug}`);
-        if (savedTab && initialCols.some((c) => c.key === savedTab)) {
-            setMobileTab(savedTab);
-        }
-        else {
-            // Default to first workflow column if no saved tab
-            setMobileTab(firstColKey);
-        }
+        const raw = localStorage.getItem(`mobileTab_${slug}`);
+        const resolved = resolveMobileTabKeyFromStorage(raw, initialCols);
+        setMobileTab((resolved ?? firstColKey));
     }
     else {
-        // No slug, use first workflow column
         setMobileTab(firstColKey);
     }
     // Check if we're already on a board page - if so, only update board content
@@ -1549,15 +1627,17 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
         <div class="mobile-board-wrapper">
           <div class="mobile-tabs" id="mobileTabs">
             ${boardCols.map((c) => {
-        const tabStyle = c.color ? ` style="--lane-color:${escapeHTML(c.color)};--lane-shadow:${escapeHTML(c.color)}d9;background:${escapeHTML(c.color)};color:#ffffff;"` : "";
+        const { tab: tabStyle } = mobileLaneTabStyleAttrForHtml(c);
+        const dk = escapeHTML(c.key);
         return `
-            <button class="mobile-tab ${getMobileTab() === c.key ? "mobile-tab--active" : ""}" data-tab="${c.key}"${tabStyle}><span class="mobile-tab__text">${escapeHTML(c.title)} ${getLaneDisplayCount(c.key)}</span></button>
+            <button class="mobile-tab ${getMobileTab() === c.key ? "mobile-tab--active" : ""}" data-tab="${dk}"${tabStyle}><span class="mobile-tab__text">${escapeHTML(c.title)} ${getLaneDisplayCount(c.key)}</span></button>
             `;
     }).join("")}
             <div id="mobileTabDropZones">
               ${boardCols.map((c) => {
-        const dropStyle = c.color ? ` style="--lane-color:${escapeHTML(c.color)};--lane-shadow:${escapeHTML(c.color)}d9;background:${escapeHTML(c.color)};"` : "";
-        return `<div id="tab_drop_${c.key}" class="mobile-tab-drop" data-status="${c.key}"${dropStyle}></div>`;
+        const { drop: dropStyle } = mobileLaneTabStyleAttrForHtml(c);
+        const dk = escapeHTML(c.key);
+        return `<div id="tab_drop_${c.key}" class="mobile-tab-drop" data-status="${dk}"${dropStyle}></div>`;
     }).join("")}
             </div>
           </div>
@@ -1574,16 +1654,17 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
             const laneMeta = getBoardLaneMeta()[c.key];
             const showLoadMore = laneMeta?.hasMore && !laneMeta?.loading;
             const laneTint = laneColumnTintClassAndStyle(c);
+            const dk = escapeHTML(c.key);
             return `
-                <section class="col ${isMobileActive ? "col--mobile-active" : ""}${laneTint.extraClass}" data-column="${c.key}"${laneTint.styleAttr}>
+                <section class="col ${isMobileActive ? "col--mobile-active" : ""}${laneTint.extraClass}" data-column="${dk}"${laneTint.styleAttr}>
                   <div class="col__head col__head--${c.key.toLowerCase()}" ${c.color ? `style="background:${escapeHTML(c.color)};"` : ""}>
                     <span class="col__title">${escapeHTML(c.title)}</span>
-                    <span class="col__count" data-count-for="${c.key}">${getLaneDisplayCount(c.key)}</span>
+                    <span class="col__count" data-count-for="${dk}">${getLaneDisplayCount(c.key)}</span>
                   </div>
-                  <div class="col__list" data-status="${c.key}" id="list_${c.key}">
+                  <div class="col__list" data-status="${dk}" id="list_${c.key}">
                     ${todos.map((t) => renderTodoCard(t, c.color, membersByUserId, cardOpts)).join("")}
                   </div>
-                  ${showLoadMore ? `<div class="col__load-more" data-load-more="${c.key}"><button class="btn btn--ghost btn--small col__load-more--desktop" type="button">Load more</button><span class="col__load-more--mobile" role="button" tabindex="0" aria-label="Load more">▼</span></div>` : ""}
+                  ${showLoadMore ? `<div class="col__load-more" data-load-more="${dk}"><button class="btn btn--ghost btn--small col__load-more--desktop" type="button">Load more</button><span class="col__load-more--mobile" role="button" tabindex="0" aria-label="Load more">▼</span></div>` : ""}
                 </section>
               `;
         })
@@ -2158,28 +2239,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
         });
         userAvatarBtn[BOUND_FLAG] = true;
     }
-    // Mobile tab switching
-    const mobileTabsEl = document.getElementById("mobileTabs");
-    if (mobileTabsEl) {
-        mobileTabsEl.querySelectorAll("[data-tab]").forEach((el) => {
-            if (!el[BOUND_FLAG]) {
-                el.addEventListener("click", (e) => {
-                    e.preventDefault();
-                    const tab = el.getAttribute("data-tab");
-                    if (tab) {
-                        setMobileTab(tab);
-                        // Save to localStorage per project
-                        const slug = getSlug();
-                        if (slug) {
-                            localStorage.setItem(`mobileTab_${slug}`, tab);
-                        }
-                        updateMobileTabs();
-                    }
-                });
-                el[BOUND_FLAG] = true;
-            }
-        });
-    }
+    bindMobileTabClickHandlersIfNeeded();
     attachBoardDelegationHandlers();
     initMobileLoadMoreVisibility();
     if (currentUserProjectRole === "maintainer" || isAnonymousBoard(board)) {
