@@ -95,6 +95,10 @@ func main() {
 		MCPHandler:     mcp.New(st, mcp.Options{Mode: cfg.ScrumboyMode}),
 		EncryptionKey:  encKey,
 		OIDCService:    oidcSvc,
+		VAPIDPublicKey:   cfg.VAPIDPublicKey,
+		VAPIDPrivateKey:  cfg.VAPIDPrivateKey,
+		VAPIDSubscriber:  cfg.VAPIDSubscriber,
+		PushDebug:        cfg.PushDebug,
 	})
 	st.SetTodoAssignedPublisher(srv.PublishTodoAssigned)
 
