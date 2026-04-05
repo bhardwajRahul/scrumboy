@@ -19,8 +19,7 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, rest []strin
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"publicKey":            s.vapidPublicKey,
-			"pushByDefaultIfVapid": s.pushByDefaultIfVapid,
+			"publicKey": s.vapidPublicKey,
 		})
 		return
 	}

@@ -1,7 +1,6 @@
 /**
- * Web Push subscription (VAPID). User can enable from Settings, or auto-subscribe after login per
- * signed-in user when the server sets pushByDefaultIfVapid on GET /api/push/vapid-public-key
- * (see SCRUMBOY_PUSH_BY_DEFAULT_IF_VAPID).
+ * Web Push subscription (VAPID). After login, auto-subscribe when the server exposes a VAPID public key
+ * (both keys configured). Optional override: Settings -> turn Web Push off or back on for this browser.
  */
 import { apiFetch } from '../api.js';
 import { getAppVersion } from '../utils.js';
@@ -63,10 +62,10 @@ function pushDebug() {
     }
 }
 /**
- * If the server advertises pushByDefaultIfVapid, attempt one automatic subscription for this user
- * (may prompt for notification permission). Scoped per `userId` in localStorage; only marks a durable
- * outcome for success, already subscribed, or explicit permission denied - not for transient failures
- * or dismissed prompts (`default`), so a later visit can retry without burning the auto path.
+ * If GET /api/push/vapid-public-key returns a public key (VAPID configured), attempt automatic
+ * subscription for this user (may prompt for notification permission). Scoped per `userId` in
+ * localStorage; only marks a durable outcome for success, already subscribed, or explicit permission
+ * denied - not for transient failures or dismissed prompts (`default`), so a later visit can retry.
  */
 export async function maybeAutoSubscribePushAfterLogin(userId) {
     if (!Number.isFinite(userId) || userId <= 0) {
@@ -79,22 +78,17 @@ export async function maybeAutoSubscribePushAfterLogin(userId) {
     if (prior === AUTOSUB_STATE_DONE || prior === AUTOSUB_STATE_DENIED) {
         return;
     }
-    let pushByDefault = false;
     try {
         const keyResp = await fetch('/api/push/vapid-public-key', { credentials: 'same-origin' });
         if (!keyResp.ok) {
             return;
         }
         const j = (await keyResp.json());
-        if (!j.publicKey || !j.pushByDefaultIfVapid) {
+        if (!j.publicKey) {
             return;
         }
-        pushByDefault = true;
     }
     catch {
-        return;
-    }
-    if (!pushByDefault) {
         return;
     }
     try {

@@ -98,8 +98,7 @@ func main() {
 		VAPIDPublicKey:       cfg.VAPIDPublicKey,
 		VAPIDPrivateKey:      cfg.VAPIDPrivateKey,
 		VAPIDSubscriber:      cfg.VAPIDSubscriber,
-		PushDebug:            cfg.PushDebug,
-		PushByDefaultIfVapid: cfg.PushByDefaultIfVapid,
+		PushDebug: cfg.PushDebug,
 	})
 	st.SetTodoAssignedPublisher(srv.PublishTodoAssigned)
 

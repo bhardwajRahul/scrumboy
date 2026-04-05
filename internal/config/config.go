@@ -43,8 +43,6 @@ type Config struct {
 	VAPIDPrivateKey string
 	VAPIDSubscriber string // mailto: or https: URL for VAPID JWT sub; plain email normalized to mailto:
 	PushDebug       bool   // SCRUMBOY_DEBUG_PUSH=1
-	// PushByDefaultIfVapid: when true and VAPID keys are set, the SPA may auto-subscribe Web Push after login per signed-in user (same browser); see docs/pwa.md.
-	PushByDefaultIfVapid bool
 }
 
 func FromEnv() Config {
@@ -86,8 +84,7 @@ func FromEnv() Config {
 		VAPIDPublicKey:       strings.TrimSpace(os.Getenv("SCRUMBOY_VAPID_PUBLIC_KEY")),
 		VAPIDPrivateKey:      strings.TrimSpace(os.Getenv("SCRUMBOY_VAPID_PRIVATE_KEY")),
 		VAPIDSubscriber:      NormalizeVAPIDSubscriber(os.Getenv("SCRUMBOY_VAPID_SUBSCRIBER")),
-		PushDebug:            strings.TrimSpace(os.Getenv("SCRUMBOY_DEBUG_PUSH")) == "1",
-		PushByDefaultIfVapid: truthyEnv(os.Getenv("SCRUMBOY_PUSH_BY_DEFAULT_IF_VAPID")),
+		PushDebug: strings.TrimSpace(os.Getenv("SCRUMBOY_DEBUG_PUSH")) == "1",
 	}
 }
 
@@ -137,11 +134,6 @@ func ResolveDataDir(dataDirOverride string) (string, string, error) {
 	}
 
 	return dataDir, dbPath, nil
-}
-
-func truthyEnv(v string) bool {
-	s := strings.TrimSpace(strings.ToLower(v))
-	return s == "1" || s == "true" || s == "yes"
 }
 
 func getenv(key, defaultValue string) string {
