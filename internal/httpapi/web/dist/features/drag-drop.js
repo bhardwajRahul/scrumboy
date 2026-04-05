@@ -58,7 +58,7 @@ function startMobileTabIntroGlow() {
     mobileTabIntroGlowTimer = setTimeout(() => {
         mobileTabIntroGlowTimer = null;
         zones.classList.remove("mobile-tab-drops--intro-glow");
-    }, 1000);
+    }, 300);
 }
 function parseLocalId(el) {
     if (!el)
