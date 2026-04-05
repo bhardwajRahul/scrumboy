@@ -1,12 +1,15 @@
 import { apiFetch } from './api.js';
 import { renderAuth, renderResetPassword, renderProjects, renderDashboard, renderBoard, renderNotFound, stopBoardEvents } from './views/index.js';
-import { startGlobalRealtime, stopGlobalRealtime } from './core/realtime.js';
+import { startGlobalRealtime, stopGlobalRealtime, initForegroundLifecycle } from './core/realtime.js';
 import { hydrateNotificationsForUser, initNotificationBadge } from './core/notifications.js';
 import { getAuthStatusChecked, getUser, getBootstrapAvailable, getAuthStatusAvailable, getBoard, getOidcEnabled, getLocalAuthEnabled } from './state/selectors.js';
 import { setAuthStatusChecked, setAuthStatusAvailable, setUser, setBootstrapAvailable, setOidcEnabled, setLocalAuthEnabled, setRoute, setTag, setSearch, setSlug, setProjectId, setBoard, resetUserScopedState, setTagColors, setOpenTodoSegment, hydrateDashboardTodoSortFromServer } from './state/mutations.js';
 import type { Board } from './types.js';
 import { RouteName, AuthStatusResponse, User } from './types.js';
 import { loadUserTheme } from './theme.js';
+
+// Attach foreground listeners once at module load (idempotent guard lives in initForegroundLifecycle).
+initForegroundLifecycle();
 
 type ParsedRoute = {
   name: RouteName;
