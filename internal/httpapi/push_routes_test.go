@@ -18,12 +18,8 @@ import (
 
 const testVapidPub, testVapidPriv = "dGVzdC1wdWJsaWMta2V5LXBhZGRlZA", "dGVzdC1wcml2YXRlLWtleS1wYWRkZWQ"
 
-func newPushTestServer(t *testing.T, mode string, withVAPID bool, pushByDefaultIfVapid ...bool) (*httptest.Server, *store.Store, func()) {
+func newPushTestServer(t *testing.T, mode string, withVAPID bool) (*httptest.Server, *store.Store, func()) {
 	t.Helper()
-	var pushDef bool
-	if len(pushByDefaultIfVapid) > 0 {
-		pushDef = pushByDefaultIfVapid[0]
-	}
 	dir := t.TempDir()
 	sqlDB, err := db.Open(filepath.Join(dir, "app.db"), db.Options{
 		BusyTimeout: 5000,
@@ -45,7 +41,6 @@ func newPushTestServer(t *testing.T, mode string, withVAPID bool, pushByDefaultI
 	if withVAPID {
 		opts.VAPIDPublicKey = testVapidPub
 		opts.VAPIDPrivateKey = testVapidPriv
-		opts.PushByDefaultIfVapid = pushDef
 	}
 	srv := NewServer(st, opts)
 	ts := httptest.NewServer(srv)
@@ -112,17 +107,13 @@ func TestPushRoutes_VapidPublicKeyAndSubscribeWhenConfigured(t *testing.T) {
 		t.Fatalf("key status=%d", resp.StatusCode)
 	}
 	var keyBody struct {
-		PublicKey             string `json:"publicKey"`
-		PushByDefaultIfVapid  bool   `json:"pushByDefaultIfVapid"`
+		PublicKey string `json:"publicKey"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&keyBody); err != nil {
 		t.Fatal(err)
 	}
 	if keyBody.PublicKey != testVapidPub {
 		t.Fatalf("publicKey=%q", keyBody.PublicKey)
-	}
-	if keyBody.PushByDefaultIfVapid {
-		t.Fatalf("pushByDefaultIfVapid want false")
 	}
 
 	ctx := context.Background()
@@ -158,33 +149,6 @@ func TestPushRoutes_VapidPublicKeyAndSubscribeWhenConfigured(t *testing.T) {
 	}
 	if len(subs) != 1 || subs[0].Endpoint != ep {
 		t.Fatalf("subs=%+v", subs)
-	}
-}
-
-func TestPushRoutes_VapidPublicKeyPushByDefaultIfVapidTrue(t *testing.T) {
-	ts, _, cleanup := newPushTestServer(t, "full", true, true)
-	defer cleanup()
-
-	resp, err := http.Get(ts.URL + "/api/push/vapid-public-key")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("key status=%d", resp.StatusCode)
-	}
-	var keyBody struct {
-		PublicKey            string `json:"publicKey"`
-		PushByDefaultIfVapid bool   `json:"pushByDefaultIfVapid"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&keyBody); err != nil {
-		t.Fatal(err)
-	}
-	if keyBody.PublicKey != testVapidPub {
-		t.Fatalf("publicKey=%q", keyBody.PublicKey)
-	}
-	if !keyBody.PushByDefaultIfVapid {
-		t.Fatal("pushByDefaultIfVapid want true")
 	}
 }
 

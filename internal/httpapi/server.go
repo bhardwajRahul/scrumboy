@@ -35,8 +35,6 @@ type Options struct {
 	VAPIDPrivateKey string
 	VAPIDSubscriber string // VAPID JWT "sub" (e.g. mailto:ops@example.com); default in notifier if empty
 	PushDebug       bool   // Log push send/skip (also SCRUMBOY_DEBUG_PUSH in config)
-	// PushByDefaultIfVapid: when true and VAPID keys are set, advertise auto-subscribe to clients.
-	PushByDefaultIfVapid bool
 }
 
 type Server struct {
@@ -65,10 +63,9 @@ type Server struct {
 	swJS        []byte // Service worker with version injected
 	mcpHandler  http.Handler
 
-	vapidPublicKey       string
-	pushVapidConfigured  bool // both public and private keys non-empty; subscribe and push notify use this
-	pushByDefaultIfVapid bool // effective: configured && opts.PushByDefaultIfVapid
-	pushDebug            bool
+	vapidPublicKey      string
+	pushVapidConfigured bool // both public and private keys non-empty; subscribe and push notify use this
+	pushDebug           bool
 }
 
 type storeAPI interface {
@@ -273,7 +270,6 @@ func NewServer(st storeAPI, opts Options) *Server {
 	vapidPub := strings.TrimSpace(opts.VAPIDPublicKey)
 	vapidPriv := strings.TrimSpace(opts.VAPIDPrivateKey)
 	pushVapidConfigured := vapidPub != "" && vapidPriv != ""
-	pushByDefaultIfVapid := pushVapidConfigured && opts.PushByDefaultIfVapid
 	pushNotifier := newPushNotifier(st, logger, opts.VAPIDPublicKey, opts.VAPIDPrivateKey, opts.VAPIDSubscriber, pushDebug)
 	fanout := eventbus.NewFanout(sseBridgeConsumer, whDispatcher, pushNotifier)
 	whWorker := newWebhookWorker(whQueue, logger)
@@ -307,9 +303,8 @@ func NewServer(st storeAPI, opts Options) *Server {
 		swJS:                      swJS,
 		mcpHandler:                opts.MCPHandler,
 		vapidPublicKey:            vapidPub,
-		pushVapidConfigured:       pushVapidConfigured,
-		pushByDefaultIfVapid:      pushByDefaultIfVapid,
-		pushDebug:                 pushDebug,
+		pushVapidConfigured: pushVapidConfigured,
+		pushDebug:           pushDebug,
 	}
 }
 

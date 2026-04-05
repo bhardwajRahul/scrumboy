@@ -1438,6 +1438,23 @@ body {
   font-size: var(--fs-13);
 }
 
+.settings-push-vapid-notice {
+  margin: 0 0 var(--s-16) 0;
+  padding: var(--s-10) var(--s-12);
+  font-size: var(--fs-13);
+  line-height: 1.45;
+  border-radius: var(--radius-8);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.settings-section--push-pwa-disabled {
+  opacity: 0.48;
+  pointer-events: none;
+  user-select: none;
+}
+
 .settings-tabs {
   display: flex;
   gap: var(--s-8);
