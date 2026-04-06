@@ -141,9 +141,10 @@ type storeAPI interface {
 	GetTagIDByName(ctx context.Context, userID int64, tagName string) (int64, error)
 	GetAnyTagIDByName(ctx context.Context, tagName string) (int64, error)
 	GetBoardScopedTagIDByName(ctx context.Context, projectID int64, tagName string) (int64, error)
-	ResolveTagForColorUpdate(ctx context.Context, projectID int64, viewerUserID *int64, tagName string, isAnonymousBoard bool) (int64, error)
+	ResolveTagForColorUpdate(ctx context.Context, projectID int64, viewerUserID *int64, tagName string, linkTemporaryBoard bool) (int64, error)
 	UpdateTagColor(ctx context.Context, viewerUserID *int64, tagID int64, color *string) error
-	UpdateTagColorForProject(ctx context.Context, projectID int64, viewerUserID *int64, tagName string, color *string, isAnonymousBoard bool) error
+	UpdateTagColorForTemporaryBoard(ctx context.Context, projectID int64, viewerUserID *int64, tagID int64, color *string) error
+	UpdateTagColorForProject(ctx context.Context, projectID int64, viewerUserID *int64, tagName string, color *string, linkTemporaryBoard bool) error
 	GetTagColor(ctx context.Context, userID int64, tagID int64) (*string, error)
 	DeleteTag(ctx context.Context, userID int64, tagID int64, isAnonymousBoard bool) error
 

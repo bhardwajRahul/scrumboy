@@ -2,7 +2,7 @@ import { todoDialog, todoDialogTitle, todoTitle, todoBody, todoTags, addTagBtn, 
 import { apiFetch } from '../api.js';
 import { getSlug, getTagColors, getAvailableTags, getAvailableTagsMap, getAutocompleteSuggestion, getUser, getBoard, getBoardMembers, getEditingTodo } from '../state/selectors.js';
 import { setEditingTodo, setAvailableTags, setAvailableTagsMap, setTagColors, setAutocompleteSuggestion } from '../state/mutations.js';
-import { escapeHTML, isAnonymousBoard, showToast, sanitizeHexColor } from '../utils.js';
+import { escapeHTML, isAnonymousBoard, isTemporaryBoard, showToast, sanitizeHexColor } from '../utils.js';
 import { normalizeSprints } from '../sprints.js';
 import { recordLocalMutation } from '../realtime/guard.js';
 // Symbol for idempotent listener attachment
@@ -744,26 +744,35 @@ export async function openTodoDialog(opts) {
     // Compute permissions once (mode-aware so create never inherits stale assignment state)
     const board = getBoard();
     const anonymousBoard = isAnonymousBoard(board);
-    const isMaintainer = (opts.role ?? "") === "maintainer" || anonymousBoard;
+    const temporaryBoard = isTemporaryBoard(board);
+    // Maintainer or unowned anonymous temp: full project-level UI affordances.
+    const baseMaintainer = (opts.role ?? "") === "maintainer" || anonymousBoard;
+    // FULL-mode temporary boards (expires_at + creator): link holders may create/edit without login.
+    // Widen form fields + submit for create and edit — not delete, sprint, assignment, links (see plan §H).
+    const tempLinkForm = temporaryBoard && (mode === "create" || mode === "edit");
     const roleNorm = (opts.role ?? "").toLowerCase();
     const isContributor = roleNorm === "contributor" || roleNorm === "editor";
     const currentUser = getUser();
     const isAssignedToMe = currentUser &&
         mode === "edit" &&
         Number(todo?.assigneeUserId) === Number(currentUser.id);
-    const canEditTitle = isMaintainer;
-    const canEditStatus = isMaintainer;
+    const canEditTitle = baseMaintainer || tempLinkForm;
+    const canEditStatus = baseMaintainer || tempLinkForm;
     const canSubmitTodo = mode === "create"
-        ? isMaintainer || anonymousBoard
-        : isMaintainer || (!anonymousBoard && isContributor && !!isAssignedToMe);
-    const canEditLinks = isMaintainer || (!anonymousBoard && isContributor);
+        ? baseMaintainer || tempLinkForm
+        : baseMaintainer ||
+            tempLinkForm ||
+            (!anonymousBoard && isContributor && !!isAssignedToMe);
+    const canEditLinks = baseMaintainer || (!anonymousBoard && isContributor);
     permissions = {
-        canChangeSprint: isMaintainer && !anonymousBoard,
-        canChangeEstimation: isMaintainer,
-        canEditTags: isMaintainer,
-        canEditNotes: isMaintainer || (!anonymousBoard && isContributor && !!isAssignedToMe),
-        canEditAssignment: isMaintainer && !anonymousBoard,
-        canDeleteTodo: isMaintainer,
+        canChangeSprint: baseMaintainer && !anonymousBoard,
+        canChangeEstimation: baseMaintainer || tempLinkForm,
+        canEditTags: baseMaintainer || tempLinkForm,
+        canEditNotes: baseMaintainer ||
+            tempLinkForm ||
+            (!anonymousBoard && isContributor && !!isAssignedToMe),
+        canEditAssignment: baseMaintainer && !anonymousBoard,
+        canDeleteTodo: baseMaintainer,
         canEditTitle,
         canEditStatus,
         canSubmitTodo,
