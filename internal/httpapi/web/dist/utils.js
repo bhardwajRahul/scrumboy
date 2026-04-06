@@ -6,6 +6,10 @@ import { toast } from './dom/elements.js';
 export function isAnonymousBoard(board) {
     return !!(board?.project && board.project.expiresAt != null && board.project.creatorUserId == null);
 }
+/** Any temporary board (expiresAt set): unowned anonymous temp or FULL-mode temp with creator. Not durable. */
+export function isTemporaryBoard(board) {
+    return !!(board?.project?.expiresAt != null);
+}
 /** Single source of truth for hex color validation. Matches backend colorHexRe. Must be {6} not +. */
 export const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 /** Returns valid hex color, or fallback if provided, or null. Use when rendering to avoid XSS. */
