@@ -35,7 +35,7 @@ import {
   setLaneLoading,
   appendLaneTodos,
 } from '../state/mutations.js';
-import { isAnonymousBoard } from '../utils.js';
+import { isAnonymousBoard, isTemporaryBoard } from '../utils.js';
 import { openTodoDialog } from '../dialogs/todo.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
 import { initDnD, columnsSpec, setDnDColumns, dragInProgress, dragJustEnded } from '../features/drag-drop.js';
@@ -688,7 +688,7 @@ function buildChipsHTML(data: ChipData[]): string {
 function updateChipsOnly(sprintId: string | null): void {
   const board = getBoard();
   if (!board) return;
-  const isAnonymousTempBoard = board.project.expiresAt != null && board.project.creatorUserId == null;
+  const isAnonymousTempBoard = isAnonymousBoard(board);
   const displayTags = isAnonymousTempBoard
     ? board.tags.filter((t) => t.count > 0)
     : board.tags;
@@ -893,7 +893,7 @@ function attachBoardDelegationHandlers(): void {
       const contextMenuNewTodo = document.getElementById("contextMenuNewTodo");
       if (contextMenuNewTodo) {
         (contextMenuNewTodo as HTMLElement).style.display =
-          isAnonymousBoard(getBoard()) || currentUserProjectRole === "maintainer" ? "" : "none";
+          isTemporaryBoard(getBoard()) || currentUserProjectRole === "maintainer" ? "" : "none";
       }
       const mouseEvent = e as MouseEvent;
       (contextMenu as HTMLElement).style.display = "block";
@@ -1497,9 +1497,8 @@ function updateBoardContent(board: Board, tag: string, search: string, sprintId:
   });
   setTagColors(tagColors);
 
-  // Check if this is an anonymous temporary board
-  const isAnonymousTempBoard = board.project.expiresAt != null && board.project.creatorUserId == null;
-  
+  const isAnonymousTempBoard = isAnonymousBoard(board);
+
   // Filter tags for display: on anonymous boards, only show tags with count > 0
   const displayTags = isAnonymousTempBoard 
     ? board.tags.filter(t => t.count > 0)
@@ -1587,7 +1586,7 @@ function updateBoardContent(board: Board, tag: string, search: string, sprintId:
   updateMobileTabs();
 
   // DnD must run after mobile tab strip DOM is final (Sortable binds #tab_drop_* inside #mobileTabDropZones).
-  if (currentUserProjectRole === "maintainer" || isAnonymousBoard(board)) {
+  if (currentUserProjectRole === "maintainer" || isTemporaryBoard(board)) {
     initDnD();
   }
 
@@ -1616,7 +1615,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
 
   // Role is now resolved in loadBoardBySlug before calling renderBoardFromData.
   // Initialize DnD if user is maintainer (role already set).
-  if (currentUserProjectRole === "maintainer" || isAnonymousBoard(board)) {
+  if (currentUserProjectRole === "maintainer" || isTemporaryBoard(board)) {
     initDnD();
   }
 
@@ -1650,9 +1649,9 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
   });
   setTagColors(tagColors);
 
-  // Check if this is an anonymous temporary board (expiresAt IS NOT NULL AND creatorUserId IS NULL)
-  const isAnonymousTempBoard = board.project.expiresAt != null && board.project.creatorUserId == null;
-  
+  // Anonymous temporary board: expiresAt set, no creator (pastebin-style). Rename + New Todo without login — see isAnonymousBoard() / backend.
+  const isAnonymousTempBoard = isAnonymousBoard(board);
+
   // Filter tags for display: on anonymous boards, only show tags with count > 0
   const displayTags = isAnonymousTempBoard 
     ? board.tags.filter(t => t.count > 0)
@@ -1687,7 +1686,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
           ${search && search.trim() !== "" ? `<button class="search-clear" id="searchClear" aria-label="Clear search" title="Clear search">✕</button>` : ''}
         </div>
         ${isAnonymousTempBoard ? `<button class="btn btn--ghost" id="renameProjectBtn" title="Rename project">Rename</button>` : ''}
-        ${(isAnonymousTempBoard || currentUserProjectRole === 'maintainer') ? `<button class="btn" id="newTodoBtn">New Todo</button>` : ''}
+        ${(isTemporaryBoard(board) || currentUserProjectRole === 'maintainer') ? `<button class="btn" id="newTodoBtn">New Todo</button>` : ''}
         ${!isMobile && !isAnonymousTempBoard && (currentUserProjectRole === 'maintainer' || currentUserProjectRole === 'contributor') ? `<button class="btn btn--ghost" id="manageMembersBtn" title="Manage members">Members</button>` : ''}
         ${!getUser() ? `<button class="btn btn--ghost" id="settingsBtn" aria-label="Settings">
           <span class="hamburger">☰</span>
@@ -1717,7 +1716,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
           ${search && search.trim() !== "" ? `<button class="search-clear" id="searchClear" aria-label="Clear search" title="Clear search">✕</button>` : ''}
         </div>
         ${isAnonymousTempBoard ? `<button class="btn btn--ghost" id="renameProjectBtn" title="Rename project">Rename</button>` : ''}
-        ${(isAnonymousTempBoard || currentUserProjectRole === 'maintainer') ? `<button class="btn" id="newTodoBtn">New Todo</button>` : ''}
+        ${(isTemporaryBoard(board) || currentUserProjectRole === 'maintainer') ? `<button class="btn" id="newTodoBtn">New Todo</button>` : ''}
         ${!isAnonymousTempBoard && currentUserProjectRole === 'maintainer' ? `<button class="btn btn--danger" id="deleteProjectBtn">Delete Project</button>` : ''}
         ${!isMobile && !isAnonymousTempBoard && (currentUserProjectRole === 'maintainer' || currentUserProjectRole === 'contributor') ? `<button class="btn btn--ghost" id="manageMembersBtn" title="Manage members">Members</button>` : ''}
         ${!getUser() ? `<button class="btn btn--ghost" id="settingsBtn" aria-label="Settings">
@@ -2389,7 +2388,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
   attachBoardDelegationHandlers();
   initMobileLoadMoreVisibility();
 
-  if (currentUserProjectRole === "maintainer" || isAnonymousBoard(board)) {
+  if (currentUserProjectRole === "maintainer" || isTemporaryBoard(board)) {
     initDnD();
   }
 
@@ -2495,13 +2494,16 @@ export async function loadBoardBySlug(slug: string | null, tag: string | null, s
 
   // Render board with role already resolved
   // Temporary boards:
-  // - Full mode: show the same back-to-projects button as durable projects.
-  // - Anonymous deployment: never show a back-to-projects path (no project enumeration).
+  // - Logged-in + full mode: full topbar with back to projects (same as durable boards).
+  // - Anonymous deployment: minimal topbar (no project list); back path omitted.
+  // - Logged-out + full mode: minimal topbar so action buttons stay visible (share links; wide topbar + mobile order rules crowded the bar).
   const showBackToProjects = !!getAuthStatusAvailable();
+  const minimalTempTopbar =
+    isTemporary && (!showBackToProjects || getUser() == null);
   renderBoardFromData(board, projectId, tag || "", search || "", effectiveSprintId, {
     backLabel: "← Projects",
-    backHref: showBackToProjects ? "/" : "",
-    minimalTopbar: isTemporary && !showBackToProjects,
+    backHref: showBackToProjects && getUser() != null ? "/" : "",
+    minimalTopbar: minimalTempTopbar,
   });
   lastBoardLoadTimestamp = Date.now();
   lastSuccessfulBoardLoadSlug = slug;
@@ -2666,12 +2668,14 @@ export async function renderBoard(
     } else {
       currentUserProjectRole = null;
     }
-    
+
     const showBackToProjects = !!getAuthStatusAvailable();
+    const minimalTempTopbar =
+      isTemporary && (!showBackToProjects || getUser() == null);
     renderBoardFromData(board, projectId, tag || "", search || "", sprintId, {
       backLabel: "← Projects",
-      backHref: showBackToProjects ? "/" : "",
-      minimalTopbar: isTemporary && !showBackToProjects,
+      backHref: showBackToProjects && getUser() != null ? "/" : "",
+      minimalTopbar: minimalTempTopbar,
     });
     lastBoardLoadTimestamp = Date.now();
     lastSuccessfulBoardLoadSlug = slug;

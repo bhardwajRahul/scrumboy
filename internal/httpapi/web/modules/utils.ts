@@ -9,6 +9,11 @@ export function isAnonymousBoard(board: Board | null): boolean {
   return !!(board?.project && board.project.expiresAt != null && board.project.creatorUserId == null);
 }
 
+/** Any temporary board (expiresAt set): unowned anonymous temp or FULL-mode temp with creator. Not durable. */
+export function isTemporaryBoard(board: Board | null): boolean {
+  return !!(board?.project?.expiresAt != null);
+}
+
 /** Single source of truth for hex color validation. Matches backend colorHexRe. Must be {6} not +. */
 export const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 

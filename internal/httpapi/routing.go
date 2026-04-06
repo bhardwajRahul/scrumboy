@@ -2044,8 +2044,14 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 		if userID, ok := store.UserIDFromContext(ctx); ok {
 			viewerUserID = &userID
 		}
-		if err := s.store.UpdateTagColor(ctx, viewerUserID, tagID, in.Color); err != nil {
-			writeStoreErr(w, err, true)
+		var patchColorErr error
+		if project.ExpiresAt != nil {
+			patchColorErr = s.store.UpdateTagColorForTemporaryBoard(ctx, project.ID, viewerUserID, tagID, in.Color)
+		} else {
+			patchColorErr = s.store.UpdateTagColor(ctx, viewerUserID, tagID, in.Color)
+		}
+		if patchColorErr != nil {
+			writeStoreErr(w, patchColorErr, true)
 			return
 		}
 		s.emitRefreshNeeded(r.Context(), project.ID, "tag_color_updated")
@@ -2053,14 +2059,14 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 		return
 	}
 
-	// PATCH /api/board/{slug}/tags/{tagName}/color - update tag color by name (anonymous-only).
-	// Name-based mutation routes are anonymous-only. Durable projects must use tag_id.
+	// PATCH /api/board/{slug}/tags/{tagName}/color - update tag color by name (temporary boards only).
+	// Durable projects must use /tags/id/{tagId}/color.
 	if len(rest) == 4 && rest[1] == "tags" && rest[3] == "color" && r.Method == http.MethodPatch {
-		isAnonymousBoard := project.ExpiresAt != nil && project.CreatorUserID == nil
-		if !isAnonymousBoard {
+		if project.ExpiresAt == nil {
 			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name-based color update not allowed for durable projects; use /tags/id/{tagId}/color", nil)
 			return
 		}
+		linkTemporaryBoard := true
 		ctx := s.requestContext(r)
 		tagName := rest[2]
 		var in struct {
@@ -2075,7 +2081,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 			viewerUserID = &userID
 		}
 
-		if err := s.store.UpdateTagColorForProject(ctx, project.ID, viewerUserID, tagName, in.Color, isAnonymousBoard); err != nil {
+		if err := s.store.UpdateTagColorForProject(ctx, project.ID, viewerUserID, tagName, in.Color, linkTemporaryBoard); err != nil {
 			writeStoreErr(w, err, true)
 			return
 		}

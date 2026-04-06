@@ -339,6 +339,68 @@ func TestAnonymousBoard_UpdateUserOwnedTagColorFails(t *testing.T) {
 	}
 }
 
+// TestCreatorOwnedTempBoard_AnonymousUpdatesUserOwnedTagDisplayColor verifies link collaboration: a user-owned tag
+// attached to todos on a creator-owned temporary board can have tags.color set by an anonymous caller via
+// UpdateTagColorForTemporaryBoard (shared display color for the board).
+func TestCreatorOwnedTempBoard_AnonymousUpdatesUserOwnedTagDisplayColor(t *testing.T) {
+	st, cleanup := newTestStore(t)
+	defer cleanup()
+	ctx := context.Background()
+	user, err := st.BootstrapUser(ctx, "owner@example.com", "password123", "Owner")
+	if err != nil {
+		t.Fatalf("BootstrapUser: %v", err)
+	}
+	ctxUser := WithUserID(ctx, user.ID)
+
+	p, err := st.CreateAnonymousBoard(ctxUser)
+	if err != nil {
+		t.Fatalf("CreateAnonymousBoard: %v", err)
+	}
+	loaded, err := st.GetProject(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if loaded.CreatorUserID == nil || *loaded.CreatorUserID != user.ID {
+		t.Fatal("expected creator-owned temp board")
+	}
+
+	_, err = st.CreateTodo(ctxUser, p.ID, CreateTodoInput{
+		Title:     "t",
+		Tags:      []string{"shared"},
+		ColumnKey: DefaultColumnBacklog,
+	}, ModeFull)
+	if err != nil {
+		t.Fatalf("CreateTodo: %v", err)
+	}
+
+	var tagID int64
+	err = st.db.QueryRowContext(ctx, `
+SELECT id FROM tags WHERE user_id = ? AND name = 'shared'`, user.ID).Scan(&tagID)
+	if err != nil {
+		t.Fatalf("get user-owned tag id: %v", err)
+	}
+
+	color := "#00AA00"
+	err = st.UpdateTagColor(ctx, nil, tagID, &color)
+	if err == nil {
+		t.Fatal("UpdateTagColor without viewer on user-owned tag should fail")
+	}
+
+	err = st.UpdateTagColorForTemporaryBoard(ctx, p.ID, nil, tagID, &color)
+	if err != nil {
+		t.Fatalf("UpdateTagColorForTemporaryBoard: %v", err)
+	}
+
+	var stored sql.NullString
+	err = st.db.QueryRowContext(ctx, `SELECT color FROM tags WHERE id = ?`, tagID).Scan(&stored)
+	if err != nil {
+		t.Fatalf("scan color: %v", err)
+	}
+	if !stored.Valid || stored.String != color {
+		t.Fatalf("expected color %q on tags row, got %v", color, stored)
+	}
+}
+
 // TestAnonymousBoard_TagDeletion tests deleting board-scoped tags
 func TestAnonymousBoard_TagDeletion(t *testing.T) {
 	st, cleanup := newTestStore(t)
