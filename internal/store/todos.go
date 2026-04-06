@@ -53,7 +53,9 @@ func (s *Store) CreateTodo(ctx context.Context, projectID int64, in CreateTodoIn
 
 		isAnonymousBoard := isAnonymousTemporaryBoard(p)
 
-		if !isAnonymousBoard {
+		// Durable projects only: require authenticated project role to create todos.
+		// Temporary boards (expires_at set), including FULL-mode creator-owned temps, allow link holders to create without login.
+		if p.ExpiresAt == nil {
 			enabled, err := authEnabledTx(ctx, tx)
 			if err != nil {
 				_ = tx.Rollback()
@@ -124,13 +126,13 @@ func (s *Store) CreateTodo(ctx context.Context, projectID int64, in CreateTodoIn
 		}
 
 		// Get userID from context for tag ownership.
-		// For anonymous boards: tags are board-scoped (no userID required)
-		// For authenticated boards: tags are user-owned (userID required)
+		// For temporary boards: tags are board-scoped (no userID required)
+		// For durable projects: tags are user-owned (userID required)
 		userID, ok := UserIDFromContext(ctx)
 		var userIDPtr *int64
 		if !ok && len(tags) > 0 {
-			if isAnonymousBoard {
-				// Allow tags on anonymous boards without userID (board-scoped tags)
+			if isTemporaryProject(p) {
+				// Allow tags on temporary boards without userID (board-scoped tags)
 				userIDPtr = nil
 			} else {
 				// Require userID for authenticated boards
@@ -243,8 +245,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			return Todo{}, fmt.Errorf("last insert id todo: %w", err)
 		}
 
-		if userIDPtr != nil || isAnonymousBoard {
-			if err := setTodoTags(ctx, tx, projectID, todoID, userIDPtr, isAnonymousBoard, tags); err != nil {
+		// Board-scoped tag path: unowned anonymous temp, OR any temp with no user in ctx (link holder creating todos with tags).
+		useBoardScopedTags := isAnonymousBoard || (isTemporaryProject(p) && userIDPtr == nil)
+		if userIDPtr != nil || useBoardScopedTags {
+			if err := setTodoTags(ctx, tx, projectID, todoID, userIDPtr, useBoardScopedTags, tags); err != nil {
 				_ = tx.Rollback()
 				return Todo{}, err
 			}
@@ -392,7 +396,9 @@ func (s *Store) UpdateTodo(ctx context.Context, todoID int64, in UpdateTodoInput
 		actorRole = role
 	}
 
-	if !isAnonymousBoard {
+	// Durable projects only: contributor/view edit scope. Temporary boards (any expires_at) use link collaboration
+	// for updates, same model as create — skip role-based edit scope.
+	if p.ExpiresAt == nil {
 		enabled, err := authEnabledTx(ctx, tx)
 		if err != nil {
 			return Todo{}, err
@@ -509,8 +515,8 @@ func (s *Store) UpdateTodo(ctx context.Context, todoID int64, in UpdateTodoInput
 
 	var userIDPtr *int64
 	if !ok && len(tags) > 0 {
-		if isAnonymousBoard {
-			// Allow tags on anonymous boards without userID (board-scoped tags)
+		if isAnonymousBoard || isTemporaryProject(p) {
+			// Board-scoped tags without user: unowned anonymous temps or any temp with anonymous ctx (link holder)
 			userIDPtr = nil
 		} else {
 			// Require userID for authenticated boards
@@ -595,8 +601,9 @@ func (s *Store) UpdateTodo(ctx context.Context, todoID int64, in UpdateTodoInput
 		}
 	}
 
-	if userIDPtr != nil || isAnonymousBoard {
-		if err := setTodoTags(ctx, tx, existing.ProjectID, todoID, userIDPtr, isAnonymousBoard, tags); err != nil {
+	useBoardScopedTags := isAnonymousBoard || (isTemporaryProject(p) && userIDPtr == nil)
+	if userIDPtr != nil || useBoardScopedTags {
+		if err := setTodoTags(ctx, tx, existing.ProjectID, todoID, userIDPtr, useBoardScopedTags, tags); err != nil {
 			return Todo{}, err
 		}
 		existing.Tags = tags
@@ -738,7 +745,8 @@ func (s *Store) DeleteTodo(ctx context.Context, todoID int64, mode Mode) error {
 		return err
 	}
 
-	if !isAnonymousTemporaryBoard(p) {
+	// Durable projects only: require role to delete. Temporary boards allow link holders without login.
+	if p.ExpiresAt == nil {
 		enabled, err := authEnabledTx(ctx, tx)
 		if err != nil {
 			return err
@@ -828,7 +836,8 @@ func (s *Store) MoveTodo(ctx context.Context, todoID int64, toColumnKey string, 
 	if err != nil {
 		return Todo{}, err
 	}
-	if !isAnonymousTemporaryBoard(p) {
+	// Durable projects only: require role to move. Temporary boards allow link holders without login.
+	if p.ExpiresAt == nil {
 		enabled, err := authEnabledTx(ctx, tx)
 		if err != nil {
 			return Todo{}, err

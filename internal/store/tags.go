@@ -257,7 +257,7 @@ SELECT
   g.name,
   g.user_id,
   g.project_id,
-  NULL AS board_color,
+  g.color AS board_color,
   COUNT(DISTINCT t.id) AS c
 FROM todos t
 JOIN todo_tags tt ON tt.todo_id = t.id
@@ -456,9 +456,10 @@ func (s *Store) ListTags(ctx context.Context, projectID int64, mode Mode) ([]Tag
 }
 
 // ResolveTagForColorUpdate resolves a tag for color update operations by tag name; all authority is then enforced by tag_id.
-// Anonymous-only no-auth: project-scoped tag color update with no auth is allowed only when isAnonymousBoard is true
-// (ExpiresAt != nil && CreatorUserID == nil). Durable/authenticated projects require maintainer/admin for project-scoped tags.
-func (s *Store) ResolveTagForColorUpdate(ctx context.Context, projectID int64, viewerUserID *int64, tagName string, isAnonymousBoard bool) (int64, error) {
+// linkTemporaryBoard: true when the project has expires_at (any temporary / link board: unowned anonymous OR creator-owned FULL-mode temp).
+// In that case, anonymous link holders may resolve board-scoped tag names without maintainer role.
+// Durable projects require maintainer/admin for project-scoped tags when linkTemporaryBoard is false.
+func (s *Store) ResolveTagForColorUpdate(ctx context.Context, projectID int64, viewerUserID *int64, tagName string, linkTemporaryBoard bool) (int64, error) {
 	normalizedName := CanonicalizeTag(tagName)
 
 	var boardTagID int64
@@ -467,7 +468,7 @@ func (s *Store) ResolveTagForColorUpdate(ctx context.Context, projectID int64, v
 		WHERE project_id = ? AND name = ? AND user_id IS NULL`,
 		projectID, normalizedName).Scan(&boardTagID)
 	if err == nil {
-		if !isAnonymousBoard {
+		if !linkTemporaryBoard {
 			if viewerUserID == nil {
 				return 0, fmt.Errorf("%w: project maintainer required for project-scoped tag", ErrUnauthorized)
 			}
@@ -581,12 +582,75 @@ ON CONFLICT(user_id, tag_id) DO UPDATE SET color = excluded.color`, *viewerUserI
 	return fmt.Errorf("%w: tag has neither user_id nor project_id", ErrConflict)
 }
 
+// UpdateTagColorForTemporaryBoard updates tag color for boards with expires_at (link collaboration).
+// Board-scoped tags: same as UpdateTagColor. User-owned tags used on this project: updates tags.color for shared
+// display when the viewer is not the tag owner (e.g. anonymous visitor); tag owner still uses user_tag_colors via UpdateTagColor.
+func (s *Store) UpdateTagColorForTemporaryBoard(ctx context.Context, projectID int64, viewerUserID *int64, tagID int64, color *string) error {
+	var tagUserID sql.NullInt64
+	var tagProjectID sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `
+SELECT user_id, project_id FROM tags WHERE id = ?`, tagID).Scan(&tagUserID, &tagProjectID)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("%w: tag not found", ErrNotFound)
+	}
+	if err != nil {
+		return fmt.Errorf("get tag: %w", err)
+	}
+
+	if color != nil && *color != "" {
+		colorTrimmed := strings.TrimSpace(*color)
+		if !colorHexRe.MatchString(colorTrimmed) {
+			return fmt.Errorf("%w: invalid tag color %q", ErrValidation, *color)
+		}
+		*color = colorTrimmed
+	}
+
+	// Board-scoped: must belong to this project
+	if tagProjectID.Valid && !tagUserID.Valid {
+		if tagProjectID.Int64 != projectID {
+			return fmt.Errorf("%w: tag not found", ErrNotFound)
+		}
+		return s.UpdateTagColor(ctx, viewerUserID, tagID, color)
+	}
+
+	if tagUserID.Valid {
+		if viewerUserID != nil && *viewerUserID == tagUserID.Int64 {
+			return s.UpdateTagColor(ctx, viewerUserID, tagID, color)
+		}
+		var n int
+		err := s.db.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM todo_tags tt
+INNER JOIN todos t ON t.id = tt.todo_id
+WHERE tt.tag_id = ? AND t.project_id = ?`, tagID, projectID).Scan(&n)
+		if err != nil {
+			return fmt.Errorf("check tag on project: %w", err)
+		}
+		if n == 0 {
+			return fmt.Errorf("%w: tag not found", ErrNotFound)
+		}
+		if color == nil || *color == "" {
+			_, err = s.db.ExecContext(ctx, `UPDATE tags SET color = NULL WHERE id = ?`, tagID)
+		} else {
+			_, err = s.db.ExecContext(ctx, `UPDATE tags SET color = ? WHERE id = ?`, *color, tagID)
+		}
+		if err != nil {
+			return fmt.Errorf("update tag display color: %w", err)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("%w: tag has neither user_id nor project_id", ErrConflict)
+}
+
 // UpdateTagColorForProject updates tag color, resolving the tag and enforcing ownership rules.
-// isAnonymousBoard: true only when project is anonymous temp board (ExpiresAt != nil && CreatorUserID == nil).
-func (s *Store) UpdateTagColorForProject(ctx context.Context, projectID int64, viewerUserID *int64, tagName string, color *string, isAnonymousBoard bool) error {
-	tagID, err := s.ResolveTagForColorUpdate(ctx, projectID, viewerUserID, tagName, isAnonymousBoard)
+// linkTemporaryBoard: true when project has ExpiresAt set (any temporary board); allows name resolution for link holders.
+func (s *Store) UpdateTagColorForProject(ctx context.Context, projectID int64, viewerUserID *int64, tagName string, color *string, linkTemporaryBoard bool) error {
+	tagID, err := s.ResolveTagForColorUpdate(ctx, projectID, viewerUserID, tagName, linkTemporaryBoard)
 	if err != nil {
 		return err
+	}
+	if linkTemporaryBoard {
+		return s.UpdateTagColorForTemporaryBoard(ctx, projectID, viewerUserID, tagID, color)
 	}
 	return s.UpdateTagColor(ctx, viewerUserID, tagID, color)
 }

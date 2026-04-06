@@ -235,6 +235,13 @@ func isAnonymousTemporaryBoard(p Project) bool {
 	return p.ExpiresAt != nil && p.CreatorUserID == nil
 }
 
+// isTemporaryProject is true for any link-expiring board (expires_at set): unowned anonymous temps
+// and FULL-mode temporary boards with a creator. Durable projects have ExpiresAt == nil.
+// Use this for "link collaboration" write paths; use isAnonymousTemporaryBoard for unowned-only semantics.
+func isTemporaryProject(p Project) bool {
+	return p.ExpiresAt != nil
+}
+
 // effectiveTagModeForProject determines tag scoping based on project state.
 // Request mode stays request-scoped and is not rewritten. Tag scoping is orthogonal: unowned temporary boards
 // should have project-scoped tags to avoid cross-board leakage.
