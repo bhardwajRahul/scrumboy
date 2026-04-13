@@ -53,6 +53,57 @@ func newTestHTTPServer(t *testing.T, mode string) (*httptest.Server, *sql.DB, fu
 	}
 }
 
+type boardEventsWireEvent struct {
+	ID        string `json:"id,omitempty"`
+	Type      string `json:"type"`
+	ProjectID int64  `json:"projectId"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+func subscribeBoardEvents(t *testing.T, client *http.Client, eventsURL string) (*http.Response, <-chan boardEventsWireEvent, <-chan error) {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodGet, eventsURL, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("connect sse: %v", err)
+	}
+
+	eventsCh := make(chan boardEventsWireEvent, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		reader := bufio.NewReader(resp.Body)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				errCh <- err
+				return
+			}
+			if !strings.HasPrefix(line, "data: ") {
+				continue
+			}
+
+			var event boardEventsWireEvent
+			payload := strings.TrimSpace(strings.TrimPrefix(line, "data: "))
+			if err := json.Unmarshal([]byte(payload), &event); err != nil {
+				errCh <- fmt.Errorf("decode sse event: %w", err)
+				return
+			}
+			if event.Type == "ping" {
+				continue
+			}
+
+			eventsCh <- event
+			return
+		}
+	}()
+
+	return resp, eventsCh, errCh
+}
+
 // doJSON sends an application/json request with X-Scrumboy: 1 on every call, matching mutating /api/* CSRF rules
 // (GETs include the header too; handlers that do not require it ignore it).
 func doJSON(t *testing.T, client *http.Client, method, url string, body any, out any) (*http.Response, []byte) {
@@ -2729,14 +2780,7 @@ func TestBoardEvents_HeadersAndRefreshNeededEvent(t *testing.T) {
 		t.Fatalf("read slug: %v", err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/board/"+slug+"/events", nil)
-	if err != nil {
-		t.Fatalf("new request: %v", err)
-	}
-	eventsResp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("connect sse: %v", err)
-	}
+	eventsResp, eventsCh, errCh := subscribeBoardEvents(t, client, ts.URL+"/api/board/"+slug+"/events")
 	defer eventsResp.Body.Close()
 
 	if ct := eventsResp.Header.Get("Content-Type"); !strings.Contains(ct, "text/event-stream") {
@@ -2749,23 +2793,6 @@ func TestBoardEvents_HeadersAndRefreshNeededEvent(t *testing.T) {
 		t.Fatalf("expected X-Accel-Buffering no, got %q", v)
 	}
 
-	eventsCh := make(chan string, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		reader := bufio.NewReader(eventsResp.Body)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				errCh <- err
-				return
-			}
-			if strings.HasPrefix(line, "data: ") {
-				eventsCh <- strings.TrimSpace(strings.TrimPrefix(line, "data: "))
-				return
-			}
-		}
-	}()
-
 	resp, _ = doJSON(t, client, http.MethodPost, ts.URL+"/api/board/"+slug+"/todos", map[string]any{
 		"title": "SSE test todo",
 		"body":  "",
@@ -2777,16 +2804,108 @@ func TestBoardEvents_HeadersAndRefreshNeededEvent(t *testing.T) {
 
 	select {
 	case event := <-eventsCh:
-		if !strings.Contains(event, `"type":"refresh_needed"`) {
-			t.Fatalf("expected refresh_needed event, got %q", event)
+		if event.Type != "refresh_needed" {
+			t.Fatalf("expected refresh_needed event, got %+v", event)
 		}
-		if !strings.Contains(event, `"projectId":`) {
-			t.Fatalf("expected projectId in event, got %q", event)
+		if event.ProjectID != p.ID {
+			t.Fatalf("expected projectId %d in event, got %+v", p.ID, event)
+		}
+		if event.Reason != "todo_created" {
+			t.Fatalf("expected reason todo_created, got %+v", event)
 		}
 	case err := <-errCh:
 		t.Fatalf("error reading sse event: %v", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for sse event")
+	}
+}
+
+func TestBoardEvents_TodoMutationRefreshReasons(t *testing.T) {
+	cases := []struct {
+		name           string
+		trigger        func(t *testing.T, client *http.Client, baseURL, slug string, localID int64)
+		expectedReason string
+	}{
+		{
+			name: "move",
+			trigger: func(t *testing.T, client *http.Client, baseURL, slug string, localID int64) {
+				t.Helper()
+				resp, _ := doJSON(t, client, http.MethodPost, baseURL+"/api/board/"+slug+"/todos/"+strconv.FormatInt(localID, 10)+"/move", map[string]any{
+					"toColumnKey": "doing",
+				}, nil)
+				if resp.StatusCode != http.StatusOK {
+					t.Fatalf("move todo status=%d", resp.StatusCode)
+				}
+			},
+			expectedReason: "todo_moved",
+		},
+		{
+			name: "delete",
+			trigger: func(t *testing.T, client *http.Client, baseURL, slug string, localID int64) {
+				t.Helper()
+				resp, _ := doJSON(t, client, http.MethodDelete, baseURL+"/api/board/"+slug+"/todos/"+strconv.FormatInt(localID, 10), nil, nil)
+				if resp.StatusCode != http.StatusNoContent {
+					t.Fatalf("delete todo status=%d", resp.StatusCode)
+				}
+			},
+			expectedReason: "todo_deleted",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
+			defer cleanup()
+
+			client := ts.Client()
+
+			var p struct {
+				ID int64 `json:"id"`
+			}
+			resp, _ := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{"name": "sse-" + tc.name}, &p)
+			if resp.StatusCode != http.StatusCreated {
+				t.Fatalf("create project status=%d", resp.StatusCode)
+			}
+
+			var slug string
+			if err := sqlDB.QueryRow(`SELECT slug FROM projects WHERE id = ?`, p.ID).Scan(&slug); err != nil {
+				t.Fatalf("read slug: %v", err)
+			}
+
+			var todo struct {
+				LocalID int64 `json:"localId"`
+			}
+			resp, _ = doJSON(t, client, http.MethodPost, ts.URL+"/api/board/"+slug+"/todos", map[string]any{
+				"title": "Realtime mutation todo",
+				"body":  "",
+				"tags":  []string{},
+			}, &todo)
+			if resp.StatusCode != http.StatusCreated {
+				t.Fatalf("create todo status=%d", resp.StatusCode)
+			}
+
+			eventsResp, eventsCh, errCh := subscribeBoardEvents(t, client, ts.URL+"/api/board/"+slug+"/events")
+			defer eventsResp.Body.Close()
+
+			tc.trigger(t, client, ts.URL, slug, todo.LocalID)
+
+			select {
+			case event := <-eventsCh:
+				if event.Type != "refresh_needed" {
+					t.Fatalf("expected refresh_needed event, got %+v", event)
+				}
+				if event.ProjectID != p.ID {
+					t.Fatalf("expected projectId %d, got %+v", p.ID, event)
+				}
+				if event.Reason != tc.expectedReason {
+					t.Fatalf("expected reason %q, got %+v", tc.expectedReason, event)
+				}
+			case err := <-errCh:
+				t.Fatalf("error reading sse event: %v", err)
+			case <-time.After(5 * time.Second):
+				t.Fatalf("timed out waiting for %s refresh event", tc.name)
+			}
+		})
 	}
 }
 

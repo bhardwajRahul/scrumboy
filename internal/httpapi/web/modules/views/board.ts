@@ -278,6 +278,12 @@ function useMergedGlobalRealtime(): boolean {
   return !!(getAuthStatusAvailable() && getUser());
 }
 
+// Logged-in boards consume merged realtime from /api/me/realtime. Keep this
+// classification aligned with the anonymous board SSE path below:
+// - todo.assigned: no board reload here; assignment refresh arrives via the
+//   synthetic refresh_needed line emitted by the SSE bridge
+// - members_updated: invalidate members cache only
+// - refresh_needed and other non-ping project-scoped events: queue a board refetch
 function onBoardRealtimeEvent(_payload: unknown): void {
   const slug = boardEventsSlug;
   if (!slug || getSlug() !== slug) return;
@@ -371,6 +377,10 @@ function ensureRealtimeForceRefreshTimer(): void {
   }, maxRefreshDelayMs);
 }
 
+// Pending realtime refreshes are slug-scoped. They are dropped after
+// navigation, deferred while local interaction guards are active, retried after
+// max(realtimeRefetchDebounceMs, guardRemaining), and force-flushed after
+// maxRefreshDelayMs so the board eventually reloads.
 function flushPendingRealtimeRefresh(force = false): void {
   const slug = pendingRealtimeRefreshSlug;
   if (!slug) {
@@ -445,6 +455,9 @@ function connectBoardEvents(slug: string): void {
   const url = new URL(`/api/board/${slug}/events`, window.location.origin).toString();
   const manager = new SseConnectionManager(url, {
     label: `board/${slug}/events`,
+    // Anonymous-board onopen is conservative: skip reconnect refetches while
+    // the initial board load is still in flight, while the manager/slug is
+    // stale, or immediately after a successful load for the same slug.
     onOpen: () => {
       debugLog("SSE onopen fired", slug);
       if (isBulkUpdating()) return;
@@ -466,6 +479,7 @@ function connectBoardEvents(slug: string): void {
       }
       refetchBoardFromRealtime(slug);
     },
+    // Mirror onBoardRealtimeEvent semantics for anonymous board SSE.
     onMessage: (event: MessageEvent) => {
       if (boardAnonSseManager !== manager || getSlug() !== slug) return;
       try {
