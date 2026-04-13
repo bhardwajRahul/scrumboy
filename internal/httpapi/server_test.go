@@ -218,8 +218,10 @@ func TestAPI_CreateMoveAndFetchBoard(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("move todo status=%d", resp.StatusCode)
 	}
-	if todo.Status != "IN_PROGRESS" {
-		t.Fatalf("expected IN_PROGRESS, got %q", todo.Status)
+	// Back-compat input still accepts legacy status names, but responses serialize
+	// the authoritative workflow column_key as uppercase.
+	if todo.Status != "DOING" {
+		t.Fatalf("expected DOING, got %q", todo.Status)
 	}
 
 	var board struct {
@@ -231,7 +233,7 @@ func TestAPI_CreateMoveAndFetchBoard(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("get board status=%d", resp.StatusCode)
 	}
-	if len(board.Columns["IN_PROGRESS"]) != 1 || board.Columns["IN_PROGRESS"][0].ID != todo.ID {
+	if len(board.Columns["doing"]) != 1 || board.Columns["doing"][0].ID != todo.ID {
 		t.Fatalf("unexpected board: %+v", board.Columns)
 	}
 
@@ -240,7 +242,7 @@ func TestAPI_CreateMoveAndFetchBoard(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("get board by id status=%d", resp.StatusCode)
 	}
-	if len(board.Columns["IN_PROGRESS"]) != 1 || board.Columns["IN_PROGRESS"][0].ID != todo.ID {
+	if len(board.Columns["doing"]) != 1 || board.Columns["doing"][0].ID != todo.ID {
 		t.Fatalf("unexpected board by id: %+v", board.Columns)
 	}
 }
@@ -829,22 +831,42 @@ func TestAPI_ProjectsIncludeExpiresAt(t *testing.T) {
 	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
 	defer cleanup()
 
-	client := ts.Client()
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		t.Fatalf("cookie jar: %v", err)
+	}
+	client := &http.Client{Jar: jar}
+
+	var u struct {
+		ID int64 `json:"id"`
+	}
+	resp, _ := doJSON(t, client, http.MethodPost, ts.URL+"/api/auth/bootstrap", map[string]any{
+		"name":     "Alice",
+		"email":    "admin@example.com",
+		"password": "password123",
+	}, &u)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("bootstrap status=%d", resp.StatusCode)
+	}
 
 	// Create durable project via API
 	var p struct {
 		ID int64 `json:"id"`
 	}
-	resp, _ := doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{"name": "durable"}, &p)
+	resp, _ = doJSON(t, client, http.MethodPost, ts.URL+"/api/projects", map[string]any{"name": "durable"}, &p)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create project status=%d", resp.StatusCode)
 	}
 
-	// Create a temporary board directly via store (no public HTTP endpoint in full mode)
+	// Create one anonymous temp board and one authenticated temp board directly via store.
 	st := store.New(sqlDB, nil)
-	tmp, err := st.CreateAnonymousBoard(context.Background())
+	anonTmp, err := st.CreateAnonymousBoard(context.Background())
 	if err != nil {
 		t.Fatalf("create anonymous board: %v", err)
+	}
+	authTmp, err := st.CreateAnonymousBoard(store.WithUserID(context.Background(), u.ID))
+	if err != nil {
+		t.Fatalf("create authenticated temp board: %v", err)
 	}
 
 	var out []struct {
@@ -856,20 +878,27 @@ func TestAPI_ProjectsIncludeExpiresAt(t *testing.T) {
 		t.Fatalf("list projects status=%d body=%s", resp.StatusCode, string(body))
 	}
 
-	var durableExpiresAt, tmpExpiresAt *time.Time
+	var durableExpiresAt, authTmpExpiresAt *time.Time
+	var sawAnonTmp bool
 	for _, item := range out {
 		if item.ID == p.ID {
 			durableExpiresAt = item.ExpiresAt
 		}
-		if item.ID == tmp.ID {
-			tmpExpiresAt = item.ExpiresAt
+		if item.ID == authTmp.ID {
+			authTmpExpiresAt = item.ExpiresAt
+		}
+		if item.ID == anonTmp.ID {
+			sawAnonTmp = true
 		}
 	}
 	if durableExpiresAt != nil {
 		t.Fatalf("expected durable project expiresAt=null, got %v", durableExpiresAt)
 	}
-	if tmpExpiresAt == nil {
-		t.Fatalf("expected temporary board expiresAt to be non-null")
+	if authTmpExpiresAt == nil {
+		t.Fatalf("expected authenticated temporary board expiresAt to be non-null")
+	}
+	if sawAnonTmp {
+		t.Fatalf("expected anonymous temporary board to be omitted from /api/projects")
 	}
 }
 
@@ -1414,7 +1443,7 @@ func TestTodoLocalID_SequencingAndSlugEndpoints(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("move todo status=%d", resp.StatusCode)
 	}
-	if moved.LocalID != 2 || moved.Status != "IN_PROGRESS" {
+	if moved.LocalID != 2 || moved.Status != "DOING" {
 		t.Fatalf("unexpected move response: %+v", moved)
 	}
 
