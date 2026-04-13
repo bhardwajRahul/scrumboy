@@ -622,19 +622,13 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request, rest []s
 	// In anonymous deployment mode, block most numeric-ID project routes.
 	// Only slug-based routes (/api/board/{slug}) are allowed for pastebin semantics.
 	//
-	// Exception: PATCH /api/projects/{id} is allowed for renaming anonymous temp boards.
+	// Exception: PATCH /api/projects/{id} stays available only for active anonymous temp boards
+	// so paste-style boards can be renamed without exposing broader project mutation paths.
 	//
-	// CRITICAL: This routing exception is permissive by design. Authorization MUST remain
-	// enforced at the store boundary (UpdateProjectName). If store-layer authorization is
-	// removed, modified, or bypassed, this could open a security hole.
-	//
-	// Store authorization enforces:
-	// - Only anonymous temp boards (expires_at IS NOT NULL AND creator_user_id IS NULL) can be renamed without auth
-	// - All other boards require proper authorization (contributor role or higher)
-	//
-	// See TestAnonymousMode_RenameProjectAuthorization for test coverage.
+	// See TestAnonymousMode_RenameProjectAuthorization for the contract.
 	if s.mode == "anonymous" {
-		// Allow PATCH requests through - authorization will be checked in the store layer
+		// Keep PATCH reachable so eligible anonymous temp boards can be renamed.
+		// The route still applies temp-board gating below before store mutation runs.
 		if len(rest) == 1 && r.Method == http.MethodPatch {
 			// Continue to PATCH handler below
 		} else {
@@ -711,6 +705,22 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request, rest []s
 	if !ok {
 		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid project id", map[string]any{"field": "projectId"})
 		return
+	}
+
+	if s.mode == "anonymous" && len(rest) == 1 && r.Method == http.MethodPatch {
+		p, err := s.store.GetProject(s.requestContext(r), projectID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
+				return
+			}
+			writeStoreErr(w, err, true)
+			return
+		}
+		if p.ExpiresAt == nil || p.CreatorUserID != nil || !p.ExpiresAt.After(time.Now().UTC()) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
+			return
+		}
 	}
 
 	if len(rest) == 1 {
