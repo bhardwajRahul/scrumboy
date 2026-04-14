@@ -31,7 +31,6 @@ import {
   setTagColors,
   setSettingsActiveTab,
   setBoardMembers,
-  setBoardLaneMeta,
   setLaneLoading,
   appendLaneTodos,
 } from '../state/mutations.js';
@@ -80,6 +79,7 @@ import {
   toggleTodoSelection,
   updateBulkEditBar,
 } from './board-selection.js';
+import { bootstrapLoadedBoardView } from './board-load-bootstrap.js';
 
 // Symbol for idempotent listener attachment
 const BOUND_FLAG = Symbol('bound');
@@ -141,45 +141,6 @@ function resolveMobileTabKeyFromStorage(saved: string | null, cols: Array<{ key:
   const mapped = LEGACY_MOBILE_TAB_KEYS[saved];
   if (mapped && cols.some((c) => c.key === mapped)) return mapped;
   return null;
-}
-
-type LaneMetaState = { hasMore: boolean; nextCursor: string | null; loading: boolean; totalCount?: number };
-
-function laneMetaKeyCandidates(key: string): string[] {
-  const lower = key.toLowerCase();
-  const upper = key.toUpperCase();
-  const out = [key, lower, upper];
-  // Legacy compatibility: map between old status key and workflow key.
-  if (lower === "doing" || upper === "IN_PROGRESS") out.push("IN_PROGRESS", "doing");
-  return Array.from(new Set(out));
-}
-
-function buildLaneMetaFromBoard(board: Board): Record<TodoStatus, LaneMetaState> {
-  const rawMeta = (board?.columnsMeta ?? {}) as Record<string, { hasMore?: boolean; nextCursor?: string | null; totalCount?: number }>;
-  const keys = new Set<string>();
-
-  getBoardColumns(board).forEach((c) => keys.add(c.key));
-  Object.keys(board?.columns ?? {}).forEach((k) => keys.add(k));
-  Object.keys(rawMeta).forEach((k) => keys.add(k));
-
-  const out: Record<TodoStatus, LaneMetaState> = {};
-  keys.forEach((key) => {
-    let source: { hasMore?: boolean; nextCursor?: string | null; totalCount?: number } | undefined;
-    for (const candidate of laneMetaKeyCandidates(key)) {
-      if (rawMeta[candidate] != null) {
-        source = rawMeta[candidate];
-        break;
-      }
-    }
-    out[key] = {
-      hasMore: source?.hasMore === true,
-      nextCursor: source?.nextCursor ?? null,
-      loading: false,
-      totalCount: source?.totalCount,
-    };
-  });
-
-  return out;
 }
 
 function hasActiveBoardSubsetFilter(tag: string | null | undefined, search: string | null | undefined, sprintId: string | null | undefined): boolean {
@@ -2181,59 +2142,33 @@ export async function loadBoardBySlug(slug: string | null, tag: string | null, s
   const currentSearch = currentUrl.searchParams.get("search") || "";
   const currentSprintId = currentUrl.searchParams.get("sprintId") || null;
   if (currentSlug !== requestSlug || currentTag !== requestTag || currentSearch !== requestSearch || (currentSprintId || null) !== (requestSprintId || null)) return;
-  const projectId = board?.project?.id;
-  if (!projectId) {
-    throw new Error("Invalid board response");
-  }
   resetBoardLimitPerLaneFloor();
-  setSlug(slug);
-  setProjectId(projectId);
-  setTag(tag || "");
-  setSearch(search || "");
   // Defer sprints — render board first, then load in background
   if (slug !== lastSprintsDataSlug) {
     lastSprintsData = null;
   }
   const effectiveSprintId = requestSprintId;
-  // Initialize boardLaneMeta from current board workflow keys (compat with legacy key variants).
-  setBoardLaneMeta(buildLaneMetaFromBoard(board));
-
-  // Fetch project members BEFORE rendering so role-dependent buttons appear correctly on first load
-  const isTemporary = !!board?.project?.expiresAt;
-  const user = getUser();
-  if (user && projectId && !isAnonymousBoard(board)) {
-    try {
-      const members = await fetchProjectMembers(projectId);
-      if (requestSeq !== boardLoadSequence || getSlug() !== requestSlug) return;
-      setBoardMembers(members);
-      const currentMember = members.find((m) => m.userId === user.id);
-      currentUserProjectRole = currentMember ? currentMember.role : null;
+  const rendered = await bootstrapLoadedBoardView({
+    board,
+    slug,
+    tag,
+    search,
+    isCurrent: () => requestSeq === boardLoadSequence && getSlug() === requestSlug,
+    setResolvedRole: (role) => {
+      currentUserProjectRole = role;
+    },
+    markMembersFetched: (projectId) => {
       lastFetchedProjectId = projectId;
-    } catch {
-      if (requestSeq !== boardLoadSequence) return;
-      setBoardMembers([]);
-      currentUserProjectRole = null;
-    }
-  } else {
-    // Reset role for anonymous boards or when not logged in
-    currentUserProjectRole = null;
-  }
-
-  // Render board with role already resolved
-  // Temporary boards:
-  // - Logged-in + full mode: full topbar with back to projects (same as durable boards).
-  // - Anonymous deployment: minimal topbar (no project list); back path omitted.
-  // - Logged-out + full mode: minimal topbar so action buttons stay visible (share links; wide topbar + mobile order rules crowded the bar).
-  const showBackToProjects = !!getAuthStatusAvailable();
-  const minimalTempTopbar =
-    isTemporary && (!showBackToProjects || getUser() == null);
-  renderBoardFromData(board, projectId, tag || "", search || "", effectiveSprintId, {
-    backLabel: "← Projects",
-    backHref: showBackToProjects && getUser() != null ? "/" : "",
-    minimalTopbar: minimalTempTopbar,
+    },
+    renderLoadedBoard: (renderOpts) => {
+      renderBoardFromData(board, renderOpts.projectId, tag || "", search || "", effectiveSprintId, renderOpts);
+    },
+    markLoadSuccess: (loadedSlug) => {
+      lastBoardLoadTimestamp = Date.now();
+      lastSuccessfulBoardLoadSlug = loadedSlug;
+    },
   });
-  lastBoardLoadTimestamp = Date.now();
-  lastSuccessfulBoardLoadSlug = slug;
+  if (!rendered) return;
   debugLog("loadBoardBySlug end (success)", slug);
 
   // Note: Avatars are already rendered in renderTodoCard() since members were fetched before rendering.
@@ -2365,47 +2300,31 @@ export async function renderBoard(
   }
   if (opts.prefetchedBoard && opts.prefetchedBoard.project?.id) {
     const board = opts.prefetchedBoard;
-    const projectId = board.project.id;
     setBoardMembers([]);
-    setSlug(slug);
-    setProjectId(projectId);
-    setTag(tag || "");
-    setSearch(search || "");
     if (slug !== lastSprintsDataSlug) {
       lastSprintsData = null;
     }
-    setBoardLaneMeta(buildLaneMetaFromBoard(board));
-    const isTemporary = !!board?.project?.expiresAt;
-    
-    // Fetch project members BEFORE rendering so role-dependent buttons appear correctly
-    const user = getUser();
-    if (user && projectId && !isAnonymousBoard(board)) {
-      try {
-        const members = await fetchProjectMembers(projectId);
-        if (getSlug() !== slug) return;
-        setBoardMembers(members);
-        const currentMember = members.find((m) => m.userId === user.id);
-        currentUserProjectRole = currentMember ? currentMember.role : null;
+    const rendered = await bootstrapLoadedBoardView({
+      board,
+      slug,
+      tag,
+      search,
+      isCurrent: () => getSlug() === slug,
+      setResolvedRole: (role) => {
+        currentUserProjectRole = role;
+      },
+      markMembersFetched: (projectId) => {
         lastFetchedProjectId = projectId;
-      } catch {
-        if (getSlug() !== slug) return;
-        setBoardMembers([]);
-        currentUserProjectRole = null;
-      }
-    } else {
-      currentUserProjectRole = null;
-    }
-
-    const showBackToProjects = !!getAuthStatusAvailable();
-    const minimalTempTopbar =
-      isTemporary && (!showBackToProjects || getUser() == null);
-    renderBoardFromData(board, projectId, tag || "", search || "", sprintId, {
-      backLabel: "← Projects",
-      backHref: showBackToProjects && getUser() != null ? "/" : "",
-      minimalTopbar: minimalTempTopbar,
+      },
+      renderLoadedBoard: (renderOpts) => {
+        renderBoardFromData(board, renderOpts.projectId, tag || "", search || "", sprintId, renderOpts);
+      },
+      markLoadSuccess: (loadedSlug) => {
+        lastBoardLoadTimestamp = Date.now();
+        lastSuccessfulBoardLoadSlug = loadedSlug;
+      },
     });
-    lastBoardLoadTimestamp = Date.now();
-    lastSuccessfulBoardLoadSlug = slug;
+    if (!rendered) return;
     if (getSlug() === slug) connectBoardEvents(slug);
     // Note: Avatars are already rendered in renderTodoCard() since members were fetched before rendering.
     // No need to call hydrateAvatarsOnCards() here.
