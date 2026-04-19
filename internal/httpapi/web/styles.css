@@ -1292,6 +1292,79 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   min-width: 0;
 }
 
+.voice-command-trigger {
+  white-space: nowrap;
+}
+
+.voice-command-dialog.dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.voice-command {
+  gap: var(--s-14);
+}
+
+.voice-command__tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-8);
+  overflow: hidden;
+}
+
+.voice-command__tab {
+  min-height: 36px;
+  padding: var(--s-8) 14px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.voice-command__tab:last-child {
+  border-right: 0;
+}
+
+.voice-command__tab--active {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--text);
+}
+
+.voice-command__speech,
+.voice-command__review {
+  display: flex;
+  align-items: center;
+  gap: var(--s-10);
+  flex-wrap: wrap;
+}
+
+.voice-command__transcript {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.voice-command__status {
+  min-height: 20px;
+  color: var(--muted);
+  font-size: var(--fs-13);
+}
+
+.voice-command__summary {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-8);
+  background: rgba(255, 255, 255, 0.03);
+  padding: var(--s-10) 12px;
+  line-height: 1.45;
+}
+
+.voice-command__summary[hidden],
+.voice-command__speech[hidden] {
+  display: none;
+}
+
 /* Edit Todo modal: Updated datetime in header, left of close button. */
 /* Hide when no datetime (e.g. New Todo before save); show after todo is saved. */
 .todo-dialog-updated[aria-hidden="true"] {
