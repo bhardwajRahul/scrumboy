@@ -167,7 +167,7 @@ export function buildFiltersHtml(chipsHTML, opts) {
     return opts?.innerOnly ? inner : `<div class="filters">${inner}</div>`;
 }
 export function buildTopbarHtml(args) {
-    const { board, minimalTopbar, search, searchPlaceholder, isMobile, isAnonymousTempBoard, currentUserProjectRole, user, backLabel, } = args;
+    const { board, minimalTopbar, search, searchPlaceholder, isMobile, isAnonymousTempBoard, currentUserProjectRole, showVoiceCommands, user, backLabel, } = args;
     if (minimalTopbar) {
         return `
       <div class="topbar">
@@ -193,6 +193,7 @@ export function buildTopbarHtml(args) {
         </div>
         ${isAnonymousTempBoard ? `<button class="btn btn--ghost" id="renameProjectBtn" title="Rename project">Rename</button>` : ''}
         ${(isTemporaryBoard(board) || currentUserProjectRole === 'maintainer') ? `<button class="btn" id="newTodoBtn">New Todo</button>` : ''}
+        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="Voice and typed commands" title="Voice and typed commands">Voice</button>` : ''}
         ${!isMobile && !isAnonymousTempBoard && (currentUserProjectRole === 'maintainer' || currentUserProjectRole === 'contributor') ? `<button class="btn btn--ghost" id="manageMembersBtn" title="Manage members">Members</button>` : ''}
         ${!user ? `<button class="btn btn--ghost" id="settingsBtn" aria-label="Settings">
           <span class="hamburger">☰</span>
@@ -224,6 +225,7 @@ export function buildTopbarHtml(args) {
         </div>
         ${isAnonymousTempBoard ? `<button class="btn btn--ghost" id="renameProjectBtn" title="Rename project">Rename</button>` : ''}
         ${(isTemporaryBoard(board) || currentUserProjectRole === 'maintainer') ? `<button class="btn" id="newTodoBtn">New Todo</button>` : ''}
+        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="Voice and typed commands" title="Voice and typed commands">Voice</button>` : ''}
         ${!isAnonymousTempBoard && currentUserProjectRole === 'maintainer' ? `<button class="btn btn--danger" id="deleteProjectBtn">Delete Project</button>` : ''}
         ${!isMobile && !isAnonymousTempBoard && (currentUserProjectRole === 'maintainer' || currentUserProjectRole === 'contributor') ? `<button class="btn btn--ghost" id="manageMembersBtn" title="Manage members">Members</button>` : ''}
         ${!user ? `<button class="btn btn--ghost" id="settingsBtn" aria-label="Settings">

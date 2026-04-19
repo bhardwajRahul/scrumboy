@@ -1,0 +1,40 @@
+// @vitest-environment happy-dom
+import { describe, expect, it } from 'vitest';
+import type { Board } from '../types.js';
+import { buildTopbarHtml } from './board-rendering.js';
+
+function board(): Board {
+  return {
+    project: {
+      id: 1,
+      name: 'Alpha',
+      slug: 'alpha',
+      dominantColor: '#123456',
+      creatorUserId: 1,
+    },
+    tags: [],
+    columns: { backlog: [] },
+  };
+}
+
+function renderTopbar(showVoiceCommands: boolean): string {
+  return buildTopbarHtml({
+    board: board(),
+    minimalTopbar: false,
+    search: '',
+    searchPlaceholder: 'Search',
+    isMobile: false,
+    isAnonymousTempBoard: false,
+    currentUserProjectRole: 'maintainer',
+    showVoiceCommands,
+    user: null,
+    backLabel: 'Projects',
+  });
+}
+
+describe('board topbar rendering', () => {
+  it('renders the voice command trigger only when explicitly enabled', () => {
+    expect(renderTopbar(true)).toContain('id="voiceCommandBtn"');
+    expect(renderTopbar(false)).not.toContain('id="voiceCommandBtn"');
+  });
+});
