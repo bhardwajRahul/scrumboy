@@ -62,6 +62,7 @@
   --danger: #ef4444;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --project-name-color: #EFBF04;
+  --voice-command-icon-filter: invert(1);
 
   /* Sprint chip inversion (dark mode: light bg + dark text) */
   --chip-sprint-bg: #f5f5f5;
@@ -102,6 +103,7 @@
   --danger: #dc2626;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
   --project-name-color: #111827;
+  --voice-command-icon-filter: invert(0);
 
   /* Sprint chip inversion (light mode: dark bg + light text) */
   --chip-sprint-bg: #111827;
@@ -1303,11 +1305,17 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   justify-content: center;
 }
 
-.voice-command-trigger svg {
+.voice-command-trigger svg,
+.voice-command-trigger img {
   width: 20px;
   height: 20px;
   fill: currentColor;
   flex: 0 0 auto;
+}
+
+.voice-command-trigger img {
+  display: block;
+  filter: var(--voice-command-icon-filter);
 }
 
 .voice-command-dialog.dialog {
