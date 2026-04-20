@@ -1,6 +1,15 @@
 import type { Board } from '../types.js';
 import type { BoardMember } from '../state/state.js';
-import { getVoiceFlowModePreference, setVoiceFlowModePreference, type VoiceFlowMode } from '../core/voiceflow-preferences.js';
+import {
+  getVoiceFlowHandsFreeConfirmationPreference,
+  getVoiceFlowModePreference,
+  setVoiceFlowHandsFreeConfirmationPreference,
+  setVoiceFlowModePreference,
+  VOICE_FLOW_CONFIRM_DELETES,
+  VOICE_FLOW_CONFIRM_MUTATIONS,
+  type VoiceFlowHandsFreeConfirmation,
+  type VoiceFlowMode,
+} from '../core/voiceflow-preferences.js';
 import { isAnonymousBoard, isTemporaryBoard, showConfirmDialog, showToast } from '../utils.js';
 import { canRunVoiceMutationCommands, canShowVoiceCommands } from '../views/board-command-capabilities.js';
 import { executeCommandIR } from './execute.js';
@@ -46,8 +55,10 @@ type ParsedAlternative = {
 type ParsedDraftAlternative = {
   transcript: string;
   draft: ParsedCommandDraft;
-  hash: string;
 };
+
+const CONFIRM_DELETES_LABEL = "Confirm only deletes";
+const CONFIRM_MUTATIONS_LABEL = "Confirm every action before execution";
 
 function setText(el: Element | null, text: string): void {
   if (el) el.textContent = text;
@@ -72,7 +83,19 @@ function dedupeAlternatives(alternatives: string[]): string[] {
 }
 
 function isMutationCommand(command: ResolvedCommand): boolean {
-  return command.ir.intent !== "open_todo";
+  switch (command.ir.intent) {
+    case "todos.create":
+    case "todos.move":
+    case "todos.delete":
+    case "todos.assign":
+      return true;
+    case "open_todo":
+      return false;
+    default: {
+      const exhaustive: never = command.ir;
+      return exhaustive;
+    }
+  }
 }
 
 function canRunResolvedCommand(context: VoiceCommandDialogContext, command: ResolvedCommand): boolean {
@@ -146,7 +169,7 @@ export async function parseAlternatives(
   for (const transcript of dedupeAlternatives(alternatives)) {
     const parsed = parseCommand(transcript);
     if (!isCommandFailure(parsed)) {
-      successes.push({ transcript, draft: parsed.value, hash: draftHash(parsed.value) });
+      successes.push({ transcript, draft: parsed.value });
     } else if (!firstFailure) {
       firstFailure = parsed;
     }
@@ -157,18 +180,57 @@ export async function parseAlternatives(
   }
 
   const first = successes[0];
-  if (successes.some((candidate) => candidate.hash !== first.hash)) {
+  if (successes.some((candidate) => candidate.draft.intent !== first.draft.intent)) {
     return commandFailure("unsupported", "Speech matched more than one command. Review the text and try again.");
   }
 
   const context = getActiveContext(options);
   if (isCommandFailure(context)) return context;
-  const resolved = await resolveParsedDraft(first.draft, context.value, signal);
-  if (isCommandFailure(resolved)) return resolved;
-  if (!canRunResolvedCommand(context.value, resolved.value)) {
-    return commandFailure("unauthorized", "Only maintainers can run mutating commands.");
+
+  if (first.draft.intent === "todos.create") {
+    const resolved = await resolveParsedDraft(first.draft, context.value, signal);
+    if (isCommandFailure(resolved)) return resolved;
+    if (!canRunResolvedCommand(context.value, resolved.value)) {
+      return commandFailure("unauthorized", "Only maintainers can run mutating commands.");
+    }
+    return { ok: true, value: { transcript: first.draft.display, resolved: resolved.value } };
   }
-  return { ok: true, value: { transcript: first.draft.display, resolved: resolved.value } };
+
+  const resolvedByHash = new Map<string, ParsedAlternative>();
+  const seenDrafts = new Set<string>();
+  let firstResolvedFailure: CommandFailure | null = null;
+
+  for (const candidate of successes) {
+    const candidateHash = draftHash(candidate.draft);
+    if (seenDrafts.has(candidateHash)) continue;
+    seenDrafts.add(candidateHash);
+
+    const resolved = await resolveParsedDraft(candidate.draft, context.value, signal);
+    if (isCommandFailure(resolved)) {
+      if (!firstResolvedFailure) firstResolvedFailure = resolved;
+      continue;
+    }
+    if (!canRunResolvedCommand(context.value, resolved.value)) {
+      if (!firstResolvedFailure) {
+        firstResolvedFailure = commandFailure("unauthorized", "Only maintainers can run mutating commands.");
+      }
+      continue;
+    }
+
+    const resolvedHash = commandHash(resolved.value);
+    if (!resolvedByHash.has(resolvedHash)) {
+      resolvedByHash.set(resolvedHash, { transcript: candidate.draft.display, resolved: resolved.value });
+    }
+  }
+
+  if (resolvedByHash.size === 1) {
+    return { ok: true, value: Array.from(resolvedByHash.values())[0] };
+  }
+  if (resolvedByHash.size > 1) {
+    return commandFailure("unsupported", "Speech matched more than one command. Review the text and try again.");
+  }
+
+  return firstResolvedFailure ?? commandFailure("unsupported", "Unsupported command.");
 }
 
 export function parseConfirmationAlternatives(alternatives: string[]): CommandResult<VoiceConfirmation> {
@@ -214,6 +276,15 @@ function createDialog(): HTMLDialogElement {
         <div class="field__label">Command</div>
         <textarea id="voiceTranscript" class="input voice-command__transcript" rows="3" maxlength="260" placeholder="create story Fix login"></textarea>
       </label>
+      <div class="voice-command__confirmation-policy" id="voiceHandsFreeConfirmPolicy" hidden>
+        <label class="voice-command__switch">
+          <input type="checkbox" id="voiceHandsFreeConfirmToggle" role="switch" aria-describedby="voiceHandsFreeConfirmLabel" />
+          <span class="voice-command__switch-track" aria-hidden="true">
+            <span class="voice-command__switch-thumb"></span>
+          </span>
+          <span class="voice-command__confirmation-label" id="voiceHandsFreeConfirmLabel">${CONFIRM_DELETES_LABEL}</span>
+        </label>
+      </div>
 
       <div class="voice-command__review">
         <button type="button" class="btn btn--ghost" id="voiceReviewBtn">Review</button>
@@ -252,6 +323,9 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   const handsFreeTab = dialog.querySelector<HTMLButtonElement>("#voiceModeHandsFree");
   const speechPanel = dialog.querySelector<HTMLElement>("#voiceSpeechPanel");
   const transcript = dialog.querySelector<HTMLTextAreaElement>("#voiceTranscript");
+  const handsFreeConfirmPolicy = dialog.querySelector<HTMLElement>("#voiceHandsFreeConfirmPolicy");
+  const handsFreeConfirmToggle = dialog.querySelector<HTMLInputElement>("#voiceHandsFreeConfirmToggle");
+  const handsFreeConfirmLabel = dialog.querySelector<HTMLElement>("#voiceHandsFreeConfirmLabel");
   const reviewBtn = dialog.querySelector<HTMLButtonElement>("#voiceReviewBtn");
   const executeBtn = dialog.querySelector<HTMLButtonElement>("#voiceExecuteBtn");
   const summary = dialog.querySelector<HTMLElement>("#voiceSummary");
@@ -260,6 +334,7 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   const stateEl = dialog.querySelector<HTMLElement>("#voiceFlowState");
   const notify = options.showMessage ?? showToast;
   let mode: VoiceFlowMode = getVoiceFlowModePreference();
+  let handsFreeConfirmation: VoiceFlowHandsFreeConfirmation = getVoiceFlowHandsFreeConfirmationPreference();
   let flowState: VoiceInteractionState = "idle";
   let currentCommand: ResolvedCommand | null = null;
   let executing = false;
@@ -277,6 +352,15 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   const setFlowState = (event: Parameters<typeof transitionVoiceInteractionState>[1]) => {
     flowState = transitionVoiceInteractionState(flowState, event);
     safeSetText(stateEl, flowState.replace(/_/g, " "));
+  };
+
+  const applyHandsFreeConfirmationPreference = () => {
+    const confirmMutations = handsFreeConfirmation === VOICE_FLOW_CONFIRM_MUTATIONS;
+    if (handsFreeConfirmToggle) {
+      handsFreeConfirmToggle.checked = confirmMutations;
+      handsFreeConfirmToggle.setAttribute("aria-checked", String(confirmMutations));
+    }
+    safeSetText(handsFreeConfirmLabel, confirmMutations ? CONFIRM_MUTATIONS_LABEL : CONFIRM_DELETES_LABEL);
   };
 
   const clearResolved = () => {
@@ -325,12 +409,20 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     safeTab?.classList.toggle("voice-command__tab--active", mode === "safe");
     handsFreeTab?.classList.toggle("voice-command__tab--active", mode === "hands-free");
     if (speechPanel) speechPanel.hidden = false;
+    if (handsFreeConfirmPolicy) handsFreeConfirmPolicy.hidden = mode !== "hands-free";
     if (reviewBtn) reviewBtn.hidden = mode === "hands-free";
     if (executeBtn) executeBtn.hidden = mode === "hands-free";
     if (transcript) transcript.readOnly = mode === "hands-free";
     safeSetText(listenStatus, "");
     safeSetText(reviewStatus, "");
     setFlowState("reset");
+  };
+
+  const shouldConfirmHandsFreeCommand = (resolved: ResolvedCommand): boolean => {
+    if (handsFreeConfirmation === VOICE_FLOW_CONFIRM_MUTATIONS) {
+      return isMutationCommand(resolved);
+    }
+    return resolved.danger;
   };
 
   const applyResolved = (resolved: ResolvedCommand) => {
@@ -450,7 +542,7 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
       setFlowState("parsed");
       applyResolved(parsed.value.resolved);
       setFlowState("show_feedback");
-      const shouldConfirm = parsed.value.resolved.requiresConfirmation || parsed.value.resolved.danger;
+      const shouldConfirm = shouldConfirmHandsFreeCommand(parsed.value.resolved);
       if (shouldConfirm) {
         const confirmed = await runHandsFreeConfirmation(parsed.value.resolved, controller);
         if (!confirmed) return;
@@ -484,6 +576,11 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   handsFreeTab?.addEventListener("click", () => {
     setMode("hands-free");
     void runHandsFreeCommand();
+  });
+  handsFreeConfirmToggle?.addEventListener("change", () => {
+    handsFreeConfirmation = handsFreeConfirmToggle.checked ? VOICE_FLOW_CONFIRM_MUTATIONS : VOICE_FLOW_CONFIRM_DELETES;
+    setVoiceFlowHandsFreeConfirmationPreference(handsFreeConfirmation);
+    applyHandsFreeConfirmationPreference();
   });
   closeBtn?.addEventListener("click", close);
   cancelBtn?.addEventListener("click", close);
@@ -597,6 +694,7 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   });
 
   setMode(mode, false);
+  applyHandsFreeConfirmationPreference();
   dialog.showModal();
   transcript?.focus();
   if (mode === "hands-free") {
