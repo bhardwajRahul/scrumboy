@@ -84,14 +84,6 @@ function draftHash(draft: ParsedCommandDraft): string {
   return JSON.stringify(draft);
 }
 
-function hasTitleTarget(draft: ParsedCommandDraft): boolean {
-  return "target" in draft && draft.target.kind === "title";
-}
-
-function titleDraftKey(draft: ParsedCommandDraft): string {
-  return JSON.stringify(draft);
-}
-
 function isTargetAmbiguity(result: CommandFailure): result is CommandFailure & { candidates: TodoTargetCandidate[]; draft: ParsedCommandDraft } {
   return result.code === "ambiguous_story" && Array.isArray(result.candidates) && result.candidates.length > 0 && !!result.draft;
 }
@@ -219,13 +211,6 @@ export async function parseAlternatives(
   const first = successes[0];
   if (successes.some((candidate) => candidate.draft.intent !== first.draft.intent)) {
     return commandFailure("unsupported", "Speech matched more than one command. Review the text and try again.");
-  }
-
-  if (successes.some((candidate) => hasTitleTarget(candidate.draft))) {
-    const titleKeys = new Set(successes.map((candidate) => titleDraftKey(candidate.draft)));
-    if (titleKeys.size > 1) {
-      return commandFailure("unsupported", "Speech matched more than one command. Review the text and try again.");
-    }
   }
 
   const context = getActiveContext(options);

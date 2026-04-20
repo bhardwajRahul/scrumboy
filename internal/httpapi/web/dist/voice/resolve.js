@@ -111,7 +111,7 @@ async function resolveDraftTarget(draft, context, options) {
         projectSlug: context.projectSlug,
         board: context.board,
         callTool: context.callTool,
-    }, options.selectedLocalId);
+    }, options.selectedLocalId, options.allowedLocalIds);
     if (isCommandFailure(resolved)) {
         return resolved.code === "ambiguous_story" ? withDraft(resolved, draft) : resolved;
     }
