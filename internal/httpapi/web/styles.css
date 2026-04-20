@@ -1294,7 +1294,9 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   min-width: 0;
 }
 
-.voice-command-trigger {
+.voice-command-trigger,
+#newTodoBtn,
+#deleteProjectBtn {
   white-space: nowrap;
   width: 40px;
   min-width: 40px;
@@ -1306,7 +1308,9 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 }
 
 .voice-command-trigger svg,
-.voice-command-trigger img {
+.voice-command-trigger img,
+#newTodoBtn img,
+#deleteProjectBtn img {
   width: 20px;
   height: 20px;
   max-width: 20px;
@@ -1315,7 +1319,9 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   flex: 0 0 auto;
 }
 
-.voice-command-trigger img {
+.voice-command-trigger img,
+#newTodoBtn img,
+#deleteProjectBtn img {
   display: block;
   filter: var(--voice-command-icon-filter);
   object-fit: contain;
@@ -3117,9 +3123,9 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
 
   .topbar .search-input-wrapper {
     order: 4;
-    flex: 1 1 88px;
-    min-width: 72px;
-    max-width: 30vw;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: none;
     margin-right: var(--s-4);
     margin-top: var(--s-8);
   }
@@ -3174,24 +3180,13 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
 
   .topbar .btn#newTodoBtn {
     margin-right: var(--s-4);
-    position: relative;
-    color: transparent;
-    width: 56px;
-    min-width: 56px;
     padding-left: 0;
     padding-right: 0;
   }
 
-  .topbar .btn#newTodoBtn::after {
-    content: "New";
-    font-size: calc(0.85rem * var(--ui-scale));
-    font-weight: 500;
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    white-space: nowrap;
-    color: var(--text);
+  .topbar .btn#deleteProjectBtn {
+    padding-left: 0;
+    padding-right: 0;
   }
 
   .topbar .btn--ghost {
