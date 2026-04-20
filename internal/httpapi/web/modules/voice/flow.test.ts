@@ -6,18 +6,27 @@ import type { BoardMember } from '../state/state.js';
 const callMcpToolMock = vi.hoisted(() => vi.fn());
 const executeCommandIRMock = vi.hoisted(() => vi.fn());
 const startOneShotRecognitionMock = vi.hoisted(() => vi.fn());
+const speakMock = vi.hoisted(() => vi.fn());
+const showConfirmDialogMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./mcp-client.js', () => ({ callMcpTool: callMcpToolMock }));
 vi.mock('./execute.js', () => ({ executeCommandIR: executeCommandIRMock }));
 vi.mock('./speech.js', () => ({ startOneShotRecognition: startOneShotRecognitionMock }));
+vi.mock('./speech-output.js', () => ({ speak: speakMock }));
+vi.mock('../utils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../utils.js')>();
+  return { ...actual, showConfirmDialog: showConfirmDialogMock };
+});
 
 import {
   openVoiceCommandDialog,
   parseAlternatives,
   parseAndResolveCommand,
+  parseConfirmationAlternatives,
   type OpenVoiceCommandOptions,
   type VoiceCommandDialogContext,
 } from './flow.js';
+import { VOICE_FLOW_MODE_STORAGE_KEY } from '../core/voiceflow-preferences.js';
 
 const members: BoardMember[] = [
   { userId: 7, name: 'Ada Lovelace', email: 'ada@example.com', role: 'maintainer' },
@@ -63,22 +72,26 @@ function makeOptions(getContext: () => VoiceCommandDialogContext | null): OpenVo
     initialProjectSlug: 'alpha',
     getContext,
     refreshBoard: vi.fn().mockResolvedValue(undefined),
+    openTodo: vi.fn().mockResolvedValue(undefined),
     recordMutation: vi.fn(),
     showMessage: vi.fn(),
   };
 }
 
 async function flushAsync(): Promise<void> {
-  for (let i = 0; i < 6; i += 1) {
+  for (let i = 0; i < 14; i += 1) {
     await Promise.resolve();
   }
 }
 
 beforeEach(() => {
   document.body.innerHTML = '';
+  localStorage.clear();
   callMcpToolMock.mockReset();
   executeCommandIRMock.mockReset();
   startOneShotRecognitionMock.mockReset();
+  speakMock.mockReset().mockResolvedValue(undefined);
+  showConfirmDialogMock.mockReset().mockResolvedValue(true);
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
     configurable: true,
     value(this: HTMLDialogElement) {
@@ -143,6 +156,19 @@ describe('voice command flow', () => {
     }
   });
 
+  it('normalizes constrained confirmation alternatives only', () => {
+    expect(parseConfirmationAlternatives(['yes'])).toEqual({ ok: true, value: 'yes' });
+    expect(parseConfirmationAlternatives(['yeah', 'yep'])).toEqual({ ok: true, value: 'yes' });
+    expect(parseConfirmationAlternatives(['nope'])).toEqual({ ok: true, value: 'no' });
+    expect(parseConfirmationAlternatives(['cancel'])).toEqual({ ok: true, value: 'cancel' });
+    expect(parseConfirmationAlternatives(['yes', 'no'])).toEqual({
+      ok: false,
+      code: 'unsupported',
+      message: 'Confirmation was ambiguous.',
+    });
+    expect(parseConfirmationAlternatives(['maybe']).ok).toBe(false);
+  });
+
   it('aborts dialog-local speech recognition on cancel', async () => {
     let aborted = false;
     startOneShotRecognitionMock.mockImplementation(({ signal }: { signal: AbortSignal }) =>
@@ -185,5 +211,53 @@ describe('voice command flow', () => {
     expect(executeCommandIRMock).not.toHaveBeenCalled();
     expect(document.getElementById('voiceReviewStatus')?.textContent).toBe('Command changed. Review again before running.');
     expect((document.getElementById('voiceExecuteBtn') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('uses a confirmation modal for destructive Safe-Mode execution', async () => {
+    executeCommandIRMock.mockResolvedValue({});
+    const options = makeOptions(() => makeContext());
+    openVoiceCommandDialog(options);
+    const transcript = document.getElementById('voiceTranscript') as HTMLTextAreaElement;
+    const form = document.getElementById('voiceCommandForm') as HTMLFormElement;
+    transcript.value = 'delete todo 56';
+
+    document.getElementById('voiceReviewBtn')?.click();
+    await flushAsync();
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flushAsync();
+
+    expect(showConfirmDialogMock).toHaveBeenCalledWith('Delete todo #56: Fix login', 'Confirm command', 'Delete');
+    expect(executeCommandIRMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('auto-listens in Hands-Free mode and executes after spoken yes confirmation', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    executeCommandIRMock.mockResolvedValue({});
+    startOneShotRecognitionMock
+      .mockResolvedValueOnce({ alternatives: ['delete todo 56'] })
+      .mockResolvedValueOnce({ alternatives: ['yes'] });
+
+    openVoiceCommandDialog(makeOptions(() => makeContext()));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(2);
+    expect(speakMock).toHaveBeenCalledWith('Delete todo #56: Fix login. Confirm?', expect.any(Object));
+    expect(executeCommandIRMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens non-destructive todos in Hands-Free mode without spoken confirmation', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    executeCommandIRMock.mockResolvedValue({});
+    startOneShotRecognitionMock.mockResolvedValueOnce({ alternatives: ['open todo 56'] });
+
+    openVoiceCommandDialog(makeOptions(() => makeContext()));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(1);
+    expect(speakMock).not.toHaveBeenCalled();
+    expect(executeCommandIRMock.mock.calls[0][0]).toMatchObject({
+      intent: 'open_todo',
+      entities: { localId: 56 },
+    });
   });
 });

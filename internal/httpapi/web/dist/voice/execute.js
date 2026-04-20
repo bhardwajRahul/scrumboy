@@ -41,6 +41,13 @@ export function buildMcpCall(ir) {
     }
 }
 export async function executeCommandIR(ir, options = {}) {
+    if (ir.intent === "open_todo") {
+        if (!options.openTodo) {
+            throw new Error("Open todo action is unavailable.");
+        }
+        await options.openTodo(ir.entities.localId);
+        return { ok: true };
+    }
     const call = buildMcpCall(ir);
     const callTool = options.callTool ?? callMcpTool;
     const markMutation = options.recordMutation ?? recordLocalMutation;

@@ -277,7 +277,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
         </div>
         ${isAnonymousTempBoard ? `<button class="btn btn--ghost" id="renameProjectBtn" title="Rename project">Rename</button>` : ''}
         ${(isTemporaryBoard(board) || currentUserProjectRole === 'maintainer') ? `<button class="btn" id="newTodoBtn">New Todo</button>` : ''}
-        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="Voice and typed commands" title="Voice and typed commands">Commands</button>` : ''}
+        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="Voice and typed commands" title="Voice and typed commands"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg></button>` : ''}
         ${!isMobile && !isAnonymousTempBoard && (currentUserProjectRole === 'maintainer' || currentUserProjectRole === 'contributor') ? `<button class="btn btn--ghost" id="manageMembersBtn" title="Manage members">Members</button>` : ''}
         ${!user ? `<button class="btn btn--ghost" id="settingsBtn" aria-label="Settings">
           <span class="hamburger">☰</span>
@@ -310,7 +310,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
         </div>
         ${isAnonymousTempBoard ? `<button class="btn btn--ghost" id="renameProjectBtn" title="Rename project">Rename</button>` : ''}
         ${(isTemporaryBoard(board) || currentUserProjectRole === 'maintainer') ? `<button class="btn" id="newTodoBtn">New Todo</button>` : ''}
-        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="Voice and typed commands" title="Voice and typed commands">Commands</button>` : ''}
+        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="Voice and typed commands" title="Voice and typed commands"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg></button>` : ''}
         ${!isAnonymousTempBoard && currentUserProjectRole === 'maintainer' ? `<button class="btn btn--danger" id="deleteProjectBtn">Delete Project</button>` : ''}
         ${!isMobile && !isAnonymousTempBoard && (currentUserProjectRole === 'maintainer' || currentUserProjectRole === 'contributor') ? `<button class="btn btn--ghost" id="manageMembersBtn" title="Manage members">Members</button>` : ''}
         ${!user ? `<button class="btn btn--ghost" id="settingsBtn" aria-label="Settings">

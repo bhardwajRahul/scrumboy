@@ -68,6 +68,34 @@ describe('voice command MCP mapping', () => {
     expect(events).toEqual(['record', 'call', 'refresh']);
   });
 
+  it('opens todos through the injected board navigation path without MCP mutation', async () => {
+    const callTool = vi.fn();
+    const recordMutation = vi.fn();
+    const refreshBoard = vi.fn();
+    const openTodo = vi.fn().mockResolvedValue(undefined);
+
+    await executeCommandIR({
+      intent: 'open_todo',
+      projectId: 1,
+      projectSlug: 'alpha',
+      entities: { localId: 56 },
+    }, { callTool, recordMutation, refreshBoard, openTodo });
+
+    expect(openTodo).toHaveBeenCalledWith(56);
+    expect(callTool).not.toHaveBeenCalled();
+    expect(recordMutation).not.toHaveBeenCalled();
+    expect(refreshBoard).not.toHaveBeenCalled();
+  });
+
+  it('requires an injected open todo action for open commands', async () => {
+    await expect(executeCommandIR({
+      intent: 'open_todo',
+      projectId: 1,
+      projectSlug: 'alpha',
+      entities: { localId: 56 },
+    })).rejects.toThrow('Open todo action is unavailable.');
+  });
+
   it('does not refresh after MCP failure', async () => {
     const callTool = vi.fn().mockRejectedValue(new Error('forbidden'));
     const recordMutation = vi.fn();

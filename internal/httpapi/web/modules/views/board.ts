@@ -1082,6 +1082,11 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
             if (!context || context.projectId !== initialProjectId || context.projectSlug !== initialProjectSlug) return;
             await loadBoardBySlug(context.projectSlug, getTag(), getSearch(), getSprintIdFromUrl());
           },
+          openTodo: async (localId) => {
+            const context = getVoiceCommandContext();
+            if (!context || context.projectId !== initialProjectId || context.projectSlug !== initialProjectSlug) return;
+            navigate(`/${context.projectSlug}/t/${localId}`);
+          },
           recordMutation: recordLocalMutation,
           showMessage: showToast,
         });

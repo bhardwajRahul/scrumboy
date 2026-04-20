@@ -1,12 +1,15 @@
 import type { Board } from '../types.js';
 import type { BoardMember } from '../state/state.js';
-import { isAnonymousBoard, isTemporaryBoard, showToast } from '../utils.js';
-import { canShowVoiceCommands } from '../views/board-command-capabilities.js';
+import { getVoiceFlowModePreference, setVoiceFlowModePreference, type VoiceFlowMode } from '../core/voiceflow-preferences.js';
+import { isAnonymousBoard, isTemporaryBoard, showConfirmDialog, showToast } from '../utils.js';
+import { canRunVoiceMutationCommands, canShowVoiceCommands } from '../views/board-command-capabilities.js';
 import { executeCommandIR } from './execute.js';
 import { callMcpTool } from './mcp-client.js';
 import { parseCommand } from './parser.js';
 import { resolveCommandDraft } from './resolve.js';
 import { startOneShotRecognition } from './speech.js';
+import { speak } from './speech-output.js';
+import { transitionVoiceInteractionState, type VoiceInteractionState } from './state-machine.js';
 import {
   commandFailure,
   isCommandFailure,
@@ -15,6 +18,7 @@ import {
   type ParsedCommandDraft,
   type ResolvedCommand,
 } from './schema.js';
+import { normalizeConfirmationResponse, type VoiceConfirmation } from './vocabulary.js';
 
 export type VoiceCommandDialogContext = {
   projectId: number;
@@ -29,6 +33,7 @@ export type OpenVoiceCommandOptions = {
   initialProjectSlug: string;
   getContext: () => VoiceCommandDialogContext | null;
   refreshBoard: () => Promise<void>;
+  openTodo: (localId: number) => Promise<void>;
   recordMutation?: () => void;
   showMessage?: (message: string) => void;
 };
@@ -64,6 +69,21 @@ function dedupeAlternatives(alternatives: string[]): string[] {
     if (out.length >= 3) break;
   }
   return out;
+}
+
+function isMutationCommand(command: ResolvedCommand): boolean {
+  return command.ir.intent !== "open_todo";
+}
+
+function canRunResolvedCommand(context: VoiceCommandDialogContext, command: ResolvedCommand): boolean {
+  if (!isMutationCommand(command)) return true;
+  return canRunVoiceMutationCommands({
+    projectId: context.projectId,
+    projectSlug: context.projectSlug,
+    role: context.role,
+    isTemporary: isTemporaryBoard(context.board),
+    isAnonymous: isAnonymousBoard(context.board),
+  });
 }
 
 function getActiveContext(options: OpenVoiceCommandOptions): CommandResult<VoiceCommandDialogContext> {
@@ -107,7 +127,12 @@ export async function parseAndResolveCommand(
   if (isCommandFailure(context)) return context;
   const parsed = parseCommand(transcript);
   if (isCommandFailure(parsed)) return parsed;
-  return resolveParsedDraft(parsed.value, context.value, signal);
+  const resolved = await resolveParsedDraft(parsed.value, context.value, signal);
+  if (isCommandFailure(resolved)) return resolved;
+  if (!canRunResolvedCommand(context.value, resolved.value)) {
+    return commandFailure("unauthorized", "Only maintainers can run mutating commands.");
+  }
+  return resolved;
 }
 
 export async function parseAlternatives(
@@ -140,7 +165,27 @@ export async function parseAlternatives(
   if (isCommandFailure(context)) return context;
   const resolved = await resolveParsedDraft(first.draft, context.value, signal);
   if (isCommandFailure(resolved)) return resolved;
+  if (!canRunResolvedCommand(context.value, resolved.value)) {
+    return commandFailure("unauthorized", "Only maintainers can run mutating commands.");
+  }
   return { ok: true, value: { transcript: first.transcript, resolved: resolved.value } };
+}
+
+export function parseConfirmationAlternatives(alternatives: string[]): CommandResult<VoiceConfirmation> {
+  const confirmations: VoiceConfirmation[] = [];
+  for (const transcript of dedupeAlternatives(alternatives)) {
+    const confirmation = normalizeConfirmationResponse(transcript);
+    if (confirmation && !confirmations.includes(confirmation)) {
+      confirmations.push(confirmation);
+    }
+  }
+  if (confirmations.length === 1) {
+    return { ok: true, value: confirmations[0] };
+  }
+  if (confirmations.length > 1) {
+    return commandFailure("unsupported", "Confirmation was ambiguous.");
+  }
+  return commandFailure("unsupported", "Please say yes or no.");
 }
 
 function createDialog(): HTMLDialogElement {
@@ -154,9 +199,10 @@ function createDialog(): HTMLDialogElement {
       </div>
 
       <div class="voice-command__tabs" role="tablist" aria-label="Command input mode">
-        <button type="button" class="voice-command__tab voice-command__tab--active" id="voiceModeSpeech">Speak</button>
-        <button type="button" class="voice-command__tab" id="voiceModeType">Type</button>
+        <button type="button" class="voice-command__tab voice-command__tab--active" id="voiceModeSafe">Safe-Mode</button>
+        <button type="button" class="voice-command__tab" id="voiceModeHandsFree">Hands-Free</button>
       </div>
+      <div class="voice-command__state" id="voiceFlowState" aria-live="polite"></div>
 
       <div class="voice-command__speech" id="voiceSpeechPanel">
         <button type="button" class="btn" id="voiceListenBtn">Listen</button>
@@ -202,8 +248,8 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   const cancelBtn = dialog.querySelector<HTMLButtonElement>("#voiceCancelBtn");
   const listenBtn = dialog.querySelector<HTMLButtonElement>("#voiceListenBtn");
   const stopBtn = dialog.querySelector<HTMLButtonElement>("#voiceStopBtn");
-  const speechTab = dialog.querySelector<HTMLButtonElement>("#voiceModeSpeech");
-  const typeTab = dialog.querySelector<HTMLButtonElement>("#voiceModeType");
+  const safeTab = dialog.querySelector<HTMLButtonElement>("#voiceModeSafe");
+  const handsFreeTab = dialog.querySelector<HTMLButtonElement>("#voiceModeHandsFree");
   const speechPanel = dialog.querySelector<HTMLElement>("#voiceSpeechPanel");
   const transcript = dialog.querySelector<HTMLTextAreaElement>("#voiceTranscript");
   const reviewBtn = dialog.querySelector<HTMLButtonElement>("#voiceReviewBtn");
@@ -211,7 +257,10 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   const summary = dialog.querySelector<HTMLElement>("#voiceSummary");
   const listenStatus = dialog.querySelector<HTMLElement>("#voiceListenStatus");
   const reviewStatus = dialog.querySelector<HTMLElement>("#voiceReviewStatus");
+  const stateEl = dialog.querySelector<HTMLElement>("#voiceFlowState");
   const notify = options.showMessage ?? showToast;
+  let mode: VoiceFlowMode = getVoiceFlowModePreference();
+  let flowState: VoiceInteractionState = "idle";
   let currentCommand: ResolvedCommand | null = null;
   let executing = false;
   let closed = false;
@@ -223,6 +272,11 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
 
   const safeSetText = (el: Element | null, text: string) => {
     if (!closed) setText(el, text);
+  };
+
+  const setFlowState = (event: Parameters<typeof transitionVoiceInteractionState>[1]) => {
+    flowState = transitionVoiceInteractionState(flowState, event);
+    safeSetText(stateEl, flowState.replace(/_/g, " "));
   };
 
   const clearResolved = () => {
@@ -251,11 +305,32 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     dialog.remove();
   };
 
-  const setMode = (mode: "speech" | "type") => {
-    speechTab?.classList.toggle("voice-command__tab--active", mode === "speech");
-    typeTab?.classList.toggle("voice-command__tab--active", mode === "type");
-    if (speechPanel) speechPanel.hidden = mode !== "speech";
+  const stopListening = () => {
+    listenStoppedByUser = true;
+    listenController?.abort();
+    listenController = null;
+    if (listenBtn) listenBtn.disabled = false;
+    if (stopBtn) stopBtn.disabled = true;
+  };
+
+  const setMode = (nextMode: VoiceFlowMode, persist = true) => {
+    if (mode !== nextMode) {
+      stopListening();
+      reviewController?.abort();
+      executeController?.abort();
+      clearResolved();
+    }
+    mode = nextMode;
+    if (persist) setVoiceFlowModePreference(nextMode);
+    safeTab?.classList.toggle("voice-command__tab--active", mode === "safe");
+    handsFreeTab?.classList.toggle("voice-command__tab--active", mode === "hands-free");
+    if (speechPanel) speechPanel.hidden = false;
+    if (reviewBtn) reviewBtn.hidden = mode === "hands-free";
+    if (executeBtn) executeBtn.hidden = mode === "hands-free";
+    if (transcript) transcript.readOnly = mode === "hands-free";
     safeSetText(listenStatus, "");
+    safeSetText(reviewStatus, "");
+    setFlowState("reset");
   };
 
   const applyResolved = (resolved: ResolvedCommand) => {
@@ -264,7 +339,7 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     safeSetText(summary, resolved.summary);
     if (summary) summary.hidden = false;
     if (executeBtn) {
-      executeBtn.disabled = false;
+      executeBtn.disabled = mode === "hands-free";
       executeBtn.textContent = resolved.confirmLabel;
       executeBtn.classList.toggle("btn--danger", resolved.danger);
     }
@@ -291,8 +366,125 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     }
   };
 
-  speechTab?.addEventListener("click", () => setMode("speech"));
-  typeTab?.addEventListener("click", () => setMode("type"));
+  const executeReviewedCommand = async (reviewedCommand: ResolvedCommand, controller: AbortController): Promise<boolean> => {
+    const reviewedHash = commandHash(reviewedCommand);
+    if (reviewedHash === lastExecutedHash) {
+      safeSetText(reviewStatus, "This command already ran.");
+      return false;
+    }
+    const value = transcript?.value.trim() ?? "";
+    const resolved = await parseAndResolveCommand(value, options, controller.signal);
+    if (closed || controller.signal.aborted || executeController !== controller) return false;
+    if (isCommandFailure(resolved)) {
+      safeSetText(reviewStatus, resolved.message);
+      return false;
+    }
+    const nextHash = commandHash(resolved.value);
+    if (nextHash !== reviewedHash) {
+      clearResolved();
+      safeSetText(reviewStatus, "Command changed. Review again before running.");
+      return false;
+    }
+    await executeCommandIR(resolved.value.ir, {
+      refreshBoard: options.refreshBoard,
+      openTodo: options.openTodo,
+      recordMutation: options.recordMutation,
+      signal: controller.signal,
+    });
+    if (closed || controller.signal.aborted || executeController !== controller) return false;
+    lastExecutedHash = nextHash;
+    return true;
+  };
+
+  const runHandsFreeConfirmation = async (resolved: ResolvedCommand, controller: AbortController): Promise<boolean> => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      setFlowState("speak_confirmation");
+      safeSetText(reviewStatus, `${resolved.summary}. Confirm?`);
+      await speak(`${resolved.summary}. Confirm?`, { signal: controller.signal });
+      if (closed || controller.signal.aborted || executeController !== controller) return false;
+      setFlowState("listen_confirmation");
+      safeSetText(listenStatus, "Say yes or no");
+      const speech = await startOneShotRecognition({ signal: controller.signal, timeoutMs: 8000 });
+      if (closed || controller.signal.aborted || executeController !== controller) return false;
+      const confirmation = parseConfirmationAlternatives(speech.alternatives);
+      if (isCommandFailure(confirmation)) {
+        safeSetText(listenStatus, attempt === 0 ? "Please say yes or no." : "Confirmation not understood.");
+        continue;
+      }
+      if (confirmation.value === "no" || confirmation.value === "cancel") {
+        setFlowState("cancel");
+        safeSetText(reviewStatus, "Cancelled");
+        return false;
+      }
+      return true;
+    }
+    setFlowState("error");
+    return false;
+  };
+
+  const runHandsFreeCommand = async () => {
+    listenController?.abort();
+    reviewController?.abort();
+    executeController?.abort();
+    clearResolved();
+    listenStoppedByUser = false;
+    const controller = new AbortController();
+    listenController = controller;
+    executeController = controller;
+    setFlowState("start_command");
+    safeSetText(listenStatus, "Listening...");
+    if (listenBtn) listenBtn.disabled = true;
+    if (stopBtn) stopBtn.disabled = false;
+    try {
+      const speech = await startOneShotRecognition({ signal: controller.signal });
+      if (closed || controller.signal.aborted || listenController !== controller) return;
+      const parsed = await parseAlternatives(speech.alternatives, options, controller.signal);
+      if (closed || controller.signal.aborted || listenController !== controller) return;
+      if (isCommandFailure(parsed)) {
+        if (transcript && speech.alternatives[0]) transcript.value = speech.alternatives[0];
+        safeSetText(listenStatus, parsed.message);
+        setFlowState("error");
+        return;
+      }
+      if (transcript) transcript.value = parsed.value.transcript;
+      setFlowState("parsed");
+      applyResolved(parsed.value.resolved);
+      setFlowState("show_feedback");
+      const shouldConfirm = parsed.value.resolved.requiresConfirmation || parsed.value.resolved.danger;
+      if (shouldConfirm) {
+        const confirmed = await runHandsFreeConfirmation(parsed.value.resolved, controller);
+        if (!confirmed) return;
+      }
+      setFlowState("execute");
+      safeSetText(reviewStatus, "Running...");
+      const executed = await executeReviewedCommand(parsed.value.resolved, controller);
+      if (!executed) return;
+      setFlowState("success");
+      notify("Command complete");
+      close();
+    } catch (err: any) {
+      if (!closed && !controller.signal.aborted) {
+        safeSetText(listenStatus, err?.message || "Speech recognition failed.");
+        setFlowState("error");
+      } else if (!closed && listenStoppedByUser) {
+        safeSetText(listenStatus, "Stopped");
+        setFlowState("cancel");
+      }
+    } finally {
+      if (listenController === controller) listenController = null;
+      if (executeController === controller) executeController = null;
+      if (!closed) {
+        if (listenBtn) listenBtn.disabled = false;
+        if (stopBtn) stopBtn.disabled = true;
+      }
+    }
+  };
+
+  safeTab?.addEventListener("click", () => setMode("safe"));
+  handsFreeTab?.addEventListener("click", () => {
+    setMode("hands-free");
+    void runHandsFreeCommand();
+  });
   closeBtn?.addEventListener("click", close);
   cancelBtn?.addEventListener("click", close);
   dialog.addEventListener("voice-command:close", close);
@@ -310,12 +502,17 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   });
 
   listenBtn?.addEventListener("click", async () => {
+    if (mode === "hands-free") {
+      void runHandsFreeCommand();
+      return;
+    }
     listenController?.abort();
     reviewController?.abort();
     clearResolved();
     listenStoppedByUser = false;
     const controller = new AbortController();
     listenController = controller;
+    setFlowState("start_command");
     safeSetText(listenStatus, "Listening...");
     if (listenBtn) listenBtn.disabled = true;
     if (stopBtn) stopBtn.disabled = false;
@@ -330,13 +527,17 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
         return;
       }
       if (transcript) transcript.value = parsed.value.transcript;
+      setFlowState("parsed");
       applyResolved(parsed.value.resolved);
+      setFlowState("show_feedback");
       safeSetText(listenStatus, "Ready");
     } catch (err: any) {
       if (!closed && !controller.signal.aborted) {
         safeSetText(listenStatus, err?.message || "Speech recognition failed.");
+        setFlowState("error");
       } else if (!closed && listenStoppedByUser) {
         safeSetText(listenStatus, "Stopped");
+        setFlowState("cancel");
       }
     } finally {
       if (listenController === controller) listenController = null;
@@ -348,56 +549,46 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   });
 
   stopBtn?.addEventListener("click", () => {
-    listenStoppedByUser = true;
-    listenController?.abort();
-    listenController = null;
+    stopListening();
     safeSetText(listenStatus, "Stopped");
+    setFlowState("cancel");
   });
 
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (executing || !currentCommand || !executeBtn) return;
+    if (mode === "hands-free" || executing || !currentCommand || !executeBtn) return;
     const reviewedCommand = currentCommand;
-    const reviewedHash = commandHash(reviewedCommand);
-    if (reviewedHash === lastExecutedHash) {
-      safeSetText(reviewStatus, "This command already ran.");
-      return;
-    }
 
     executeController?.abort();
     const controller = new AbortController();
     executeController = controller;
     executing = true;
     executeBtn.disabled = true;
+    setFlowState("execute");
     safeSetText(reviewStatus, "Running...");
     try {
-      const value = transcript?.value.trim() ?? "";
-      const resolved = await parseAndResolveCommand(value, options, controller.signal);
-      if (closed || controller.signal.aborted || executeController !== controller) return;
-      if (isCommandFailure(resolved)) {
-        safeSetText(reviewStatus, resolved.message);
-        executeBtn.disabled = false;
+      if (reviewedCommand.danger) {
+        const confirmed = await showConfirmDialog(reviewedCommand.summary, "Confirm command", reviewedCommand.confirmLabel);
+        if (!confirmed) {
+          executeBtn.disabled = false;
+          safeSetText(reviewStatus, "Cancelled");
+          setFlowState("cancel");
+          return;
+        }
+      }
+      const executed = await executeReviewedCommand(reviewedCommand, controller);
+      if (!executed) {
+        if (currentCommand) executeBtn.disabled = false;
         return;
       }
-      const nextHash = commandHash(resolved.value);
-      if (nextHash !== reviewedHash) {
-        clearResolved();
-        safeSetText(reviewStatus, "Command changed. Review again before running.");
-        return;
-      }
-      await executeCommandIR(resolved.value.ir, {
-        refreshBoard: options.refreshBoard,
-        recordMutation: options.recordMutation,
-        signal: controller.signal,
-      });
-      if (closed || controller.signal.aborted || executeController !== controller) return;
-      lastExecutedHash = nextHash;
+      setFlowState("success");
       notify("Command complete");
       close();
     } catch (err: any) {
       if (!closed && !controller.signal.aborted) {
         safeSetText(reviewStatus, err?.message || "Command failed.");
         executeBtn.disabled = false;
+        setFlowState("error");
       }
     } finally {
       if (executeController === controller) executeController = null;
@@ -405,7 +596,10 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     }
   });
 
-  setMode("speech");
+  setMode(mode, false);
   dialog.showModal();
   transcript?.focus();
+  if (mode === "hands-free") {
+    void runHandsFreeCommand();
+  }
 }

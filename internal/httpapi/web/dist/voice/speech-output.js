@@ -1,0 +1,45 @@
+export function speak(text, options = {}) {
+    return new Promise((resolve) => {
+        const synth = window.speechSynthesis;
+        if (!synth || typeof SpeechSynthesisUtterance === "undefined") {
+            resolve();
+            return;
+        }
+        let settled = false;
+        const utterance = new SpeechSynthesisUtterance(text);
+        const cleanup = () => {
+            utterance.onend = null;
+            utterance.onerror = null;
+            options.signal?.removeEventListener("abort", onAbort);
+        };
+        const finish = () => {
+            if (settled)
+                return;
+            settled = true;
+            cleanup();
+            resolve();
+        };
+        const onAbort = () => {
+            try {
+                synth.cancel();
+            }
+            catch {
+            }
+            finish();
+        };
+        utterance.onend = finish;
+        utterance.onerror = finish;
+        if (options.signal?.aborted) {
+            onAbort();
+            return;
+        }
+        options.signal?.addEventListener("abort", onAbort, { once: true });
+        try {
+            synth.cancel();
+            synth.speak(utterance);
+        }
+        catch {
+            finish();
+        }
+    });
+}
