@@ -2,14 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { parseCommand } from './parser.js';
 
 describe('voice command parser', () => {
-  it('accepts exactly the MVP command forms', () => {
+  it('accepts story and todo aliases with canonical intents', () => {
     expect(parseCommand('create story Fix login')).toEqual({
+      ok: true,
+      value: { intent: 'todos.create', title: 'Fix login' },
+    });
+    expect(parseCommand('create todo Fix login')).toEqual({
       ok: true,
       value: { intent: 'todos.create', title: 'Fix login' },
     });
     expect(parseCommand('move story fifty six to in progress')).toEqual({
       ok: true,
       value: { intent: 'todos.move', localId: 56, rawStatus: 'in progress', ambiguousId: false },
+    });
+    expect(parseCommand('move todo 56 to done')).toEqual({
+      ok: true,
+      value: { intent: 'todos.move', localId: 56, rawStatus: 'done', ambiguousId: false },
     });
     expect(parseCommand('delete story #56')).toEqual({
       ok: true,
@@ -23,11 +31,47 @@ describe('voice command parser', () => {
       ok: true,
       value: { intent: 'todos.move', localId: 56, rawStatus: 'done', ambiguousId: false },
     });
+    expect(parseCommand('todo 56 is done')).toEqual({
+      ok: true,
+      value: { intent: 'todos.move', localId: 56, rawStatus: 'done', ambiguousId: false },
+    });
   });
 
-  it('rejects broadened grammar and project-scope phrases', () => {
+  it('accepts open and edit commands with explicit or bare IDs', () => {
+    expect(parseCommand('open story twelve')).toEqual({
+      ok: true,
+      value: { intent: 'open_todo', localId: 12, ambiguousId: false },
+    });
+    expect(parseCommand('edit todo 12')).toEqual({
+      ok: true,
+      value: { intent: 'open_todo', localId: 12, ambiguousId: false },
+    });
+    expect(parseCommand('open 12')).toEqual({
+      ok: true,
+      value: { intent: 'open_todo', localId: 12, ambiguousId: false },
+    });
+    expect(parseCommand('edit one two')).toEqual({
+      ok: true,
+      value: { intent: 'open_todo', localId: 12, ambiguousId: true },
+    });
+  });
+
+  it('allows bare IDs only for whitelisted complete commands', () => {
+    expect(parseCommand('delete 12')).toEqual({
+      ok: true,
+      value: { intent: 'todos.delete', localId: 12, ambiguousId: false },
+    });
+    expect(parseCommand('move 12 to done')).toEqual({
+      ok: true,
+      value: { intent: 'todos.move', localId: 12, rawStatus: 'done', ambiguousId: false },
+    });
+    expect(parseCommand('12').ok).toBe(false);
+    expect(parseCommand('move 12').ok).toBe(false);
+  });
+
+  it('rejects unsupported grammar and project-scope phrases', () => {
     expect(parseCommand('new story Fix login').ok).toBe(false);
-    expect(parseCommand('create todo Fix login').ok).toBe(false);
+    expect(parseCommand('move it to done').ok).toBe(false);
     expect(parseCommand('move story 56 to done in project beta')).toEqual({
       ok: false,
       code: 'project_scope',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canShowVoiceCommands, type VoiceCommandCapabilityInput } from './board-command-capabilities.js';
+import { canRunVoiceMutationCommands, canShowVoiceCommands, type VoiceCommandCapabilityInput } from './board-command-capabilities.js';
 
 const base: VoiceCommandCapabilityInput = {
   projectId: 1,
@@ -10,12 +10,18 @@ const base: VoiceCommandCapabilityInput = {
 };
 
 describe('voice command board capabilities', () => {
-  it('allows durable project boards for maintainers only', () => {
+  it('shows durable project commands to project members', () => {
     expect(canShowVoiceCommands(base)).toBe(true);
-    expect(canShowVoiceCommands({ ...base, role: 'contributor' })).toBe(false);
+    expect(canShowVoiceCommands({ ...base, role: 'contributor' })).toBe(true);
+    expect(canShowVoiceCommands({ ...base, role: 'viewer' })).toBe(true);
     expect(canShowVoiceCommands({ ...base, role: 'editor' })).toBe(false);
-    expect(canShowVoiceCommands({ ...base, role: 'viewer' })).toBe(false);
     expect(canShowVoiceCommands({ ...base, role: null })).toBe(false);
+  });
+
+  it('keeps mutating voice commands maintainer-only on the client', () => {
+    expect(canRunVoiceMutationCommands(base)).toBe(true);
+    expect(canRunVoiceMutationCommands({ ...base, role: 'contributor' })).toBe(false);
+    expect(canRunVoiceMutationCommands({ ...base, role: 'viewer' })).toBe(false);
   });
 
   it('rejects boards without session-backed durable project scope', () => {

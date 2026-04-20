@@ -47,5 +47,12 @@ describe('voice command schema validation', () => {
       projectSlug: 'alpha',
       entities: { title: 'Fix login', columnKey: 'done' },
     }, { projectId: 1, projectSlug: 'alpha', board }).ok).toBe(false);
+
+    expect(validateCommandIR({
+      intent: 'open_todo',
+      projectId: 1,
+      projectSlug: 'alpha',
+      entities: { localId: 56, title: 'wrong' },
+    }, { projectId: 1, projectSlug: 'alpha', board }).ok).toBe(false);
   });
 });

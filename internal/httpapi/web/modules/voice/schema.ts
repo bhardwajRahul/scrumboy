@@ -1,6 +1,6 @@
 import type { Board } from '../types.js';
 
-export type CommandIntent = "todos.create" | "todos.move" | "todos.delete" | "todos.assign";
+export type CommandIntent = "todos.create" | "todos.move" | "todos.delete" | "todos.assign" | "open_todo";
 
 export type CommandIR =
   | {
@@ -26,13 +26,20 @@ export type CommandIR =
       projectId: number;
       projectSlug: string;
       entities: { localId: number; assigneeUserId: number };
+    }
+  | {
+      intent: "open_todo";
+      projectId: number;
+      projectSlug: string;
+      entities: { localId: number };
     };
 
 export type ParsedCommandDraft =
   | { intent: "todos.create"; title: string }
   | { intent: "todos.move"; localId: number; rawStatus: string; ambiguousId?: boolean }
   | { intent: "todos.delete"; localId: number; ambiguousId?: boolean }
-  | { intent: "todos.assign"; localId: number; rawUser: string; ambiguousId?: boolean };
+  | { intent: "todos.assign"; localId: number; rawUser: string; ambiguousId?: boolean }
+  | { intent: "open_todo"; localId: number; ambiguousId?: boolean };
 
 export type CommandFailureCode =
   | "unsupported"
@@ -45,6 +52,7 @@ export type CommandFailureCode =
   | "unknown_user"
   | "ambiguous_user"
   | "invalid_schema"
+  | "unauthorized"
   | "stale_context"
   | "speech_unavailable"
   | "speech_failed"
@@ -68,6 +76,7 @@ export type ResolvedCommand = {
   summary: string;
   confirmLabel: string;
   danger: boolean;
+  requiresConfirmation: boolean;
   storyTitle?: string;
   statusName?: string;
   assigneeName?: string;
@@ -126,7 +135,7 @@ export function validateCommandIR(value: unknown, context: ValidationContext): C
       }
       const title = ir.entities.title;
       if (typeof title !== "string" || title.trim().length === 0 || title.trim().length > 200) {
-        return fail("invalid_title", "Story title must be between 1 and 200 characters.");
+        return fail("invalid_title", "Todo title must be between 1 and 200 characters.");
       }
       return { ok: true, value: { ...ir, entities: { title: title.trim() } } };
     }
@@ -135,7 +144,7 @@ export function validateCommandIR(value: unknown, context: ValidationContext): C
         return fail("invalid_schema", "Move command fields are invalid.");
       }
       if (!isPositiveInteger(ir.entities.localId)) {
-        return fail("invalid_schema", "Story ID must be a positive integer.");
+        return fail("invalid_schema", "Todo ID must be a positive integer.");
       }
       if (typeof ir.entities.toColumnKey !== "string" || !activeLaneKeys.has(ir.entities.toColumnKey)) {
         return fail("unknown_status", "Status was not found on this board.");
@@ -147,7 +156,7 @@ export function validateCommandIR(value: unknown, context: ValidationContext): C
         return fail("invalid_schema", "Delete command fields are invalid.");
       }
       if (!isPositiveInteger(ir.entities.localId)) {
-        return fail("invalid_schema", "Story ID must be a positive integer.");
+        return fail("invalid_schema", "Todo ID must be a positive integer.");
       }
       return { ok: true, value: ir };
     }
@@ -157,6 +166,15 @@ export function validateCommandIR(value: unknown, context: ValidationContext): C
       }
       if (!isPositiveInteger(ir.entities.localId) || !isPositiveInteger(ir.entities.assigneeUserId)) {
         return fail("invalid_schema", "Assignment command IDs must be positive integers.");
+      }
+      return { ok: true, value: ir };
+    }
+    case "open_todo": {
+      if (!hasExactKeys(ir.entities, ["localId"])) {
+        return fail("invalid_schema", "Open command fields are invalid.");
+      }
+      if (!isPositiveInteger(ir.entities.localId)) {
+        return fail("invalid_schema", "Todo ID must be a positive integer.");
       }
       return { ok: true, value: ir };
     }

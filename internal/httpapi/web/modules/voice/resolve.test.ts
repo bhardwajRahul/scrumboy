@@ -50,7 +50,7 @@ async function parseAndResolve(input: string, sourceBoard = board()) {
 
 describe('voice command resolution', () => {
   it('maps spoken status aliases to active board lane keys', async () => {
-    const resolved = await parseAndResolve('story 56 is in progress');
+    const resolved = await parseAndResolve('todo 56 is in progress');
 
     expect(resolved).toMatchObject({
       ok: true,
@@ -61,6 +61,48 @@ describe('voice command resolution', () => {
           projectSlug: 'alpha',
           entities: { localId: 56, toColumnKey: 'doing' },
         },
+      },
+    });
+  });
+
+  it('maps explicit status aliases from the active board', async () => {
+    const sourceBoard = board({
+      columnOrder: [
+        { key: 'todo', name: 'To Do', isDone: false },
+        { key: 'done', name: 'Done', isDone: true },
+      ],
+      columns: {
+        todo: [{ id: 10, localId: 56, title: 'Fix login', status: 'todo' }],
+        done: [],
+      },
+    });
+
+    const resolved = await parseAndResolve('move todo 56 to to do', sourceBoard);
+
+    expect(resolved).toMatchObject({
+      ok: true,
+      value: {
+        ir: {
+          intent: 'todos.move',
+          entities: { localId: 56, toColumnKey: 'todo' },
+        },
+      },
+    });
+  });
+
+  it('resolves open commands inside the active project', async () => {
+    const resolved = await parseAndResolve('open todo 56');
+
+    expect(resolved).toMatchObject({
+      ok: true,
+      value: {
+        ir: {
+          intent: 'open_todo',
+          projectId: 1,
+          projectSlug: 'alpha',
+          entities: { localId: 56 },
+        },
+        requiresConfirmation: false,
       },
     });
   });

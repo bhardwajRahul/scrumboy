@@ -2,6 +2,8 @@ import { recordLocalMutation } from '../realtime/guard.js';
 import { callMcpTool, type McpToolName } from './mcp-client.js';
 import type { CommandIR } from './schema.js';
 
+type McpCommandIR = Extract<CommandIR, { intent: "todos.create" | "todos.move" | "todos.delete" | "todos.assign" }>;
+
 export type McpCommandCall = {
   tool: McpToolName;
   input: Record<string, unknown>;
@@ -12,9 +14,10 @@ export type ExecuteOptions = {
   refreshBoard?: () => Promise<void>;
   recordMutation?: () => void;
   signal?: AbortSignal;
+  openTodo?: (localId: number) => Promise<void>;
 };
 
-export function buildMcpCall(ir: CommandIR): McpCommandCall {
+export function buildMcpCall(ir: McpCommandIR): McpCommandCall {
   switch (ir.intent) {
     case "todos.create":
       return {
@@ -56,6 +59,14 @@ export function buildMcpCall(ir: CommandIR): McpCommandCall {
 }
 
 export async function executeCommandIR(ir: CommandIR, options: ExecuteOptions = {}): Promise<unknown> {
+  if (ir.intent === "open_todo") {
+    if (!options.openTodo) {
+      throw new Error("Open todo action is unavailable.");
+    }
+    await options.openTodo(ir.entities.localId);
+    return { ok: true };
+  }
+
   const call = buildMcpCall(ir);
   const callTool = options.callTool ?? callMcpTool;
   const markMutation = options.recordMutation ?? recordLocalMutation;

@@ -35,7 +35,8 @@ function renderTopbar(showVoiceCommands: boolean): string {
 describe('board topbar rendering', () => {
   it('renders the voice command trigger only when explicitly enabled', () => {
     expect(renderTopbar(true)).toContain('id="voiceCommandBtn"');
-    expect(renderTopbar(true)).toContain('>Commands</button>');
+    expect(renderTopbar(true)).toContain('aria-label="Voice and typed commands"');
+    expect(renderTopbar(true)).toContain('<svg');
     expect(renderTopbar(false)).not.toContain('id="voiceCommandBtn"');
   });
 });
