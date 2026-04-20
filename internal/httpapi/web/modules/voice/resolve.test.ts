@@ -348,7 +348,70 @@ describe('voice command resolution', () => {
     });
   });
 
-  it('resolves an ambiguous title only through an explicit selected active-project local ID', async () => {
+  it('resolves an ambiguous title through an explicitly offered selected local ID', async () => {
+    const parsed = parseCommand('delete login');
+    if (!parsed.ok) throw new Error('parse failed');
+    const sourceBoard = board({
+      columns: {
+        backlog: [
+          { id: 1, localId: 12, title: 'Fix login redirect', status: 'backlog' },
+          { id: 2, localId: 13, title: 'Fix login validation', status: 'backlog' },
+        ],
+        not_started: [],
+        doing: [],
+        testing: [],
+        done: [],
+      },
+    });
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: sourceBoard,
+      members,
+    }, { selectedLocalId: 13, allowedLocalIds: [12, 13] });
+
+    expect(resolved).toMatchObject({
+      ok: true,
+      value: {
+        ir: { intent: 'todos.delete', projectSlug: 'alpha', entities: { localId: 13 } },
+        summary: 'Delete todo #13: Fix login validation',
+      },
+    });
+  });
+
+  it('rejects selected local IDs that were not offered as ambiguity candidates', async () => {
+    const parsed = parseCommand('delete login');
+    if (!parsed.ok) throw new Error('parse failed');
+    const sourceBoard = board({
+      columns: {
+        backlog: [
+          { id: 1, localId: 12, title: 'Fix login redirect', status: 'backlog' },
+          { id: 2, localId: 13, title: 'Fix login validation', status: 'backlog' },
+          { id: 3, localId: 99, title: 'Unrelated active project todo', status: 'backlog' },
+        ],
+        not_started: [],
+        doing: [],
+        testing: [],
+        done: [],
+      },
+    });
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: sourceBoard,
+      members,
+    }, { selectedLocalId: 99, allowedLocalIds: [12, 13] });
+
+    expect(resolved).toEqual({
+      ok: false,
+      code: 'invalid_schema',
+      message: 'Selected todo was not one of the offered choices.',
+    });
+  });
+
+  it('rejects selected local IDs when no offered-candidate allowlist is supplied', async () => {
     const parsed = parseCommand('delete login');
     if (!parsed.ok) throw new Error('parse failed');
     const sourceBoard = board({
@@ -371,12 +434,10 @@ describe('voice command resolution', () => {
       members,
     }, { selectedLocalId: 13 });
 
-    expect(resolved).toMatchObject({
-      ok: true,
-      value: {
-        ir: { intent: 'todos.delete', projectSlug: 'alpha', entities: { localId: 13 } },
-        summary: 'Delete todo #13: Fix login validation',
-      },
+    expect(resolved).toEqual({
+      ok: false,
+      code: 'invalid_schema',
+      message: 'Selected todo was not one of the offered choices.',
     });
   });
 });

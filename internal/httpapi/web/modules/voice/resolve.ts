@@ -22,6 +22,7 @@ type MembersListResponse = {
 
 export type ResolveCommandOptions = {
   selectedLocalId?: number;
+  allowedLocalIds?: number[];
 };
 
 function boardLanes(board: Board): LaneRef[] {
@@ -139,7 +140,7 @@ async function resolveDraftTarget(draft: Exclude<ParsedCommandDraft, { intent: "
     projectSlug: context.projectSlug,
     board: context.board,
     callTool: context.callTool,
-  }, options.selectedLocalId);
+  }, options.selectedLocalId, options.allowedLocalIds);
   if (isCommandFailure(resolved)) {
     return resolved.code === "ambiguous_story" ? withDraft(resolved, draft) : resolved;
   }

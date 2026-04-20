@@ -60,6 +60,7 @@ type ParsedDraftAlternative = {
 
 type TargetSelection = {
   selectedLocalId?: number;
+  allowedLocalIds?: number[];
 };
 
 type PendingDisambiguation = {
@@ -402,7 +403,7 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   let flowState: VoiceInteractionState = "idle";
   let currentCommand: ResolvedCommand | null = null;
   let pendingDisambiguation: PendingDisambiguation | null = null;
-  let currentTargetSelection: { transcript: string; localId: number } | null = null;
+  let currentTargetSelection: { transcript: string; localId: number; allowedLocalIds: number[] } | null = null;
   let executing = false;
   let closed = false;
   let listenStoppedByUser = false;
@@ -410,6 +411,9 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   let listenController: AbortController | null = null;
   let reviewController: AbortController | null = null;
   let executeController: AbortController | null = null;
+
+  const isActiveHandsFreeRun = (controller: AbortController): boolean =>
+    !closed && !controller.signal.aborted && listenController === controller;
 
   const safeSetText = (el: Element | null, text: string) => {
     if (!closed) setText(el, text);
@@ -590,7 +594,12 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
       return false;
     }
     const value = transcript?.value.trim() ?? "";
-    const selection = currentTargetSelection?.transcript === value ? { selectedLocalId: currentTargetSelection.localId } : {};
+    const selection = currentTargetSelection?.transcript === value
+      ? {
+          selectedLocalId: currentTargetSelection.localId,
+          allowedLocalIds: currentTargetSelection.allowedLocalIds,
+        }
+      : {};
     const resolved = await parseAndResolveCommand(value, options, controller.signal, selection);
     if (closed || controller.signal.aborted || executeController !== controller) return false;
     if (isCommandFailure(resolved)) {
@@ -619,16 +628,19 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     const pending = pendingDisambiguation;
     if (!pending || index < 0 || index >= pending.candidates.length) return null;
     const candidate = pending.candidates[index];
+    const allowedLocalIds = pending.candidates.map((item) => item.localId);
+    if (!allowedLocalIds.includes(candidate.localId)) return null;
     const resolved = await parseAndResolveCommand(pending.transcript, options, controller.signal, {
       selectedLocalId: candidate.localId,
+      allowedLocalIds,
     });
-    if (closed || controller.signal.aborted) return null;
+    if (closed || controller.signal.aborted || pendingDisambiguation !== pending) return null;
     if (isCommandFailure(resolved)) {
       safeSetText(reviewStatus, resolved.message);
       return null;
     }
     if (transcript) transcript.value = pending.transcript;
-    currentTargetSelection = { transcript: pending.transcript, localId: candidate.localId };
+    currentTargetSelection = { transcript: pending.transcript, localId: candidate.localId, allowedLocalIds };
     setFlowState("target_resolved");
     applyResolved(resolved.value);
     return resolved.value;
@@ -673,10 +685,10 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       setFlowState("listen_disambiguation");
       await speakDisambiguationPrompt(pendingDisambiguation, controller);
-      if (closed || controller.signal.aborted || executeController !== controller) return null;
+      if (!isActiveHandsFreeRun(controller)) return null;
       safeSetText(listenStatus, "Say one, two, or three");
       const speech = await startOneShotRecognition({ signal: controller.signal, timeoutMs: 8000 });
-      if (closed || controller.signal.aborted || executeController !== controller) return null;
+      if (!isActiveHandsFreeRun(controller)) return null;
       const choice = parseDisambiguationAlternatives(speech.alternatives, pendingDisambiguation.candidates.length);
       if (isCommandFailure(choice)) {
         safeSetText(listenStatus, attempt === 0 ? "Please say one, two, or three." : "Choice not understood.");
