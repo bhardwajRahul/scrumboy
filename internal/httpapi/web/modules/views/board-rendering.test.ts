@@ -38,6 +38,8 @@ describe('board topbar rendering', () => {
     expect(renderTopbar(true)).toContain('aria-label="VoiceFlow"');
     expect(renderTopbar(true)).toContain('<img');
     expect(renderTopbar(true)).toContain('src="/mic.svg"');
+    expect(renderTopbar(true)).toContain('width="20"');
+    expect(renderTopbar(true)).toContain('height="20"');
     expect(renderTopbar(false)).not.toContain('id="voiceCommandBtn"');
   });
 });

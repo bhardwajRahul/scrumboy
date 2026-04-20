@@ -1309,6 +1309,8 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 .voice-command-trigger img {
   width: 20px;
   height: 20px;
+  max-width: 20px;
+  max-height: 20px;
   fill: currentColor;
   flex: 0 0 auto;
 }
@@ -1316,6 +1318,7 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 .voice-command-trigger img {
   display: block;
   filter: var(--voice-command-icon-filter);
+  object-fit: contain;
 }
 
 .voice-command-dialog.dialog {
@@ -3106,11 +3109,11 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
 
   /* Second row: search, rename (if exists), New Todo, Delete Project */
   .topbar .search-input-wrapper {
-    order: 2;
-    flex: 1;
-    min-width: 120px;
-    max-width: none;
-    margin-right: var(--s-16);
+    order: 3;
+    flex: 0 1 150px;
+    min-width: 0;
+    max-width: 45vw;
+    margin-right: var(--s-4);
     margin-top: var(--s-8);
   }
 
@@ -3121,13 +3124,18 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   }
 
   .topbar #newTodoBtn {
-    order: 2;
+    order: 4;
     margin-top: var(--s-8);
     margin-right: var(--s-4);
   }
 
-  .topbar #deleteProjectBtn {
+  .topbar #voiceCommandBtn {
     order: 2;
+    margin-top: var(--s-8);
+  }
+
+  .topbar #deleteProjectBtn {
+    order: 5;
     margin-top: var(--s-8);
   }
 
