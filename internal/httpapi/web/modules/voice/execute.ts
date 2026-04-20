@@ -8,9 +8,10 @@ export type McpCommandCall = {
 };
 
 export type ExecuteOptions = {
-  callTool?: <T = unknown>(tool: McpToolName, input: Record<string, unknown>) => Promise<T>;
+  callTool?: <T = unknown>(tool: McpToolName, input: Record<string, unknown>, options?: { signal?: AbortSignal }) => Promise<T>;
   refreshBoard?: () => Promise<void>;
   recordMutation?: () => void;
+  signal?: AbortSignal;
 };
 
 export function buildMcpCall(ir: CommandIR): McpCommandCall {
@@ -60,7 +61,9 @@ export async function executeCommandIR(ir: CommandIR, options: ExecuteOptions = 
   const markMutation = options.recordMutation ?? recordLocalMutation;
 
   markMutation();
-  const result = await callTool(call.tool, call.input);
+  const result = options.signal
+    ? await callTool(call.tool, call.input, { signal: options.signal })
+    : await callTool(call.tool, call.input);
   if (options.refreshBoard) {
     await options.refreshBoard();
   }

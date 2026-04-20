@@ -22,6 +22,7 @@ import { bootstrapLoadedBoardView } from './board-load-bootstrap.js';
 import { bindBoardFilterUi, clearSprintChipData, clearSprintChipDataIfSlugChanged, computeBoardChipsRender, ensureSprintSubscription, hasSprintChipDataForSlug, resetBoardFilterUiState, setSprintChipDataForSlug, updateChipsOnly, } from './board-filters.js';
 export { notifySprintStateChanged } from './board-filters.js';
 import { attachBoardInteractionListeners, clearPendingRealtimeRefresh, connectBoardEvents, debugLog, disconnectBoardEvents, markBoardLoadSucceeded, runWhileTodoDialogOpening, setInitialBoardLoadInFlight, } from './board-realtime.js';
+import { canShowVoiceCommands } from './board-command-capabilities.js';
 // Symbol for idempotent listener attachment
 const BOUND_FLAG = Symbol('bound');
 const HIGHLIGHT_CLASS = "card--highlight";
@@ -33,6 +34,29 @@ let boardLoadSequence = 0;
 let resolverController = null;
 let highlightRafId = null;
 let highlightTimeoutId = null;
+function getVoiceCommandContext() {
+    const board = getBoard();
+    const projectId = getProjectId();
+    const projectSlug = getSlug();
+    if (!board || projectId == null || !projectSlug)
+        return null;
+    return {
+        projectId,
+        projectSlug,
+        board,
+        members: getBoardMembers(),
+        role: currentUserProjectRole,
+    };
+}
+function canUseVoiceCommandContext(context) {
+    return !!context && canShowVoiceCommands({
+        projectId: context.projectId,
+        projectSlug: context.projectSlug,
+        role: context.role,
+        isTemporary: isTemporaryBoard(context.board),
+        isAnonymous: isAnonymousBoard(context.board),
+    });
+}
 /** Older builds stored uppercase `mobileTab_${slug}` values; workflow column_key is store-shaped (lowercase). */
 const LEGACY_MOBILE_TAB_KEYS = {
     BACKLOG: "backlog",
@@ -41,13 +65,6 @@ const LEGACY_MOBILE_TAB_KEYS = {
     TESTING: "testing",
     DONE: "done",
 };
-function canShowVoiceCommands(board, projectId) {
-    return projectId > 0
-        && !!board.project?.slug
-        && currentUserProjectRole === "maintainer"
-        && !isTemporaryBoard(board)
-        && !isAnonymousBoard(board);
-}
 function resolveMobileTabKeyFromStorage(saved, cols) {
     if (!saved || cols.length === 0)
         return null;
@@ -722,7 +739,13 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     // Anonymous temporary board: expiresAt set, no creator (pastebin-style). Rename + New Todo without login — see isAnonymousBoard() / backend.
     const isAnonymousTempBoard = isAnonymousBoard(board);
     const { chipsHTML } = computeBoardChipsRender(board, tag || "", sprintId ?? null);
-    const showVoiceCommands = canShowVoiceCommands(board, projectId);
+    const showVoiceCommands = canShowVoiceCommands({
+        projectId,
+        projectSlug: board.project?.slug,
+        role: currentUserProjectRole,
+        isTemporary: isTemporaryBoard(board),
+        isAnonymous: isAnonymousTempBoard,
+    });
     // Minimal topbar (used for temporary/anonymous boards): logo, project name, rename (if anonymous temp), New Todo, Settings
     const topbarHTML = buildTopbarHtml({
         board,
@@ -926,38 +949,38 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     const voiceCommandBtn = document.getElementById("voiceCommandBtn");
     if (voiceCommandBtn && !voiceCommandBtn[BOUND_FLAG]) {
         voiceCommandBtn.addEventListener("click", async () => {
-            const currentBoard = getBoard();
-            const currentSlug = getSlug();
-            const currentProjectId = getProjectId();
-            if (!currentBoard || !currentSlug || currentProjectId == null || !canShowVoiceCommands(currentBoard, currentProjectId)) {
-                showToast("Voice commands are unavailable for this board");
+            const openingContext = getVoiceCommandContext();
+            if (!canUseVoiceCommandContext(openingContext)) {
+                showToast("Commands are unavailable for this board");
                 return;
             }
+            const initialProjectId = openingContext.projectId;
+            const initialProjectSlug = openingContext.projectSlug;
             try {
                 const { openVoiceCommandDialog } = await import("../voice/flow.js");
-                if (getSlug() !== currentSlug || getProjectId() !== currentProjectId) {
-                    showToast("The board changed before voice commands opened");
+                const latestContext = getVoiceCommandContext();
+                if (!canUseVoiceCommandContext(latestContext)
+                    || latestContext.projectId !== initialProjectId
+                    || latestContext.projectSlug !== initialProjectSlug) {
+                    showToast("The board changed before commands opened");
                     return;
                 }
                 openVoiceCommandDialog({
-                    projectId: currentProjectId,
-                    projectSlug: currentSlug,
-                    board: currentBoard,
-                    members: getBoardMembers(),
-                    role: currentUserProjectRole,
-                    isCurrent: () => getSlug() === currentSlug && getProjectId() === currentProjectId,
+                    initialProjectId,
+                    initialProjectSlug,
+                    getContext: getVoiceCommandContext,
                     refreshBoard: async () => {
-                        const slug = getSlug();
-                        if (!slug)
+                        const context = getVoiceCommandContext();
+                        if (!context || context.projectId !== initialProjectId || context.projectSlug !== initialProjectSlug)
                             return;
-                        await loadBoardBySlug(slug, getTag(), getSearch(), getSprintIdFromUrl());
+                        await loadBoardBySlug(context.projectSlug, getTag(), getSearch(), getSprintIdFromUrl());
                     },
                     recordMutation: recordLocalMutation,
                     showMessage: showToast,
                 });
             }
             catch (err) {
-                showToast(err?.message || "Voice commands failed to load");
+                showToast(err?.message || "Commands failed to load");
             }
         });
         voiceCommandBtn[BOUND_FLAG] = true;
