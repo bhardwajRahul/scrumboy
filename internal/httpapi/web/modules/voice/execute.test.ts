@@ -44,10 +44,16 @@ describe('voice command MCP mapping', () => {
     });
   });
 
-  it('records mutation and refreshes through injected hooks after MCP success', async () => {
-    const callTool = vi.fn().mockResolvedValue({ todo: { localId: 56 } });
-    const recordMutation = vi.fn();
-    const refreshBoard = vi.fn().mockResolvedValue(undefined);
+  it('records mutation before MCP and refreshes only after success', async () => {
+    const events: string[] = [];
+    const callTool = vi.fn().mockImplementation(async () => {
+      events.push('call');
+      return { todo: { localId: 56 } };
+    });
+    const recordMutation = vi.fn(() => events.push('record'));
+    const refreshBoard = vi.fn().mockImplementation(async () => {
+      events.push('refresh');
+    });
 
     await executeCommandIR({
       intent: 'todos.delete',
@@ -59,5 +65,40 @@ describe('voice command MCP mapping', () => {
     expect(recordMutation).toHaveBeenCalledTimes(1);
     expect(callTool).toHaveBeenCalledWith('todos.delete', { projectSlug: 'alpha', localId: 56 });
     expect(refreshBoard).toHaveBeenCalledTimes(1);
+    expect(events).toEqual(['record', 'call', 'refresh']);
+  });
+
+  it('does not refresh after MCP failure', async () => {
+    const callTool = vi.fn().mockRejectedValue(new Error('forbidden'));
+    const recordMutation = vi.fn();
+    const refreshBoard = vi.fn().mockResolvedValue(undefined);
+
+    await expect(executeCommandIR({
+      intent: 'todos.delete',
+      projectId: 1,
+      projectSlug: 'alpha',
+      entities: { localId: 56 },
+    }, { callTool, recordMutation, refreshBoard })).rejects.toThrow('forbidden');
+
+    expect(recordMutation).toHaveBeenCalledTimes(1);
+    expect(refreshBoard).not.toHaveBeenCalled();
+  });
+
+  it('passes abort signals to MCP callers when provided', async () => {
+    const callTool = vi.fn().mockResolvedValue({ todo: { localId: 56 } });
+    const controller = new AbortController();
+
+    await executeCommandIR({
+      intent: 'todos.move',
+      projectId: 1,
+      projectSlug: 'alpha',
+      entities: { localId: 56, toColumnKey: 'done' },
+    }, { callTool, signal: controller.signal });
+
+    expect(callTool).toHaveBeenCalledWith(
+      'todos.move',
+      { projectSlug: 'alpha', localId: 56, toColumnKey: 'done' },
+      { signal: controller.signal },
+    );
   });
 });

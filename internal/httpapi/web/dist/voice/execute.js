@@ -45,7 +45,9 @@ export async function executeCommandIR(ir, options = {}) {
     const callTool = options.callTool ?? callMcpTool;
     const markMutation = options.recordMutation ?? recordLocalMutation;
     markMutation();
-    const result = await callTool(call.tool, call.input);
+    const result = options.signal
+        ? await callTool(call.tool, call.input, { signal: options.signal })
+        : await callTool(call.tool, call.input);
     if (options.refreshBoard) {
         await options.refreshBoard();
     }

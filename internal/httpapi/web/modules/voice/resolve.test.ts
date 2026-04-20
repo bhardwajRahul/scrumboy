@@ -79,6 +79,23 @@ describe('voice command resolution', () => {
     });
   });
 
+  it('uses local board and member state before remote MCP lookups', async () => {
+    const parsed = parseCommand('assign story 56 to ada lovelace');
+    if (!parsed.ok) throw new Error('parse failed');
+    const callTool = vi.fn();
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: board(),
+      members,
+      callTool,
+    });
+
+    expect(resolved.ok).toBe(true);
+    expect(callTool).not.toHaveBeenCalled();
+  });
+
   it('rejects ambiguous lane names', async () => {
     const customBoard = board({
       columnOrder: [
@@ -119,6 +136,50 @@ describe('voice command resolution', () => {
     expect(resolved).toMatchObject({
       ok: true,
       value: { ir: { intent: 'todos.delete', entities: { localId: 99 } } },
+    });
+  });
+
+  it('refreshes members once when local members do not resolve an assignee', async () => {
+    const parsed = parseCommand('assign story 56 to grace');
+    if (!parsed.ok) throw new Error('parse failed');
+    const callTool = vi.fn().mockResolvedValue({
+      items: [{ userId: 8, name: 'Grace Hopper', email: 'grace@example.com', role: 'contributor' }],
+    });
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: board(),
+      members: [members[0]],
+      callTool,
+    });
+
+    expect(callTool).toHaveBeenCalledTimes(1);
+    expect(callTool).toHaveBeenCalledWith('members.list', { projectSlug: 'alpha' });
+    expect(resolved).toMatchObject({
+      ok: true,
+      value: { ir: { intent: 'todos.assign', entities: { localId: 56, assigneeUserId: 8 } } },
+    });
+  });
+
+  it('rejects ambiguous users safely', async () => {
+    const parsed = parseCommand('assign story 56 to ada lovelace');
+    if (!parsed.ok) throw new Error('parse failed');
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: board(),
+      members: [
+        ...members,
+        { userId: 9, name: 'Ada Lovelace', email: 'ada2@example.com', role: 'contributor' },
+      ],
+    });
+
+    expect(resolved).toEqual({
+      ok: false,
+      code: 'ambiguous_user',
+      message: 'Assignee matches more than one project member.',
     });
   });
 });

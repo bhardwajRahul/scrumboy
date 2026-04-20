@@ -1,11 +1,11 @@
-import { showToast } from '../utils.js';
+import { isAnonymousBoard, isTemporaryBoard, showToast } from '../utils.js';
+import { canShowVoiceCommands } from '../views/board-command-capabilities.js';
 import { executeCommandIR } from './execute.js';
 import { callMcpTool } from './mcp-client.js';
 import { parseCommand } from './parser.js';
 import { resolveCommandDraft } from './resolve.js';
 import { startOneShotRecognition } from './speech.js';
-import { isCommandFailure } from './schema.js';
-let activeAbortController = null;
+import { commandFailure, isCommandFailure, } from './schema.js';
 function setText(el, text) {
     if (el)
         el.textContent = text;
@@ -13,44 +13,81 @@ function setText(el, text) {
 function commandHash(command) {
     return JSON.stringify(command.ir);
 }
-function sameCommand(a, b) {
-    return commandHash(a) === commandHash(b);
+function draftHash(draft) {
+    return JSON.stringify(draft);
 }
-async function parseAndResolve(transcript, options) {
-    if (!options.isCurrent()) {
-        return { ok: false, code: "stale_context", message: "The board changed before the command could run." };
+function dedupeAlternatives(alternatives) {
+    const out = [];
+    for (const alternative of alternatives) {
+        const transcript = String(alternative ?? "").trim();
+        if (transcript && !out.includes(transcript))
+            out.push(transcript);
+        if (out.length >= 3)
+            break;
     }
+    return out;
+}
+function getActiveContext(options) {
+    const context = options.getContext();
+    if (!context || context.projectId !== options.initialProjectId || context.projectSlug !== options.initialProjectSlug) {
+        return commandFailure("stale_context", "The board changed before the command could run.");
+    }
+    const allowed = canShowVoiceCommands({
+        projectId: context.projectId,
+        projectSlug: context.projectSlug,
+        role: context.role,
+        isTemporary: isTemporaryBoard(context.board),
+        isAnonymous: isAnonymousBoard(context.board),
+    });
+    if (!allowed) {
+        return commandFailure("stale_context", "Commands are unavailable for this board.");
+    }
+    return { ok: true, value: context };
+}
+async function resolveParsedDraft(draft, context, signal) {
+    return resolveCommandDraft(draft, {
+        projectId: context.projectId,
+        projectSlug: context.projectSlug,
+        board: context.board,
+        members: context.members,
+        callTool: (tool, input) => callMcpTool(tool, input, { signal }),
+    });
+}
+export async function parseAndResolveCommand(transcript, options, signal) {
+    const context = getActiveContext(options);
+    if (isCommandFailure(context))
+        return context;
     const parsed = parseCommand(transcript);
     if (isCommandFailure(parsed))
         return parsed;
-    return resolveCommandDraft(parsed.value, {
-        projectId: options.projectId,
-        projectSlug: options.projectSlug,
-        board: options.board,
-        members: options.members,
-        callTool: callMcpTool,
-    });
+    return resolveParsedDraft(parsed.value, context.value, signal);
 }
-async function parseAlternatives(alternatives, options) {
+export async function parseAlternatives(alternatives, options, signal) {
     const successes = [];
     let firstFailure = null;
-    for (const transcript of alternatives) {
-        const resolved = await parseAndResolve(transcript, options);
-        if (!isCommandFailure(resolved)) {
-            successes.push({ transcript, resolved: resolved.value });
+    for (const transcript of dedupeAlternatives(alternatives)) {
+        const parsed = parseCommand(transcript);
+        if (!isCommandFailure(parsed)) {
+            successes.push({ transcript, draft: parsed.value, hash: draftHash(parsed.value) });
         }
         else if (!firstFailure) {
-            firstFailure = resolved;
+            firstFailure = parsed;
         }
     }
     if (successes.length === 0) {
-        return firstFailure ?? { ok: false, code: "unsupported", message: "Unsupported command." };
+        return firstFailure ?? commandFailure("unsupported", "Unsupported command.");
     }
     const first = successes[0];
-    if (successes.some((candidate) => !sameCommand(candidate.resolved, first.resolved))) {
-        return { ok: false, code: "unsupported", message: "Speech matched more than one command. Review the text and try again." };
+    if (successes.some((candidate) => candidate.hash !== first.hash)) {
+        return commandFailure("unsupported", "Speech matched more than one command. Review the text and try again.");
     }
-    return { ok: true, value: first };
+    const context = getActiveContext(options);
+    if (isCommandFailure(context))
+        return context;
+    const resolved = await resolveParsedDraft(first.draft, context.value, signal);
+    if (isCommandFailure(resolved))
+        return resolved;
+    return { ok: true, value: { transcript: first.transcript, resolved: resolved.value } };
 }
 function createDialog() {
     const dialog = document.createElement("dialog");
@@ -58,12 +95,12 @@ function createDialog() {
     dialog.innerHTML = `
     <form method="dialog" class="dialog__form voice-command" id="voiceCommandForm">
       <div class="dialog__header">
-        <div class="dialog__title">Voice</div>
+        <div class="dialog__title">Commands</div>
         <button class="btn btn--ghost" type="button" id="voiceCommandClose" aria-label="Close">x</button>
       </div>
 
       <div class="voice-command__tabs" role="tablist" aria-label="Command input mode">
-        <button type="button" class="voice-command__tab voice-command__tab--active" id="voiceModeSpeech">Speech</button>
+        <button type="button" class="voice-command__tab voice-command__tab--active" id="voiceModeSpeech">Speak</button>
         <button type="button" class="voice-command__tab" id="voiceModeType">Type</button>
       </div>
 
@@ -97,7 +134,9 @@ function createDialog() {
 export function openVoiceCommandDialog(options) {
     const existing = document.getElementById("voiceCommandDialog");
     if (existing?.parentNode) {
-        existing.parentNode.removeChild(existing);
+        existing.dispatchEvent(new Event("voice-command:close"));
+        if (existing.parentNode)
+            existing.parentNode.removeChild(existing);
     }
     const dialog = createDialog();
     dialog.id = "voiceCommandDialog";
@@ -119,7 +158,16 @@ export function openVoiceCommandDialog(options) {
     const notify = options.showMessage ?? showToast;
     let currentCommand = null;
     let executing = false;
+    let closed = false;
+    let listenStoppedByUser = false;
     let lastExecutedHash = null;
+    let listenController = null;
+    let reviewController = null;
+    let executeController = null;
+    const safeSetText = (el, text) => {
+        if (!closed)
+            setText(el, text);
+    };
     const clearResolved = () => {
         currentCommand = null;
         if (summary) {
@@ -133,8 +181,15 @@ export function openVoiceCommandDialog(options) {
         }
     };
     const close = () => {
-        activeAbortController?.abort();
-        activeAbortController = null;
+        if (closed)
+            return;
+        closed = true;
+        listenController?.abort();
+        reviewController?.abort();
+        executeController?.abort();
+        listenController = null;
+        reviewController = null;
+        executeController = null;
         if (dialog.open)
             dialog.close();
         dialog.remove();
@@ -144,11 +199,13 @@ export function openVoiceCommandDialog(options) {
         typeTab?.classList.toggle("voice-command__tab--active", mode === "type");
         if (speechPanel)
             speechPanel.hidden = mode !== "speech";
-        setText(listenStatus, "");
+        safeSetText(listenStatus, "");
     };
     const applyResolved = (resolved) => {
+        if (closed)
+            return;
         currentCommand = resolved;
-        setText(summary, resolved.summary);
+        safeSetText(summary, resolved.summary);
         if (summary)
             summary.hidden = false;
         if (executeBtn) {
@@ -156,23 +213,35 @@ export function openVoiceCommandDialog(options) {
             executeBtn.textContent = resolved.confirmLabel;
             executeBtn.classList.toggle("btn--danger", resolved.danger);
         }
-        setText(reviewStatus, "");
+        safeSetText(reviewStatus, "");
     };
     const reviewTranscript = async () => {
+        reviewController?.abort();
+        const controller = new AbortController();
+        reviewController = controller;
         clearResolved();
         const value = transcript?.value.trim() ?? "";
-        setText(reviewStatus, "Reviewing...");
-        const resolved = await parseAndResolve(value, options);
-        if (isCommandFailure(resolved)) {
-            setText(reviewStatus, resolved.message);
-            return;
+        safeSetText(reviewStatus, "Reviewing...");
+        try {
+            const resolved = await parseAndResolveCommand(value, options, controller.signal);
+            if (closed || controller.signal.aborted || reviewController !== controller)
+                return;
+            if (isCommandFailure(resolved)) {
+                safeSetText(reviewStatus, resolved.message);
+                return;
+            }
+            applyResolved(resolved.value);
         }
-        applyResolved(resolved.value);
+        finally {
+            if (reviewController === controller)
+                reviewController = null;
+        }
     };
     speechTab?.addEventListener("click", () => setMode("speech"));
     typeTab?.addEventListener("click", () => setMode("type"));
     closeBtn?.addEventListener("click", close);
     cancelBtn?.addEventListener("click", close);
+    dialog.addEventListener("voice-command:close", close);
     dialog.addEventListener("click", (event) => {
         if (event.target === dialog)
             close();
@@ -186,73 +255,112 @@ export function openVoiceCommandDialog(options) {
         void reviewTranscript();
     });
     listenBtn?.addEventListener("click", async () => {
+        listenController?.abort();
+        reviewController?.abort();
         clearResolved();
-        setText(listenStatus, "Listening...");
-        activeAbortController = new AbortController();
+        listenStoppedByUser = false;
+        const controller = new AbortController();
+        listenController = controller;
+        safeSetText(listenStatus, "Listening...");
         if (listenBtn)
             listenBtn.disabled = true;
         if (stopBtn)
             stopBtn.disabled = false;
         try {
-            const speech = await startOneShotRecognition({ signal: activeAbortController.signal });
-            const parsed = await parseAlternatives(speech.alternatives, options);
+            const speech = await startOneShotRecognition({ signal: controller.signal });
+            if (closed || controller.signal.aborted || listenController !== controller)
+                return;
+            const parsed = await parseAlternatives(speech.alternatives, options, controller.signal);
+            if (closed || controller.signal.aborted || listenController !== controller)
+                return;
             if (isCommandFailure(parsed)) {
                 if (transcript && speech.alternatives[0])
                     transcript.value = speech.alternatives[0];
-                setText(listenStatus, parsed.message);
+                safeSetText(listenStatus, parsed.message);
                 return;
             }
             if (transcript)
                 transcript.value = parsed.value.transcript;
             applyResolved(parsed.value.resolved);
-            setText(listenStatus, "Ready");
+            safeSetText(listenStatus, "Ready");
         }
         catch (err) {
-            setText(listenStatus, err?.message || "Speech recognition failed.");
+            if (!closed && !controller.signal.aborted) {
+                safeSetText(listenStatus, err?.message || "Speech recognition failed.");
+            }
+            else if (!closed && listenStoppedByUser) {
+                safeSetText(listenStatus, "Stopped");
+            }
         }
         finally {
-            activeAbortController = null;
-            if (listenBtn)
-                listenBtn.disabled = false;
-            if (stopBtn)
-                stopBtn.disabled = true;
+            if (listenController === controller)
+                listenController = null;
+            if (!closed) {
+                if (listenBtn)
+                    listenBtn.disabled = false;
+                if (stopBtn)
+                    stopBtn.disabled = true;
+            }
         }
     });
     stopBtn?.addEventListener("click", () => {
-        activeAbortController?.abort();
-        activeAbortController = null;
-        setText(listenStatus, "Stopped");
+        listenStoppedByUser = true;
+        listenController?.abort();
+        listenController = null;
+        safeSetText(listenStatus, "Stopped");
     });
     form?.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (executing || !currentCommand || !executeBtn)
             return;
-        if (!options.isCurrent()) {
-            setText(reviewStatus, "The board changed before the command could run.");
+        const reviewedCommand = currentCommand;
+        const reviewedHash = commandHash(reviewedCommand);
+        if (reviewedHash === lastExecutedHash) {
+            safeSetText(reviewStatus, "This command already ran.");
             return;
         }
-        const hash = commandHash(currentCommand);
-        if (hash === lastExecutedHash) {
-            setText(reviewStatus, "This command already ran.");
-            return;
-        }
+        executeController?.abort();
+        const controller = new AbortController();
+        executeController = controller;
         executing = true;
         executeBtn.disabled = true;
-        setText(reviewStatus, "Running...");
+        safeSetText(reviewStatus, "Running...");
         try {
-            await executeCommandIR(currentCommand.ir, {
+            const value = transcript?.value.trim() ?? "";
+            const resolved = await parseAndResolveCommand(value, options, controller.signal);
+            if (closed || controller.signal.aborted || executeController !== controller)
+                return;
+            if (isCommandFailure(resolved)) {
+                safeSetText(reviewStatus, resolved.message);
+                executeBtn.disabled = false;
+                return;
+            }
+            const nextHash = commandHash(resolved.value);
+            if (nextHash !== reviewedHash) {
+                clearResolved();
+                safeSetText(reviewStatus, "Command changed. Review again before running.");
+                return;
+            }
+            await executeCommandIR(resolved.value.ir, {
                 refreshBoard: options.refreshBoard,
                 recordMutation: options.recordMutation,
+                signal: controller.signal,
             });
-            lastExecutedHash = hash;
+            if (closed || controller.signal.aborted || executeController !== controller)
+                return;
+            lastExecutedHash = nextHash;
             notify("Command complete");
             close();
         }
         catch (err) {
-            setText(reviewStatus, err?.message || "Command failed.");
-            executeBtn.disabled = false;
+            if (!closed && !controller.signal.aborted) {
+                safeSetText(reviewStatus, err?.message || "Command failed.");
+                executeBtn.disabled = false;
+            }
         }
         finally {
+            if (executeController === controller)
+                executeController = null;
             executing = false;
         }
     });
