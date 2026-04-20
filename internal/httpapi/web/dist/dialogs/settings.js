@@ -8,11 +8,12 @@ import { processWallpaperFileForUpload } from '../utils.js';
 import { getSlug, getBoard, getProjectId, getProjects, getSettingsProjectId, getSettingsActiveTab, getTagColors, getUser, getAuthStatusAvailable, getBackupImportBtn, getBackupData, getBoardMembers } from '../state/selectors.js';
 import { setSettingsProjectId, setSettingsActiveTab, setBackupImportBtn, setBackupData, setBackupPreview, setUser, setBoardMembers, } from '../state/mutations.js';
 import { renderRealBurndownChart, destroyBurndownChart, mountBurndownChart } from '../charts/burndown.js';
+import { emit } from '../events.js';
 import { normalizeSprints } from '../sprints.js';
 import { KEY_ACTION_LIST, chordFromKeyboardEvent, formatChordForDisplay, getResolvedChordForAction, isTypingInTextField, reloadKeybindingsFromStorage, saveKeybindingOverride, setKeybindingsCaptureListening, } from '../core/keybindings.js';
 import { requestDesktopNotificationPermission, getDesktopNotificationStatusDescription, } from '../core/assignmentNotify.js';
 import { isPushSubscribed, subscribeToPush, unsubscribeFromPush } from '../core/push.js';
-import { getVoiceFlowModePreference, setVoiceFlowModePreference } from '../core/voiceflow-preferences.js';
+import { getVoiceFlowEnabledPreference, setVoiceFlowEnabledPreference } from '../core/voiceflow-preferences.js';
 import { bindWorkflowTabInteractions, clearWorkflowDraftState, invalidateWorkflowLaneCountsCache, isWorkflowDraftDirty, loadWorkflowTabContent, resetWorkflowDraftToBaseline, } from './settings-workflow.js';
 import { bindTagTabInteractions, invalidateTagsCache as invalidateTagSettingsCache, loadTagSettingsContent, } from './settings-tags.js';
 import { bindSprintsTabInteractions, renderSprintsTabContent } from './settings-sprints.js';
@@ -169,28 +170,15 @@ function renderBackupTabHTML() {
     </div>
   `;
 }
-function renderVoiceFlowTabHTML() {
-    const mode = getVoiceFlowModePreference();
+function renderVoiceFlowCustomizationHTML() {
+    const enabled = getVoiceFlowEnabledPreference();
     return `
     <div class="settings-section">
       <div class="settings-section__title">VoiceFlow</div>
-      <div class="settings-section__description muted">Choose how the project command modal behaves after you press the board microphone.</div>
-      <div class="settings-kv" style="margin-top: 12px;">
-        <label class="settings-kv__row" style="cursor: pointer;">
-          <div>
-            <input type="radio" name="voiceFlowMode" value="safe" ${mode === "safe" ? "checked" : ""}>
-            <span>Safe-Mode</span>
-          </div>
-          <div class="muted">Shows the command text, lets you review it, and requires a click before running.</div>
-        </label>
-        <label class="settings-kv__row" style="cursor: pointer;">
-          <div>
-            <input type="radio" name="voiceFlowMode" value="hands-free" ${mode === "hands-free" ? "checked" : ""}>
-            <span>Hands-Free</span>
-          </div>
-          <div class="muted">Starts listening after the microphone is pressed and asks for spoken confirmation when needed.</div>
-        </label>
-      </div>
+      <label class="row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
+        <input type="checkbox" id="voiceFlowEnabledToggle" ${enabled ? "checked" : ""} />
+        <span>Use voice commands to move, create and delete todos.</span>
+      </label>
     </div>
   `;
 }
@@ -512,7 +500,6 @@ export async function renderSettingsModal(options) {
     // Show Users tab only if user has admin or owner role
     const currentUser = getUser();
     const showUsersTab = showProfileTab && (currentUser?.systemRole === "owner" || currentUser?.systemRole === "admin");
-    const showVoiceFlowTab = showProfileTab;
     // In board view we have a slug and can use capability routes.
     // In projects listing view (full mode), show all tags from all projects the user has access to.
     let tagsURL = null;
@@ -588,8 +575,8 @@ export async function renderSettingsModal(options) {
     else if (!showWorkflowTab && getSettingsActiveTab() === "workflow") {
         setSettingsActiveTab(hasProjectAccess ? "tag-colors" : "customization");
     }
-    else if (!showVoiceFlowTab && getSettingsActiveTab() === "voiceflow") {
-        setSettingsActiveTab(hasProjectAccess ? "tag-colors" : "customization");
+    else if (getSettingsActiveTab() === "voiceflow") {
+        setSettingsActiveTab("customization");
     }
     // Fetch full user profile (including avatar) when Profile tab is shown (skip when re-rendering after avatar change)
     if (showProfileTab && getUser() && !options?.skipProfileRefetch) {
@@ -840,6 +827,7 @@ export async function renderSettingsModal(options) {
         </div>
       </div>
       ${wallpaperSectionHTML}
+      ${renderVoiceFlowCustomizationHTML()}
       <div class="settings-section">
         <div class="settings-section__title">Desktop notifications</div>
         <div class="settings-section__description muted">OS-level alerts when someone assigns you a todo (works when this tab is in the background).</div>
@@ -928,14 +916,13 @@ export async function renderSettingsModal(options) {
       ${showUsersTab ? `<button class="settings-tab ${getSettingsActiveTab() === "users" ? "settings-tab--active" : ""}" data-tab="users">Users</button>` : ``}
       ${showSprintsTab ? `<button class="settings-tab ${getSettingsActiveTab() === "sprints" ? "settings-tab--active" : ""}" data-tab="sprints">Sprints</button>` : ``}
       ${showWorkflowTab ? `<button class="settings-tab ${getSettingsActiveTab() === "workflow" ? "settings-tab--active" : ""}" data-tab="workflow">Workflow</button>` : ``}
-      ${showVoiceFlowTab ? `<button class="settings-tab ${getSettingsActiveTab() === "voiceflow" ? "settings-tab--active" : ""}" data-tab="voiceflow">VoiceFlow</button>` : ``}
       <button class="settings-tab ${getSettingsActiveTab() === "customization" ? "settings-tab--active" : ""}" data-tab="customization">Customization</button>
       <button class="settings-tab ${getSettingsActiveTab() === "tag-colors" ? "settings-tab--active" : ""}" data-tab="tag-colors">Tag Colors</button>
       ${showChartsTab ? `<button class="settings-tab ${getSettingsActiveTab() === "charts" ? "settings-tab--active" : ""}" data-tab="charts">Charts</button>` : ``}
       <button class="settings-tab ${getSettingsActiveTab() === "backup" ? "settings-tab--active" : ""}" data-tab="backup">Backup</button>
     </div>
     <div class="settings-tab-content" id="settingsTabContent">
-      ${getSettingsActiveTab() === "profile" ? profileHTML : getSettingsActiveTab() === "users" ? usersHTML : getSettingsActiveTab() === "sprints" ? sprintsHTML : getSettingsActiveTab() === "workflow" ? workflowHTML : getSettingsActiveTab() === "voiceflow" ? renderVoiceFlowTabHTML() : getSettingsActiveTab() === "customization" ? customizationHTML : getSettingsActiveTab() === "tag-colors" ? tagColorsContent : getSettingsActiveTab() === "charts" ? chartsContent : getSettingsActiveTab() === "backup" ? renderBackupTabHTML() : ""}
+      ${getSettingsActiveTab() === "profile" ? profileHTML : getSettingsActiveTab() === "users" ? usersHTML : getSettingsActiveTab() === "sprints" ? sprintsHTML : getSettingsActiveTab() === "workflow" ? workflowHTML : getSettingsActiveTab() === "customization" ? customizationHTML : getSettingsActiveTab() === "tag-colors" ? tagColorsContent : getSettingsActiveTab() === "charts" ? chartsContent : getSettingsActiveTab() === "backup" ? renderBackupTabHTML() : ""}
     </div>
   `;
     // Abort previous listeners before attaching new ones
@@ -1001,15 +988,6 @@ export async function renderSettingsModal(options) {
                 void switchSettingsTab(tabName);
         }, { signal });
     });
-    if (getSettingsActiveTab() === "voiceflow") {
-        document.querySelectorAll('input[name="voiceFlowMode"]').forEach((input) => {
-            input.addEventListener("change", () => {
-                if (input.checked && (input.value === "safe" || input.value === "hands-free")) {
-                    setVoiceFlowModePreference(input.value);
-                }
-            }, { signal });
-        });
-    }
     // Setup tab switching (keyboard: Tab cycles visible tabs)
     const settingsDlgForKeyboard = document.getElementById("settingsDialog");
     if (settingsDlgForKeyboard) {
@@ -1316,6 +1294,13 @@ export async function renderSettingsModal(options) {
         }, { signal });
     }
     if (getSettingsActiveTab() === "customization") {
+        const voiceFlowEnabledToggle = document.getElementById("voiceFlowEnabledToggle");
+        if (voiceFlowEnabledToggle) {
+            voiceFlowEnabledToggle.addEventListener("change", () => {
+                setVoiceFlowEnabledPreference(voiceFlowEnabledToggle.checked);
+                emit("voiceflow:enabled-changed", voiceFlowEnabledToggle.checked);
+            }, { signal });
+        }
         const desktopNotifyBtn = document.getElementById("desktopNotifyEnableBtn");
         if (desktopNotifyBtn && !desktopNotifyBtn.hasAttribute("disabled")) {
             desktopNotifyBtn.addEventListener("click", async () => {

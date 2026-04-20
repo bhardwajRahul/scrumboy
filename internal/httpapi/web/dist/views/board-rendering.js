@@ -1,5 +1,8 @@
 import { columnsSpec } from '../features/drag-drop.js';
 import { escapeHTML, isTemporaryBoard, renderAvatarContent, renderUserAvatar, sanitizeHexColor, } from '../utils.js';
+export function renderVoiceCommandTriggerHtml() {
+    return `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="VoiceFlow" title="VoiceFlow"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>`;
+}
 export function getBoardColumns(board) {
     const order = board.columnOrder;
     if (order && order.length > 0) {
@@ -168,9 +171,11 @@ export function buildFiltersHtml(chipsHTML, opts) {
 }
 export function buildTopbarHtml(args) {
     const { board, minimalTopbar, search, searchPlaceholder, isMobile, isAnonymousTempBoard, currentUserProjectRole, showVoiceCommands, user, backLabel, } = args;
+    const voiceCommandClass = showVoiceCommands ? "topbar--voice-commands-on" : "topbar--voice-commands-off";
+    const voiceCommandTriggerHTML = showVoiceCommands ? renderVoiceCommandTriggerHtml() : "";
     if (minimalTopbar) {
         return `
-      <div class="topbar">
+      <div class="topbar ${voiceCommandClass}">
         <div class="brand">
           <button class="brand-link" id="brandLink" style="background: none; border: none; padding: 0; cursor: pointer;">
             <img src="/scrumboytext.png" alt="Scrumboy" class="brand-text" />
@@ -181,7 +186,7 @@ export function buildTopbarHtml(args) {
             : ''}
         <div class="brand">${escapeHTML(board.project.name)}</div>
         <div class="spacer"></div>
-        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="VoiceFlow" title="VoiceFlow"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>` : ''}
+        ${voiceCommandTriggerHTML}
         <div class="search-input-wrapper">
           <input
             type="text"
@@ -204,7 +209,7 @@ export function buildTopbarHtml(args) {
     `;
     }
     return `
-      <div class="topbar">
+      <div class="topbar ${voiceCommandClass}">
         <button class="btn btn--ghost" id="backBtn">${escapeHTML(backLabel)}</button>
         ${isAnonymousTempBoard
         ? (board.project.image ? `<img src="${escapeHTML(board.project.image)}" alt="" class="project-image-topbar" style="width: 32px; height: 32px; pointer-events: none; flex-shrink: 0;" />` : `<span class="project-image-topbar-placeholder" style="width: 32px; height: 32px; flex-shrink: 0;">📷</span>`)
@@ -213,7 +218,7 @@ export function buildTopbarHtml(args) {
           </button>`}
         <div class="brand">${escapeHTML(board.project.name)}</div>
         <div class="spacer"></div>
-        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="VoiceFlow" title="VoiceFlow"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>` : ''}
+        ${voiceCommandTriggerHTML}
         <div class="search-input-wrapper">
           <input
             type="text"

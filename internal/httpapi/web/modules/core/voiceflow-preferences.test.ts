@@ -2,13 +2,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setUser } from '../state/mutations.js';
 import {
+  getVoiceFlowEnabledPreference,
   getVoiceFlowHandsFreeConfirmationPreference,
   getVoiceFlowModePreference,
+  hydrateVoiceFlowEnabledFromServer,
   hydrateVoiceFlowHandsFreeConfirmationFromServer,
   hydrateVoiceFlowModeFromServer,
+  normalizeVoiceFlowEnabled,
   normalizeVoiceFlowHandsFreeConfirmation,
+  setVoiceFlowEnabledPreference,
   setVoiceFlowHandsFreeConfirmationPreference,
   setVoiceFlowModePreference,
+  VOICE_FLOW_ENABLED_STORAGE_KEY,
   VOICE_FLOW_HANDS_FREE_CONFIRMATION_STORAGE_KEY,
   VOICE_FLOW_MODE_STORAGE_KEY,
 } from './voiceflow-preferences.js';
@@ -25,6 +30,41 @@ afterEach(() => {
 });
 
 describe('VoiceFlow preferences', () => {
+  it('defaults voice commands to enabled and persists disabled locally', () => {
+    expect(getVoiceFlowEnabledPreference()).toBe(true);
+    setVoiceFlowEnabledPreference(false, { skipRemote: true });
+    expect(localStorage.getItem(VOICE_FLOW_ENABLED_STORAGE_KEY)).toBe('false');
+    expect(getVoiceFlowEnabledPreference()).toBe(false);
+  });
+
+  it('hydrates invalid voice command enabled values back to enabled', () => {
+    hydrateVoiceFlowEnabledFromServer('unexpected');
+    expect(getVoiceFlowEnabledPreference()).toBe(true);
+  });
+
+  it('normalizes voice command enabled values', () => {
+    expect(normalizeVoiceFlowEnabled(true)).toBe(true);
+    expect(normalizeVoiceFlowEnabled('true')).toBe(true);
+    expect(normalizeVoiceFlowEnabled(false)).toBe(false);
+    expect(normalizeVoiceFlowEnabled('false')).toBe(false);
+    expect(normalizeVoiceFlowEnabled('0')).toBe(false);
+    expect(normalizeVoiceFlowEnabled('off')).toBe(false);
+    expect(normalizeVoiceFlowEnabled('unexpected')).toBe(true);
+  });
+
+  it('saves the voice command enabled preference through the existing user preference endpoint when signed in', () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    setUser({ id: 1, name: 'Ada' });
+
+    setVoiceFlowEnabledPreference(false);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/user/preferences', expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify({ key: 'voiceFlowEnabled', value: 'false' }),
+    }));
+  });
+
   it('defaults to Safe-Mode and persists Hands-Free locally', () => {
     expect(getVoiceFlowModePreference()).toBe('safe');
     setVoiceFlowModePreference('hands-free', { skipRemote: true });

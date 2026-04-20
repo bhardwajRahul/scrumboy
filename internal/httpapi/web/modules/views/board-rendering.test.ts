@@ -35,12 +35,14 @@ function renderTopbar(showVoiceCommands: boolean): string {
 
 describe('board topbar rendering', () => {
   it('renders the voice command trigger only when explicitly enabled', () => {
+    expect(renderTopbar(true)).toContain('topbar--voice-commands-on');
     expect(renderTopbar(true)).toContain('id="voiceCommandBtn"');
     expect(renderTopbar(true)).toContain('aria-label="VoiceFlow"');
     expect(renderTopbar(true)).toContain('<img');
     expect(renderTopbar(true)).toContain('src="/mic.svg"');
     expect(renderTopbar(true)).toContain('width="20"');
     expect(renderTopbar(true)).toContain('height="20"');
+    expect(renderTopbar(false)).toContain('topbar--voice-commands-off');
     expect(renderTopbar(false)).not.toContain('id="voiceCommandBtn"');
   });
 

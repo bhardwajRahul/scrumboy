@@ -4125,6 +4125,11 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   flex-shrink: 1;
 }
 
+.topbar--voice-commands-off .search-input {
+  width: 250px;
+  max-width: 250px;
+}
+
 /* Glow when focused or when there is typed text; disappears only when empty */
 .search-input:focus,
 .search-input:not(:placeholder-shown) {

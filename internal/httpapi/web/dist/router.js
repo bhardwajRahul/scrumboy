@@ -7,7 +7,7 @@ import { getAuthStatusChecked, getUser, getBootstrapAvailable, getAuthStatusAvai
 import { setAuthStatusChecked, setAuthStatusAvailable, setUser, setBootstrapAvailable, setOidcEnabled, setLocalAuthEnabled, setRoute, setTag, setSearch, setSlug, setProjectId, setBoard, resetUserScopedState, setTagColors, setOpenTodoSegment, hydrateDashboardTodoSortFromServer } from './state/mutations.js';
 import { loadUserTheme } from './theme.js';
 import { applyWallpaperForAuthContext, loadUserWallpaper } from './wallpaper.js';
-import { hydrateVoiceFlowHandsFreeConfirmationFromServer, hydrateVoiceFlowModeFromServer, VOICE_FLOW_HANDS_FREE_CONFIRMATION_PREFERENCE_KEY, VOICE_FLOW_MODE_PREFERENCE_KEY, } from './core/voiceflow-preferences.js';
+import { hydrateVoiceFlowEnabledFromServer, hydrateVoiceFlowHandsFreeConfirmationFromServer, hydrateVoiceFlowModeFromServer, VOICE_FLOW_ENABLED_PREFERENCE_KEY, VOICE_FLOW_HANDS_FREE_CONFIRMATION_PREFERENCE_KEY, VOICE_FLOW_MODE_PREFERENCE_KEY, } from './core/voiceflow-preferences.js';
 // Attach foreground listeners once at module load (idempotent guard lives in initForegroundLifecycle).
 initForegroundLifecycle();
 let isRouting = false;
@@ -138,6 +138,14 @@ async function routeOnce() {
                 if (v === 'board' || v === 'activity') {
                     hydrateDashboardTodoSortFromServer(v);
                 }
+            }
+            catch (err) {
+                // Ignore errors
+            }
+            try {
+                const enabledResp = await apiFetch(`/api/user/preferences?key=${VOICE_FLOW_ENABLED_PREFERENCE_KEY}`);
+                if (enabledResp?.value)
+                    hydrateVoiceFlowEnabledFromServer(enabledResp.value);
             }
             catch (err) {
                 // Ignore errors
