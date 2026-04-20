@@ -152,8 +152,11 @@ async function resolveTodoByTitle(target, context) {
         candidates: ranked.slice(0, 3).map(({ localId, title }) => ({ localId, title })),
     });
 }
-export async function resolveTodoTarget(target, context, selectedLocalId) {
+export async function resolveTodoTarget(target, context, selectedLocalId, allowedLocalIds) {
     if (selectedLocalId != null) {
+        if (!allowedLocalIds || !allowedLocalIds.includes(selectedLocalId)) {
+            return commandFailure("invalid_schema", "Selected todo was not one of the offered choices.");
+        }
         const resolved = await resolveTodoByLocalId(selectedLocalId, context);
         if (isCommandFailure(resolved))
             return resolved;

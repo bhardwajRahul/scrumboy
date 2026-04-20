@@ -204,6 +204,31 @@ describe('voice command flow', () => {
     }
   });
 
+  it('accepts title speech alternatives that resolve to the same command IR', async () => {
+    const board = makeBoard({
+      columns: {
+        backlog: [{ id: 11, localId: 11, title: 'Little Duck', status: 'backlog' }],
+        doing: [],
+        done: [],
+      },
+    });
+
+    const result = await parseAlternatives([
+      'move little duck to in progress',
+      'move Little Duck to doing',
+    ], makeOptions(() => makeContext(board)));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.transcript).toBe('move todo little duck to in progress');
+      expect(result.value.resolved.ir).toMatchObject({
+        intent: 'todos.move',
+        entities: { localId: 11, toColumnKey: 'doing' },
+      });
+      expect(result.value.resolved.summary).toBe('Move todo #11: Little Duck to In Progress');
+    }
+  });
+
   it('rejects structured alternatives that resolve to different command IRs', async () => {
     const board = makeBoard({
       columnOrder: [
@@ -250,12 +275,12 @@ describe('voice command flow', () => {
     expect(callMcpToolMock).toHaveBeenCalledWith('todos.get', { projectSlug: 'alpha', localId: 99 }, { signal: undefined });
   });
 
-  it('rejects differing title alternatives before MCP-backed resolution', async () => {
+  it('rejects title alternatives that resolve to different command IRs', async () => {
     const getContext = vi.fn(() => makeContext(makeAmbiguousLoginBoard()));
 
     const result = await parseAlternatives([
       'open login redirect',
-      'open landing page',
+      'open login validation',
     ], makeOptions(getContext));
 
     expect(result).toEqual({
@@ -263,8 +288,9 @@ describe('voice command flow', () => {
       code: 'unsupported',
       message: 'Speech matched more than one command. Review the text and try again.',
     });
-    expect(getContext).not.toHaveBeenCalled();
-    expect(callMcpToolMock).not.toHaveBeenCalled();
+    expect(getContext).toHaveBeenCalledTimes(1);
+    expect(callMcpToolMock).toHaveBeenCalledWith('todos.search', { projectSlug: 'alpha', query: 'login redirect', limit: 10 }, { signal: undefined });
+    expect(callMcpToolMock).toHaveBeenCalledWith('todos.search', { projectSlug: 'alpha', query: 'login validation', limit: 10 }, { signal: undefined });
   });
 
   it('normalizes to do speech alternatives into canonical todo text', async () => {
@@ -587,10 +613,12 @@ describe('voice command flow', () => {
       )
       .mockResolvedValueOnce({ alternatives: ['open todo 56'] });
 
-    openVoiceCommandDialog(makeOptions(() => makeContext(makeAmbiguousLoginBoard())));
+    let context = makeContext(makeAmbiguousLoginBoard());
+    openVoiceCommandDialog(makeOptions(() => context));
     await flushAsync();
 
-    document.getElementById('voiceListenBtn')?.click();
+    context = makeContext();
+    document.getElementById('voiceModeHandsFree')?.click();
     await flushAsync();
 
     expect(firstDisambiguationAborted).toBe(true);
