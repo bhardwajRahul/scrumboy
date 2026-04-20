@@ -184,8 +184,12 @@ export async function resolveTodoTarget(
   target: TodoTargetReference,
   context: TodoTargetResolveContext,
   selectedLocalId?: number,
+  allowedLocalIds?: number[],
 ): Promise<CommandResult<ResolvedTodoTarget>> {
   if (selectedLocalId != null) {
+    if (!allowedLocalIds || !allowedLocalIds.includes(selectedLocalId)) {
+      return commandFailure("invalid_schema", "Selected todo was not one of the offered choices.");
+    }
     const resolved = await resolveTodoByLocalId(selectedLocalId, context);
     if (isCommandFailure(resolved)) return resolved;
     return { ok: true, value: { todo: resolved.value, ambiguousId: target.kind === "id" ? target.ambiguousId : false } };

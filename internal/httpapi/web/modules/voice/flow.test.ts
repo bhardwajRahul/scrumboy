@@ -547,6 +547,60 @@ describe('voice command flow', () => {
     });
   });
 
+  it('aborts Hands-Free disambiguation listening when the user stops the run', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    let disambiguationAborted = false;
+    startOneShotRecognitionMock
+      .mockResolvedValueOnce({ alternatives: ['open login'] })
+      .mockImplementationOnce(({ signal }: { signal: AbortSignal }) =>
+        new Promise(() => {
+          signal.addEventListener('abort', () => {
+            disambiguationAborted = true;
+          });
+        })
+      );
+
+    openVoiceCommandDialog(makeOptions(() => makeContext(makeAmbiguousLoginBoard())));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(2);
+    document.getElementById('voiceStopBtn')?.click();
+    await flushAsync();
+
+    expect(disambiguationAborted).toBe(true);
+    expect(executeCommandIRMock).not.toHaveBeenCalled();
+    expect(document.getElementById('voiceFlowState')?.textContent).toBe('cancelled');
+  });
+
+  it('supersedes an in-flight Hands-Free disambiguation run cleanly', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    executeCommandIRMock.mockResolvedValue({});
+    let firstDisambiguationAborted = false;
+    startOneShotRecognitionMock
+      .mockResolvedValueOnce({ alternatives: ['open login'] })
+      .mockImplementationOnce(({ signal }: { signal: AbortSignal }) =>
+        new Promise(() => {
+          signal.addEventListener('abort', () => {
+            firstDisambiguationAborted = true;
+          });
+        })
+      )
+      .mockResolvedValueOnce({ alternatives: ['open todo 56'] });
+
+    openVoiceCommandDialog(makeOptions(() => makeContext(makeAmbiguousLoginBoard())));
+    await flushAsync();
+
+    document.getElementById('voiceListenBtn')?.click();
+    await flushAsync();
+
+    expect(firstDisambiguationAborted).toBe(true);
+    expect(executeCommandIRMock).toHaveBeenCalledTimes(1);
+    expect(executeCommandIRMock.mock.calls[0][0]).toMatchObject({
+      intent: 'open_todo',
+      entities: { localId: 56 },
+    });
+  });
+
   it('keeps Hands-Free delete confirmation after title disambiguation', async () => {
     localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
     executeCommandIRMock.mockResolvedValue({});
