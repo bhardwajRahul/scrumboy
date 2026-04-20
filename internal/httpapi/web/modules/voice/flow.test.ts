@@ -26,7 +26,10 @@ import {
   type OpenVoiceCommandOptions,
   type VoiceCommandDialogContext,
 } from './flow.js';
-import { VOICE_FLOW_MODE_STORAGE_KEY } from '../core/voiceflow-preferences.js';
+import {
+  VOICE_FLOW_HANDS_FREE_CONFIRMATION_STORAGE_KEY,
+  VOICE_FLOW_MODE_STORAGE_KEY,
+} from '../core/voiceflow-preferences.js';
 
 const members: BoardMember[] = [
   { userId: 7, name: 'Ada Lovelace', email: 'ada@example.com', role: 'maintainer' },
@@ -124,6 +127,95 @@ describe('voice command flow', () => {
     });
     expect(getContext).not.toHaveBeenCalled();
     expect(callMcpToolMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the top create command when speech alternatives differ only by title', async () => {
+    const getContext = vi.fn(() => makeContext());
+
+    const result = await parseAlternatives([
+      'create story fix login',
+      'create story fixed login',
+    ], makeOptions(getContext));
+
+    expect(result.ok).toBe(true);
+    expect(getContext).toHaveBeenCalledTimes(1);
+    if (result.ok) {
+      expect(result.value.transcript).toBe('create todo fix login');
+      expect(result.value.resolved.ir).toMatchObject({
+        intent: 'todos.create',
+        entities: { title: 'fix login' },
+      });
+    }
+  });
+
+  it('resolves spoken ID introducers before command execution', async () => {
+    const board = makeBoard({
+      columnOrder: [
+        { key: 'backlog', name: 'Backlog', isDone: false },
+        { key: 'testing', name: 'Testing', isDone: false },
+        { key: 'done', name: 'Done', isDone: true },
+      ],
+      columns: {
+        backlog: [{ id: 1, localId: 1, title: 'Fix login', status: 'backlog' }],
+        testing: [],
+        done: [],
+      },
+    });
+
+    const result = await parseAlternatives(['move number one to testing'], makeOptions(() => makeContext(board)));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.transcript).toBe('move todo 1 to testing');
+      expect(result.value.resolved.ir).toMatchObject({
+        intent: 'todos.move',
+        entities: { localId: 1, toColumnKey: 'testing' },
+      });
+    }
+  });
+
+  it('accepts structured alternatives that resolve to the same command IR', async () => {
+    const result = await parseAlternatives([
+      'move todo 56 to in progress',
+      'move todo 56 to doing',
+    ], makeOptions(() => makeContext()));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.resolved.ir).toMatchObject({
+        intent: 'todos.move',
+        entities: { localId: 56, toColumnKey: 'doing' },
+      });
+    }
+  });
+
+  it('rejects structured alternatives that resolve to different command IRs', async () => {
+    const board = makeBoard({
+      columnOrder: [
+        { key: 'backlog', name: 'Backlog', isDone: false },
+        { key: 'testing', name: 'Testing', isDone: false },
+        { key: 'done', name: 'Done', isDone: true },
+      ],
+      columns: {
+        backlog: [
+          { id: 1, localId: 1, title: 'Fix login', status: 'backlog' },
+          { id: 2, localId: 2, title: 'Fix logout', status: 'backlog' },
+        ],
+        testing: [],
+        done: [],
+      },
+    });
+
+    const result = await parseAlternatives([
+      'move todo one to testing',
+      'move todo two to testing',
+    ], makeOptions(() => makeContext(board)));
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'unsupported',
+      message: 'Speech matched more than one command. Review the text and try again.',
+    });
   });
 
   it('resolves equivalent speech alternatives once', async () => {
@@ -239,6 +331,36 @@ describe('voice command flow', () => {
     expect(document.getElementById('voiceSummary')?.textContent).toBe('Delete todo #56: Fix login');
   });
 
+  it('hides the Hands-Free confirmation toggle in Safe-Mode', () => {
+    openVoiceCommandDialog(makeOptions(() => makeContext()));
+
+    expect((document.getElementById('voiceHandsFreeConfirmPolicy') as HTMLElement).hidden).toBe(true);
+  });
+
+  it('shows and persists the Hands-Free confirmation toggle below the transcript', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    startOneShotRecognitionMock.mockImplementation(() => new Promise<never>(() => {}));
+
+    openVoiceCommandDialog(makeOptions(() => makeContext()));
+    await flushAsync();
+
+    const transcript = document.getElementById('voiceTranscript') as HTMLTextAreaElement;
+    const policy = document.getElementById('voiceHandsFreeConfirmPolicy') as HTMLElement;
+    const toggle = document.getElementById('voiceHandsFreeConfirmToggle') as HTMLInputElement;
+    const label = document.getElementById('voiceHandsFreeConfirmLabel') as HTMLElement;
+
+    expect(policy.hidden).toBe(false);
+    expect(transcript.compareDocumentPosition(policy) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(toggle.checked).toBe(false);
+    expect(label.textContent).toBe('Confirm only deletes');
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(label.textContent).toBe('Confirm every action before execution');
+    expect(localStorage.getItem(VOICE_FLOW_HANDS_FREE_CONFIRMATION_STORAGE_KEY)).toBe('mutations');
+  });
+
   it('uses a confirmation modal for destructive Safe-Mode execution', async () => {
     executeCommandIRMock.mockResolvedValue({});
     const options = makeOptions(() => makeContext());
@@ -271,8 +393,63 @@ describe('voice command flow', () => {
     expect(executeCommandIRMock).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['create', 'create story fix login', 'todos.create'],
+    ['move', 'move story 56 to done', 'todos.move'],
+    ['assign', 'assign story 56 to Ada Lovelace', 'todos.assign'],
+  ])('executes %s in Hands-Free default confirmation mode without spoken confirmation', async (_label, command, intent) => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    executeCommandIRMock.mockResolvedValue({});
+    startOneShotRecognitionMock.mockResolvedValueOnce({ alternatives: [command] });
+
+    openVoiceCommandDialog(makeOptions(() => makeContext()));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(1);
+    expect(speakMock).not.toHaveBeenCalled();
+    expect(executeCommandIRMock.mock.calls[0][0]).toMatchObject({ intent });
+  });
+
+  it.each([
+    ['create', 'create story fix login', 'Create todo "fix login". Confirm?'],
+    ['move', 'move story 56 to done', 'Move todo #56: Fix login to Done. Confirm?'],
+    ['assign', 'assign story 56 to Ada Lovelace', 'Assign todo #56: Fix login to Ada Lovelace. Confirm?'],
+    ['delete', 'delete story 56', 'Delete todo #56: Fix login. Confirm?'],
+  ])('asks for spoken confirmation before %s when Hands-Free confirmation covers mutations', async (_label, command, prompt) => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    localStorage.setItem(VOICE_FLOW_HANDS_FREE_CONFIRMATION_STORAGE_KEY, 'mutations');
+    executeCommandIRMock.mockResolvedValue({});
+    startOneShotRecognitionMock
+      .mockResolvedValueOnce({ alternatives: [command] })
+      .mockResolvedValueOnce({ alternatives: ['yes'] });
+
+    openVoiceCommandDialog(makeOptions(() => makeContext()));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(2);
+    expect(speakMock).toHaveBeenCalledWith(prompt, expect.any(Object));
+    expect(executeCommandIRMock).toHaveBeenCalledTimes(1);
+  });
+
   it('opens non-destructive todos in Hands-Free mode without spoken confirmation', async () => {
     localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    executeCommandIRMock.mockResolvedValue({});
+    startOneShotRecognitionMock.mockResolvedValueOnce({ alternatives: ['open todo 56'] });
+
+    openVoiceCommandDialog(makeOptions(() => makeContext()));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(1);
+    expect(speakMock).not.toHaveBeenCalled();
+    expect(executeCommandIRMock.mock.calls[0][0]).toMatchObject({
+      intent: 'open_todo',
+      entities: { localId: 56 },
+    });
+  });
+
+  it('opens todos in Hands-Free mutation confirmation mode without spoken confirmation', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    localStorage.setItem(VOICE_FLOW_HANDS_FREE_CONFIRMATION_STORAGE_KEY, 'mutations');
     executeCommandIRMock.mockResolvedValue({});
     startOneShotRecognitionMock.mockResolvedValueOnce({ alternatives: ['open todo 56'] });
 

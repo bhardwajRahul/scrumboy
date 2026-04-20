@@ -33,10 +33,19 @@ const TENS = {
     ninety: 90,
 };
 function normalizeNumberPhrase(input) {
-    return normalizePhrase(input)
-        .replace(/^#\s*/, "")
+    const tokens = normalizePhrase(input)
         .split(" ")
         .filter(Boolean);
+    if (tokens[0] === "#" || tokens[0]?.startsWith("#")) {
+        tokens[0] = tokens[0].replace(/^#/, "");
+    }
+    if (tokens[0] === "number" || tokens[0] === "id") {
+        tokens.shift();
+    }
+    if (tokens[0] === "#" || tokens[0]?.startsWith("#")) {
+        tokens[0] = tokens[0].replace(/^#/, "");
+    }
+    return tokens.filter(Boolean);
 }
 export function normalizePhrase(input) {
     return String(input ?? "")
@@ -81,6 +90,10 @@ export function parseSpokenNumber(input) {
     const tokens = normalizeNumberPhrase(trimmed);
     if (tokens.length === 0)
         return null;
+    if (tokens.length === 1 && /^\d+$/.test(tokens[0])) {
+        const value = Number(tokens[0]);
+        return Number.isSafeInteger(value) && value > 0 ? { value, ambiguous: false } : null;
+    }
     if (tokens.every((token) => Object.prototype.hasOwnProperty.call(SMALL, token) && SMALL[token] >= 0 && SMALL[token] <= 9)) {
         if (tokens.length === 1) {
             const value = SMALL[tokens[0]];

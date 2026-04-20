@@ -97,6 +97,34 @@ describe('voice command parser', () => {
     expect(parseCommand('move 12').ok).toBe(false);
   });
 
+  it('canonicalizes spoken ID introducers before parsing commands', () => {
+    expect(parseCommand('move number one to testing')).toEqual({
+      ok: true,
+      value: { intent: 'todos.move', localId: 1, rawStatus: 'testing', ambiguousId: false, display: 'move todo 1 to testing' },
+    });
+    expect(parseCommand('move story number one to testing')).toEqual({
+      ok: true,
+      value: { intent: 'todos.move', localId: 1, rawStatus: 'testing', ambiguousId: false, display: 'move todo 1 to testing' },
+    });
+    expect(parseCommand('delete id one')).toEqual({
+      ok: true,
+      value: { intent: 'todos.delete', localId: 1, ambiguousId: false, display: 'delete todo 1' },
+    });
+    expect(parseCommand('open number one')).toEqual({
+      ok: true,
+      value: { intent: 'open_todo', localId: 1, ambiguousId: false, display: 'open todo 1' },
+    });
+    expect(parseCommand('assign story number one to Ada')).toEqual({
+      ok: true,
+      value: { intent: 'todos.assign', localId: 1, rawUser: 'ada', ambiguousId: false, display: 'assign todo 1 to ada' },
+    });
+    expect(parseCommand('move number to testing')).toEqual({
+      ok: false,
+      code: 'invalid_id',
+      message: 'Todo ID was not recognized.',
+    });
+  });
+
   it('rejects unsupported grammar and project-scope phrases', () => {
     expect(parseCommand('new story Fix login').ok).toBe(false);
     expect(parseCommand('move it to done').ok).toBe(false);
