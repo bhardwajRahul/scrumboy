@@ -16,13 +16,14 @@ import { registerBoardRefresher, registerSprintsRefresher, getBoardLimitPerLaneF
 import { normalizeSprints } from '../sprints.js';
 import { on, off } from '../events.js';
 import { recordLocalMutation, } from '../realtime/guard.js';
-import { buildBoardColumnsHtml, buildFiltersHtml, buildNoResultsHtml, buildTopbarHtml, getBoardColumns, renderTodoCard, } from './board-rendering.js';
+import { buildBoardColumnsHtml, buildFiltersHtml, buildNoResultsHtml, buildTopbarHtml, getBoardColumns, renderVoiceCommandTriggerHtml, renderTodoCard, } from './board-rendering.js';
 import { clearTodoMultiSelection, ensureBulkEditUi, getSelectedTodoIds, toggleTodoSelection, } from './board-selection.js';
 import { bootstrapLoadedBoardView } from './board-load-bootstrap.js';
 import { bindBoardFilterUi, clearSprintChipData, clearSprintChipDataIfSlugChanged, computeBoardChipsRender, ensureSprintSubscription, hasSprintChipDataForSlug, resetBoardFilterUiState, setSprintChipDataForSlug, updateChipsOnly, } from './board-filters.js';
 export { notifySprintStateChanged } from './board-filters.js';
 import { attachBoardInteractionListeners, clearPendingRealtimeRefresh, connectBoardEvents, debugLog, disconnectBoardEvents, markBoardLoadSucceeded, runWhileTodoDialogOpening, setInitialBoardLoadInFlight, } from './board-realtime.js';
 import { canShowVoiceCommands } from './board-command-capabilities.js';
+import { getVoiceFlowEnabledPreference } from '../core/voiceflow-preferences.js';
 // Symbol for idempotent listener attachment
 const BOUND_FLAG = Symbol('bound');
 const HIGHLIGHT_CLASS = "card--highlight";
@@ -49,7 +50,7 @@ function getVoiceCommandContext() {
     };
 }
 function canUseVoiceCommandContext(context) {
-    return !!context && canShowVoiceCommands({
+    return getVoiceFlowEnabledPreference() && !!context && canShowVoiceCommands({
         projectId: context.projectId,
         projectSlug: context.projectSlug,
         role: context.role,
@@ -57,6 +58,83 @@ function canUseVoiceCommandContext(context) {
         isAnonymous: isAnonymousBoard(context.board),
     });
 }
+function canShowVoiceCommandsForBoard(projectId, board) {
+    return getVoiceFlowEnabledPreference() && canShowVoiceCommands({
+        projectId,
+        projectSlug: board.project?.slug,
+        role: currentUserProjectRole,
+        isTemporary: isTemporaryBoard(board),
+        isAnonymous: isAnonymousBoard(board),
+    });
+}
+function bindVoiceCommandButton() {
+    const voiceCommandBtn = document.getElementById("voiceCommandBtn");
+    if (!voiceCommandBtn || voiceCommandBtn[BOUND_FLAG])
+        return;
+    voiceCommandBtn.addEventListener("click", async () => {
+        const openingContext = getVoiceCommandContext();
+        if (!canUseVoiceCommandContext(openingContext)) {
+            showToast("Commands are unavailable for this board");
+            return;
+        }
+        const initialProjectId = openingContext.projectId;
+        const initialProjectSlug = openingContext.projectSlug;
+        try {
+            const { openVoiceCommandDialog } = await import("../voice/flow.js");
+            const latestContext = getVoiceCommandContext();
+            if (!canUseVoiceCommandContext(latestContext)
+                || latestContext.projectId !== initialProjectId
+                || latestContext.projectSlug !== initialProjectSlug) {
+                showToast("The board changed before commands opened");
+                return;
+            }
+            openVoiceCommandDialog({
+                initialProjectId,
+                initialProjectSlug,
+                getContext: getVoiceCommandContext,
+                refreshBoard: async () => {
+                    const context = getVoiceCommandContext();
+                    if (!context || context.projectId !== initialProjectId || context.projectSlug !== initialProjectSlug)
+                        return;
+                    await loadBoardBySlug(context.projectSlug, getTag(), getSearch(), getSprintIdFromUrl());
+                },
+                openTodo: async (localId) => {
+                    const context = getVoiceCommandContext();
+                    if (!context || context.projectId !== initialProjectId || context.projectSlug !== initialProjectSlug)
+                        return;
+                    navigate(`/${context.projectSlug}/t/${localId}`);
+                },
+                recordMutation: recordLocalMutation,
+                showMessage: showToast,
+            });
+        }
+        catch (err) {
+            showToast(err?.message || "Commands failed to load");
+        }
+    });
+    voiceCommandBtn[BOUND_FLAG] = true;
+}
+function syncVoiceCommandPreferenceInTopbar() {
+    const topbar = document.querySelector(".topbar");
+    const board = getBoard();
+    const projectId = getProjectId();
+    const slug = getSlug();
+    if (!topbar || !board || projectId == null || !slug)
+        return;
+    const showVoiceCommands = canShowVoiceCommandsForBoard(projectId, board);
+    topbar.classList.toggle("topbar--voice-commands-on", showVoiceCommands);
+    topbar.classList.toggle("topbar--voice-commands-off", !showVoiceCommands);
+    const existing = document.getElementById("voiceCommandBtn");
+    if (!showVoiceCommands) {
+        existing?.remove();
+        return;
+    }
+    if (!existing) {
+        topbar.querySelector(".search-input-wrapper")?.insertAdjacentHTML("beforebegin", renderVoiceCommandTriggerHtml());
+    }
+    bindVoiceCommandButton();
+}
+on("voiceflow:enabled-changed", syncVoiceCommandPreferenceInTopbar);
 /** Older builds stored uppercase `mobileTab_${slug}` values; workflow column_key is store-shaped (lowercase). */
 const LEGACY_MOBILE_TAB_KEYS = {
     BACKLOG: "backlog",
@@ -739,13 +817,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     // Anonymous temporary board: expiresAt set, no creator (pastebin-style). Rename + New Todo without login — see isAnonymousBoard() / backend.
     const isAnonymousTempBoard = isAnonymousBoard(board);
     const { chipsHTML } = computeBoardChipsRender(board, tag || "", sprintId ?? null);
-    const showVoiceCommands = canShowVoiceCommands({
-        projectId,
-        projectSlug: board.project?.slug,
-        role: currentUserProjectRole,
-        isTemporary: isTemporaryBoard(board),
-        isAnonymous: isAnonymousTempBoard,
-    });
+    const showVoiceCommands = canShowVoiceCommandsForBoard(projectId, board);
     // Minimal topbar (used for temporary/anonymous boards): logo, project name, rename (if anonymous temp), New Todo, Settings
     const topbarHTML = buildTopbarHtml({
         board,
@@ -946,51 +1018,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
         newTodoBtn.addEventListener("click", () => openTodoDialog({ mode: "create", role: currentUserProjectRole }));
         newTodoBtn[BOUND_FLAG] = true;
     }
-    const voiceCommandBtn = document.getElementById("voiceCommandBtn");
-    if (voiceCommandBtn && !voiceCommandBtn[BOUND_FLAG]) {
-        voiceCommandBtn.addEventListener("click", async () => {
-            const openingContext = getVoiceCommandContext();
-            if (!canUseVoiceCommandContext(openingContext)) {
-                showToast("Commands are unavailable for this board");
-                return;
-            }
-            const initialProjectId = openingContext.projectId;
-            const initialProjectSlug = openingContext.projectSlug;
-            try {
-                const { openVoiceCommandDialog } = await import("../voice/flow.js");
-                const latestContext = getVoiceCommandContext();
-                if (!canUseVoiceCommandContext(latestContext)
-                    || latestContext.projectId !== initialProjectId
-                    || latestContext.projectSlug !== initialProjectSlug) {
-                    showToast("The board changed before commands opened");
-                    return;
-                }
-                openVoiceCommandDialog({
-                    initialProjectId,
-                    initialProjectSlug,
-                    getContext: getVoiceCommandContext,
-                    refreshBoard: async () => {
-                        const context = getVoiceCommandContext();
-                        if (!context || context.projectId !== initialProjectId || context.projectSlug !== initialProjectSlug)
-                            return;
-                        await loadBoardBySlug(context.projectSlug, getTag(), getSearch(), getSprintIdFromUrl());
-                    },
-                    openTodo: async (localId) => {
-                        const context = getVoiceCommandContext();
-                        if (!context || context.projectId !== initialProjectId || context.projectSlug !== initialProjectSlug)
-                            return;
-                        navigate(`/${context.projectSlug}/t/${localId}`);
-                    },
-                    recordMutation: recordLocalMutation,
-                    showMessage: showToast,
-                });
-            }
-            catch (err) {
-                showToast(err?.message || "Commands failed to load");
-            }
-        });
-        voiceCommandBtn[BOUND_FLAG] = true;
-    }
+    bindVoiceCommandButton();
     // Setup manage members button event listener (extracted for reuse)
     const setupManageMembersButton = (projId, projectName) => {
         const btn = document.getElementById("manageMembersBtn");

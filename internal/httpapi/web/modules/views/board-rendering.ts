@@ -57,6 +57,10 @@ type BuildBoardColumnsHtmlArgs = {
   cardOpts: RenderTodoCardOpts;
 };
 
+export function renderVoiceCommandTriggerHtml(): string {
+  return `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="VoiceFlow" title="VoiceFlow"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>`;
+}
+
 export function getBoardColumns(board: Board): BoardColumn[] {
   const order = (board as any).columnOrder as Array<{ key: string; name: string; color?: string; isDone?: boolean }> | undefined;
   if (order && order.length > 0) {
@@ -251,10 +255,12 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
     user,
     backLabel,
   } = args;
+  const voiceCommandClass = showVoiceCommands ? "topbar--voice-commands-on" : "topbar--voice-commands-off";
+  const voiceCommandTriggerHTML = showVoiceCommands ? renderVoiceCommandTriggerHtml() : "";
 
   if (minimalTopbar) {
     return `
-      <div class="topbar">
+      <div class="topbar ${voiceCommandClass}">
         <div class="brand">
           <button class="brand-link" id="brandLink" style="background: none; border: none; padding: 0; cursor: pointer;">
             <img src="/scrumboytext.png" alt="Scrumboy" class="brand-text" />
@@ -265,7 +271,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
           : ''}
         <div class="brand">${escapeHTML(board.project.name)}</div>
         <div class="spacer"></div>
-        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="VoiceFlow" title="VoiceFlow"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>` : ''}
+        ${voiceCommandTriggerHTML}
         <div class="search-input-wrapper">
           <input
             type="text"
@@ -289,7 +295,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
   }
 
   return `
-      <div class="topbar">
+      <div class="topbar ${voiceCommandClass}">
         <button class="btn btn--ghost" id="backBtn">${escapeHTML(backLabel)}</button>
         ${isAnonymousTempBoard
           ? (board.project.image ? `<img src="${escapeHTML(board.project.image)}" alt="" class="project-image-topbar" style="width: 32px; height: 32px; pointer-events: none; flex-shrink: 0;" />` : `<span class="project-image-topbar-placeholder" style="width: 32px; height: 32px; flex-shrink: 0;">📷</span>`)
@@ -298,7 +304,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
           </button>`}
         <div class="brand">${escapeHTML(board.project.name)}</div>
         <div class="spacer"></div>
-        ${showVoiceCommands ? `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="VoiceFlow" title="VoiceFlow"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>` : ''}
+        ${voiceCommandTriggerHTML}
         <div class="search-input-wrapper">
           <input
             type="text"
