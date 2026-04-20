@@ -1,10 +1,11 @@
 import { normalizeLookup } from './normalize.js';
 
 export type VoiceConfirmation = "yes" | "no" | "cancel";
+export type VoiceDisambiguationChoice = "option_1" | "option_2" | "option_3";
 
 export const ENTITY_ALIASES = new Set(["story", "stories", "todo", "todos", "to do", "to dos"]);
 
-export const ENTITY_ALIAS_PATTERN = "(story|stories|todo|todos|to[-\\s]+dos|to[-\\s]+do)";
+export const ENTITY_ALIAS_PATTERN = "(?:story|stories|todo|todos|to[-\\s]+dos|to[-\\s]+do)";
 
 export const BUILTIN_STATUS_ALIASES: Array<[string, string]> = [
   ["backlog", "backlog"],
@@ -20,6 +21,23 @@ export const BUILTIN_STATUS_ALIASES: Array<[string, string]> = [
 const YES_ALIASES = new Set(["yes", "yeah", "yep"]);
 const NO_ALIASES = new Set(["no", "nope", "nah"]);
 const CANCEL_ALIASES = new Set(["cancel", "stop"]);
+const DISAMBIGUATION_ALIASES = new Map<string, VoiceDisambiguationChoice>([
+  ["first one", "option_1"],
+  ["number one", "option_1"],
+  ["option one", "option_1"],
+  ["one", "option_1"],
+  ["1", "option_1"],
+  ["second one", "option_2"],
+  ["number two", "option_2"],
+  ["option two", "option_2"],
+  ["two", "option_2"],
+  ["2", "option_2"],
+  ["third one", "option_3"],
+  ["number three", "option_3"],
+  ["option three", "option_3"],
+  ["three", "option_3"],
+  ["3", "option_3"],
+]);
 
 export function normalizeEntityAlias(input: string): "todo" | null {
   return ENTITY_ALIASES.has(normalizeLookup(input)) ? "todo" : null;
@@ -31,4 +49,13 @@ export function normalizeConfirmationResponse(input: string): VoiceConfirmation 
   if (NO_ALIASES.has(normalized)) return "no";
   if (CANCEL_ALIASES.has(normalized)) return "cancel";
   return null;
+}
+
+export function isBuiltinStatusPhrase(input: string): boolean {
+  const normalized = normalizeLookup(input);
+  return BUILTIN_STATUS_ALIASES.some(([alias]) => normalizeLookup(alias) === normalized);
+}
+
+export function normalizeDisambiguationChoice(input: string): VoiceDisambiguationChoice | null {
+  return DISAMBIGUATION_ALIASES.get(normalizeLookup(input)) ?? null;
 }

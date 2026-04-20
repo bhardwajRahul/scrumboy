@@ -1,9 +1,10 @@
-import type { Board, Todo } from '../types.js';
+import type { Board } from '../types.js';
 import type { BoardMember } from '../state/state.js';
 import { normalizeLookup } from './normalize.js';
-import { commandFailure, isCommandFailure, validateCommandIR, type CommandIR, type CommandResult, type ParsedCommandDraft, type ResolvedCommand } from './schema.js';
+import { commandFailure, isCommandFailure, validateCommandIR, type CommandFailure, type CommandIR, type CommandResult, type ParsedCommandDraft, type ResolvedCommand } from './schema.js';
 import type { McpToolName } from './mcp-client.js';
 import { BUILTIN_STATUS_ALIASES } from './vocabulary.js';
+import { resolveTodoTarget } from './target-resolver.js';
 
 export type ResolveContext = {
   projectId: number;
@@ -15,12 +16,12 @@ export type ResolveContext = {
 
 type LaneRef = { key: string; name: string; isDone: boolean };
 
-type TodoGetResponse = {
-  todo?: Todo;
-};
-
 type MembersListResponse = {
   items?: BoardMember[];
+};
+
+export type ResolveCommandOptions = {
+  selectedLocalId?: number;
 };
 
 function boardLanes(board: Board): LaneRef[] {
@@ -36,36 +37,6 @@ function boardLanes(board: Board): LaneRef[] {
     name: key.replace(/_/g, " "),
     isDone: key === "done",
   }));
-}
-
-function findTodoInBoard(board: Board, localId: number): Todo | null {
-  for (const todos of Object.values(board.columns ?? {})) {
-    const found = todos.find((todo) => todo.localId === localId);
-    if (found) return found;
-  }
-  return null;
-}
-
-async function resolveTodo(localId: number, context: ResolveContext): Promise<CommandResult<Todo>> {
-  const fromBoard = findTodoInBoard(context.board, localId);
-  if (fromBoard) return { ok: true, value: fromBoard };
-
-  if (!context.callTool) {
-    return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
-  }
-
-  try {
-    const data = await context.callTool<TodoGetResponse>("todos.get", {
-      projectSlug: context.projectSlug,
-      localId,
-    });
-    if (data?.todo?.localId === localId) {
-      return { ok: true, value: data.todo };
-    }
-    return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
-  } catch {
-    return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
-  }
 }
 
 function addAlias(aliases: Map<string, Set<LaneRef>>, alias: string, lane: LaneRef): void {
@@ -159,7 +130,27 @@ function validateResolvedIR(ir: CommandIR, context: ResolveContext): CommandResu
   });
 }
 
-export async function resolveCommandDraft(draft: ParsedCommandDraft, context: ResolveContext): Promise<CommandResult<ResolvedCommand>> {
+function withDraft(failure: CommandFailure, draft: ParsedCommandDraft): CommandFailure {
+  return { ...failure, draft };
+}
+
+async function resolveDraftTarget(draft: Exclude<ParsedCommandDraft, { intent: "todos.create" }>, context: ResolveContext, options: ResolveCommandOptions) {
+  const resolved = await resolveTodoTarget(draft.target, {
+    projectSlug: context.projectSlug,
+    board: context.board,
+    callTool: context.callTool,
+  }, options.selectedLocalId);
+  if (isCommandFailure(resolved)) {
+    return resolved.code === "ambiguous_story" ? withDraft(resolved, draft) : resolved;
+  }
+  return resolved;
+}
+
+export async function resolveCommandDraft(
+  draft: ParsedCommandDraft,
+  context: ResolveContext,
+  options: ResolveCommandOptions = {},
+): Promise<CommandResult<ResolvedCommand>> {
   if (draft.intent === "todos.create") {
     const ir: CommandIR = {
       intent: "todos.create",
@@ -181,15 +172,15 @@ export async function resolveCommandDraft(draft: ParsedCommandDraft, context: Re
     };
   }
 
-  const todo = await resolveTodo(draft.localId, context);
-  if (isCommandFailure(todo)) return todo;
-
   if (draft.intent === "open_todo") {
+    const target = await resolveDraftTarget(draft, context, options);
+    if (isCommandFailure(target)) return target;
+    const todo = target.value.todo;
     const ir: CommandIR = {
       intent: "open_todo",
       projectId: context.projectId,
       projectSlug: context.projectSlug,
-      entities: { localId: draft.localId },
+      entities: { localId: todo.localId },
     };
     const validated = validateResolvedIR(ir, context);
     if (isCommandFailure(validated)) return validated;
@@ -197,21 +188,24 @@ export async function resolveCommandDraft(draft: ParsedCommandDraft, context: Re
       ok: true,
       value: {
         ir: validated.value,
-        summary: `Open todo #${draft.localId}: ${todo.value.title}`,
+        summary: `Open todo #${todo.localId}: ${todo.title}`,
         confirmLabel: "Open",
         danger: false,
-        requiresConfirmation: !!draft.ambiguousId,
-        storyTitle: todo.value.title,
+        requiresConfirmation: !!target.value.ambiguousId,
+        storyTitle: todo.title,
       },
     };
   }
 
   if (draft.intent === "todos.delete") {
+    const target = await resolveDraftTarget(draft, context, options);
+    if (isCommandFailure(target)) return target;
+    const todo = target.value.todo;
     const ir: CommandIR = {
       intent: "todos.delete",
       projectId: context.projectId,
       projectSlug: context.projectSlug,
-      entities: { localId: draft.localId },
+      entities: { localId: todo.localId },
     };
     const validated = validateResolvedIR(ir, context);
     if (isCommandFailure(validated)) return validated;
@@ -219,11 +213,11 @@ export async function resolveCommandDraft(draft: ParsedCommandDraft, context: Re
       ok: true,
       value: {
         ir: validated.value,
-        summary: `Delete todo #${draft.localId}: ${todo.value.title}`,
+        summary: `Delete todo #${todo.localId}: ${todo.title}`,
         confirmLabel: "Delete",
         danger: true,
         requiresConfirmation: true,
-        storyTitle: todo.value.title,
+        storyTitle: todo.title,
       },
     };
   }
@@ -231,11 +225,14 @@ export async function resolveCommandDraft(draft: ParsedCommandDraft, context: Re
   if (draft.intent === "todos.move") {
     const lane = resolveStatus(draft.rawStatus, context.board);
     if (isCommandFailure(lane)) return lane;
+    const target = await resolveDraftTarget(draft, context, options);
+    if (isCommandFailure(target)) return target;
+    const todo = target.value.todo;
     const ir: CommandIR = {
       intent: "todos.move",
       projectId: context.projectId,
       projectSlug: context.projectSlug,
-      entities: { localId: draft.localId, toColumnKey: lane.value.key },
+      entities: { localId: todo.localId, toColumnKey: lane.value.key },
     };
     const validated = validateResolvedIR(ir, context);
     if (isCommandFailure(validated)) return validated;
@@ -243,11 +240,11 @@ export async function resolveCommandDraft(draft: ParsedCommandDraft, context: Re
       ok: true,
       value: {
         ir: validated.value,
-        summary: `Move todo #${draft.localId}: ${todo.value.title} to ${lane.value.name}`,
+        summary: `Move todo #${todo.localId}: ${todo.title} to ${lane.value.name}`,
         confirmLabel: "Move",
         danger: false,
         requiresConfirmation: true,
-        storyTitle: todo.value.title,
+        storyTitle: todo.title,
         statusName: lane.value.name,
       },
     };
@@ -255,11 +252,14 @@ export async function resolveCommandDraft(draft: ParsedCommandDraft, context: Re
 
   const member = await resolveMember(draft.rawUser, context);
   if (isCommandFailure(member)) return member;
+  const target = await resolveDraftTarget(draft, context, options);
+  if (isCommandFailure(target)) return target;
+  const todo = target.value.todo;
   const ir: CommandIR = {
     intent: "todos.assign",
     projectId: context.projectId,
     projectSlug: context.projectSlug,
-    entities: { localId: draft.localId, assigneeUserId: member.value.userId },
+    entities: { localId: todo.localId, assigneeUserId: member.value.userId },
   };
   const validated = validateResolvedIR(ir, context);
   if (isCommandFailure(validated)) return validated;
@@ -267,11 +267,11 @@ export async function resolveCommandDraft(draft: ParsedCommandDraft, context: Re
     ok: true,
     value: {
       ir: validated.value,
-      summary: `Assign todo #${draft.localId}: ${todo.value.title} to ${member.value.name || member.value.email}`,
+      summary: `Assign todo #${todo.localId}: ${todo.title} to ${member.value.name || member.value.email}`,
       confirmLabel: "Assign",
       danger: false,
       requiresConfirmation: true,
-      storyTitle: todo.value.title,
+      storyTitle: todo.title,
       assigneeName: member.value.name || member.value.email,
     },
   };

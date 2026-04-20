@@ -74,6 +74,10 @@ export function normalizeLookup(input: string): string {
     .trim();
 }
 
+export function normalizeTitleReference(input: string): string {
+  return normalizeLookup(input);
+}
+
 export function stripWrappingQuotes(input: string): string {
   const trimmed = input.trim();
   if (trimmed.length >= 2) {

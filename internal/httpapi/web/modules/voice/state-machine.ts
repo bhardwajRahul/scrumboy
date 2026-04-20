@@ -1,7 +1,11 @@
 export type VoiceInteractionState =
   | "idle"
   | "listening_command"
+  | "resolving_target"
   | "parsed"
+  | "disambiguation_prompt"
+  | "listening_disambiguation"
+  | "resolved_target"
   | "showing_feedback_or_confirmation"
   | "speaking_confirmation"
   | "listening_confirmation"
@@ -12,7 +16,11 @@ export type VoiceInteractionState =
 
 export type VoiceInteractionEvent =
   | "start_command"
+  | "resolve_target"
   | "parsed"
+  | "prompt_disambiguation"
+  | "listen_disambiguation"
+  | "target_resolved"
   | "show_feedback"
   | "speak_confirmation"
   | "listen_confirmation"
@@ -33,16 +41,24 @@ export function transitionVoiceInteractionState(
   switch (event) {
     case "start_command":
       return "listening_command";
+    case "resolve_target":
+      return state === "idle" || state === "listening_command" || state === "parsed" ? "resolving_target" : state;
     case "parsed":
-      return state === "listening_command" ? "parsed" : state;
+      return state === "listening_command" || state === "resolving_target" ? "parsed" : state;
+    case "prompt_disambiguation":
+      return state === "resolving_target" || state === "listening_command" || state === "parsed" ? "disambiguation_prompt" : state;
+    case "listen_disambiguation":
+      return state === "disambiguation_prompt" || state === "listening_disambiguation" ? "listening_disambiguation" : state;
+    case "target_resolved":
+      return state === "resolving_target" || state === "disambiguation_prompt" || state === "listening_disambiguation" ? "resolved_target" : state;
     case "show_feedback":
-      return state === "parsed" ? "showing_feedback_or_confirmation" : state;
+      return state === "parsed" || state === "resolved_target" ? "showing_feedback_or_confirmation" : state;
     case "speak_confirmation":
       return state === "showing_feedback_or_confirmation" || state === "listening_confirmation" ? "speaking_confirmation" : state;
     case "listen_confirmation":
       return state === "speaking_confirmation" ? "listening_confirmation" : state;
     case "execute":
-      return state === "parsed" || state === "showing_feedback_or_confirmation" || state === "listening_confirmation" ? "executing" : state;
+      return state === "parsed" || state === "resolved_target" || state === "showing_feedback_or_confirmation" || state === "listening_confirmation" ? "executing" : state;
     default:
       return state;
   }

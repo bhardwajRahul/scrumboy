@@ -1451,7 +1451,43 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   line-height: 1.45;
 }
 
+.voice-command__disambiguation {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-8);
+  background: rgba(255, 255, 255, 0.03);
+  padding: var(--s-10) 12px;
+  line-height: 1.45;
+}
+
+.voice-command__disambiguation-title {
+  font-weight: 700;
+  margin-bottom: var(--s-8);
+}
+
+.voice-command__candidate-list {
+  display: grid;
+  gap: var(--s-6);
+}
+
+.voice-command__candidate {
+  width: 100%;
+  min-height: 36px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-8);
+  background: var(--panel2);
+  color: var(--text);
+  padding: var(--s-8) 10px;
+  cursor: pointer;
+}
+
+.voice-command__candidate:hover,
+.voice-command__candidate:focus-visible {
+  border-color: var(--accent);
+}
+
 .voice-command__summary[hidden],
+.voice-command__disambiguation[hidden],
 .voice-command__speech[hidden],
 .voice-command__confirmation-policy[hidden] {
   display: none;
