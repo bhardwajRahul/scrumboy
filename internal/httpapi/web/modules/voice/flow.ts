@@ -26,8 +26,9 @@ import {
   type CommandResult,
   type ParsedCommandDraft,
   type ResolvedCommand,
+  type TodoTargetCandidate,
 } from './schema.js';
-import { normalizeConfirmationResponse, type VoiceConfirmation } from './vocabulary.js';
+import { normalizeConfirmationResponse, normalizeDisambiguationChoice, type VoiceConfirmation, type VoiceDisambiguationChoice } from './vocabulary.js';
 
 export type VoiceCommandDialogContext = {
   projectId: number;
@@ -57,6 +58,17 @@ type ParsedDraftAlternative = {
   draft: ParsedCommandDraft;
 };
 
+type TargetSelection = {
+  selectedLocalId?: number;
+  allowedLocalIds?: number[];
+};
+
+type PendingDisambiguation = {
+  transcript: string;
+  draft: ParsedCommandDraft;
+  candidates: TodoTargetCandidate[];
+};
+
 const CONFIRM_DELETES_LABEL = "Confirm only deletes";
 const CONFIRM_MUTATIONS_LABEL = "Confirm every action before execution";
 
@@ -70,6 +82,21 @@ function commandHash(command: ResolvedCommand): string {
 
 function draftHash(draft: ParsedCommandDraft): string {
   return JSON.stringify(draft);
+}
+
+function isTargetAmbiguity(result: CommandFailure): result is CommandFailure & { candidates: TodoTargetCandidate[]; draft: ParsedCommandDraft } {
+  return result.code === "ambiguous_story" && Array.isArray(result.candidates) && result.candidates.length > 0 && !!result.draft;
+}
+
+function choiceIndex(choice: VoiceDisambiguationChoice): number {
+  switch (choice) {
+    case "option_1":
+      return 0;
+    case "option_2":
+      return 1;
+    case "option_3":
+      return 2;
+  }
 }
 
 function dedupeAlternatives(alternatives: string[]): string[] {
@@ -131,6 +158,7 @@ async function resolveParsedDraft(
   draft: ParsedCommandDraft,
   context: VoiceCommandDialogContext,
   signal?: AbortSignal,
+  targetSelection: TargetSelection = {},
 ): Promise<CommandResult<ResolvedCommand>> {
   return resolveCommandDraft(draft, {
     projectId: context.projectId,
@@ -138,19 +166,20 @@ async function resolveParsedDraft(
     board: context.board,
     members: context.members,
     callTool: (tool, input) => callMcpTool(tool, input, { signal }),
-  });
+  }, targetSelection);
 }
 
 export async function parseAndResolveCommand(
   transcript: string,
   options: OpenVoiceCommandOptions,
   signal?: AbortSignal,
+  targetSelection: TargetSelection = {},
 ): Promise<CommandResult<ResolvedCommand>> {
   const context = getActiveContext(options);
   if (isCommandFailure(context)) return context;
   const parsed = parseCommand(transcript);
   if (isCommandFailure(parsed)) return parsed;
-  const resolved = await resolveParsedDraft(parsed.value, context.value, signal);
+  const resolved = await resolveParsedDraft(parsed.value, context.value, signal, targetSelection);
   if (isCommandFailure(resolved)) return resolved;
   if (!canRunResolvedCommand(context.value, resolved.value)) {
     return commandFailure("unauthorized", "Only maintainers can run mutating commands.");
@@ -189,7 +218,7 @@ export async function parseAlternatives(
 
   if (first.draft.intent === "todos.create") {
     const resolved = await resolveParsedDraft(first.draft, context.value, signal);
-    if (isCommandFailure(resolved)) return resolved;
+    if (isCommandFailure(resolved)) return { ...resolved, transcript: first.draft.display };
     if (!canRunResolvedCommand(context.value, resolved.value)) {
       return commandFailure("unauthorized", "Only maintainers can run mutating commands.");
     }
@@ -207,7 +236,7 @@ export async function parseAlternatives(
 
     const resolved = await resolveParsedDraft(candidate.draft, context.value, signal);
     if (isCommandFailure(resolved)) {
-      if (!firstResolvedFailure) firstResolvedFailure = resolved;
+      if (!firstResolvedFailure) firstResolvedFailure = { ...resolved, transcript: candidate.draft.display };
       continue;
     }
     if (!canRunResolvedCommand(context.value, resolved.value)) {
@@ -248,6 +277,25 @@ export function parseConfirmationAlternatives(alternatives: string[]): CommandRe
     return commandFailure("unsupported", "Confirmation was ambiguous.");
   }
   return commandFailure("unsupported", "Please say yes or no.");
+}
+
+export function parseDisambiguationAlternatives(alternatives: string[], candidateCount: number): CommandResult<number> {
+  const choices: number[] = [];
+  for (const transcript of dedupeAlternatives(alternatives)) {
+    const choice = normalizeDisambiguationChoice(transcript);
+    if (!choice) continue;
+    const index = choiceIndex(choice);
+    if (index < candidateCount && !choices.includes(index)) {
+      choices.push(index);
+    }
+  }
+  if (choices.length === 1) {
+    return { ok: true, value: choices[0] };
+  }
+  if (choices.length > 1) {
+    return commandFailure("unsupported", "Choice was ambiguous.");
+  }
+  return commandFailure("unsupported", "Please say one, two, or three.");
 }
 
 function createDialog(): HTMLDialogElement {
@@ -292,6 +340,7 @@ function createDialog(): HTMLDialogElement {
       </div>
 
       <div class="voice-command__summary" id="voiceSummary" hidden></div>
+      <div class="voice-command__disambiguation" id="voiceDisambiguation" hidden></div>
 
       <div class="dialog__footer">
         <div class="spacer"></div>
@@ -329,6 +378,7 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   const reviewBtn = dialog.querySelector<HTMLButtonElement>("#voiceReviewBtn");
   const executeBtn = dialog.querySelector<HTMLButtonElement>("#voiceExecuteBtn");
   const summary = dialog.querySelector<HTMLElement>("#voiceSummary");
+  const disambiguation = dialog.querySelector<HTMLElement>("#voiceDisambiguation");
   const listenStatus = dialog.querySelector<HTMLElement>("#voiceListenStatus");
   const reviewStatus = dialog.querySelector<HTMLElement>("#voiceReviewStatus");
   const stateEl = dialog.querySelector<HTMLElement>("#voiceFlowState");
@@ -337,6 +387,8 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   let handsFreeConfirmation: VoiceFlowHandsFreeConfirmation = getVoiceFlowHandsFreeConfirmationPreference();
   let flowState: VoiceInteractionState = "idle";
   let currentCommand: ResolvedCommand | null = null;
+  let pendingDisambiguation: PendingDisambiguation | null = null;
+  let currentTargetSelection: { transcript: string; localId: number; allowedLocalIds: number[] } | null = null;
   let executing = false;
   let closed = false;
   let listenStoppedByUser = false;
@@ -344,6 +396,9 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   let listenController: AbortController | null = null;
   let reviewController: AbortController | null = null;
   let executeController: AbortController | null = null;
+
+  const isActiveHandsFreeRun = (controller: AbortController): boolean =>
+    !closed && !controller.signal.aborted && listenController === controller;
 
   const safeSetText = (el: Element | null, text: string) => {
     if (!closed) setText(el, text);
@@ -365,6 +420,53 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
 
   const clearResolved = () => {
     currentCommand = null;
+    pendingDisambiguation = null;
+    currentTargetSelection = null;
+    if (summary) {
+      summary.hidden = true;
+      summary.textContent = "";
+    }
+    if (disambiguation) {
+      disambiguation.hidden = true;
+      disambiguation.replaceChildren();
+    }
+    if (executeBtn) {
+      executeBtn.disabled = true;
+      executeBtn.classList.remove("btn--danger");
+      executeBtn.textContent = "Execute";
+    }
+  };
+
+  const renderDisambiguation = (pending: PendingDisambiguation) => {
+    if (!disambiguation) return;
+    disambiguation.replaceChildren();
+    const title = document.createElement("div");
+    title.className = "voice-command__disambiguation-title";
+    title.textContent = "Which one?";
+    disambiguation.appendChild(title);
+    const list = document.createElement("div");
+    list.className = "voice-command__candidate-list";
+    pending.candidates.slice(0, 3).forEach((candidate, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "voice-command__candidate";
+      button.dataset.index = String(index);
+      button.textContent = `${index + 1}. #${candidate.localId} ${candidate.title}`;
+      list.appendChild(button);
+    });
+    disambiguation.appendChild(list);
+    disambiguation.hidden = false;
+  };
+
+  const showTargetAmbiguity = (failure: CommandFailure, transcriptValue: string): boolean => {
+    if (!isTargetAmbiguity(failure)) return false;
+    pendingDisambiguation = {
+      transcript: failure.transcript || transcriptValue,
+      draft: failure.draft,
+      candidates: failure.candidates.slice(0, 3),
+    };
+    currentCommand = null;
+    currentTargetSelection = null;
     if (summary) {
       summary.hidden = true;
       summary.textContent = "";
@@ -374,6 +476,10 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
       executeBtn.classList.remove("btn--danger");
       executeBtn.textContent = "Execute";
     }
+    renderDisambiguation(pendingDisambiguation);
+    safeSetText(reviewStatus, failure.message);
+    setFlowState("prompt_disambiguation");
+    return true;
   };
 
   const close = () => {
@@ -428,6 +534,11 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   const applyResolved = (resolved: ResolvedCommand) => {
     if (closed) return;
     currentCommand = resolved;
+    pendingDisambiguation = null;
+    if (disambiguation) {
+      disambiguation.hidden = true;
+      disambiguation.replaceChildren();
+    }
     safeSetText(summary, resolved.summary);
     if (summary) summary.hidden = false;
     if (executeBtn) {
@@ -445,14 +556,17 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     clearResolved();
     const value = transcript?.value.trim() ?? "";
     safeSetText(reviewStatus, "Reviewing...");
+    setFlowState("resolve_target");
     try {
       const resolved = await parseAndResolveCommand(value, options, controller.signal);
       if (closed || controller.signal.aborted || reviewController !== controller) return;
       if (isCommandFailure(resolved)) {
+        if (showTargetAmbiguity(resolved, value)) return;
         safeSetText(reviewStatus, resolved.message);
         return;
       }
       applyResolved(resolved.value);
+      setFlowState("target_resolved");
     } finally {
       if (reviewController === controller) reviewController = null;
     }
@@ -465,9 +579,16 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
       return false;
     }
     const value = transcript?.value.trim() ?? "";
-    const resolved = await parseAndResolveCommand(value, options, controller.signal);
+    const selection = currentTargetSelection?.transcript === value
+      ? {
+          selectedLocalId: currentTargetSelection.localId,
+          allowedLocalIds: currentTargetSelection.allowedLocalIds,
+        }
+      : {};
+    const resolved = await parseAndResolveCommand(value, options, controller.signal, selection);
     if (closed || controller.signal.aborted || executeController !== controller) return false;
     if (isCommandFailure(resolved)) {
+      if (showTargetAmbiguity(resolved, value)) return false;
       safeSetText(reviewStatus, resolved.message);
       return false;
     }
@@ -486,6 +607,28 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     if (closed || controller.signal.aborted || executeController !== controller) return false;
     lastExecutedHash = nextHash;
     return true;
+  };
+
+  const resolvePendingDisambiguation = async (index: number, controller: AbortController): Promise<ResolvedCommand | null> => {
+    const pending = pendingDisambiguation;
+    if (!pending || index < 0 || index >= pending.candidates.length) return null;
+    const candidate = pending.candidates[index];
+    const allowedLocalIds = pending.candidates.map((item) => item.localId);
+    if (!allowedLocalIds.includes(candidate.localId)) return null;
+    const resolved = await parseAndResolveCommand(pending.transcript, options, controller.signal, {
+      selectedLocalId: candidate.localId,
+      allowedLocalIds,
+    });
+    if (closed || controller.signal.aborted || pendingDisambiguation !== pending) return null;
+    if (isCommandFailure(resolved)) {
+      safeSetText(reviewStatus, resolved.message);
+      return null;
+    }
+    if (transcript) transcript.value = pending.transcript;
+    currentTargetSelection = { transcript: pending.transcript, localId: candidate.localId, allowedLocalIds };
+    setFlowState("target_resolved");
+    applyResolved(resolved.value);
+    return resolved.value;
   };
 
   const runHandsFreeConfirmation = async (resolved: ResolvedCommand, controller: AbortController): Promise<boolean> => {
@@ -514,6 +657,35 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
     return false;
   };
 
+  const speakDisambiguationPrompt = async (pending: PendingDisambiguation, controller: AbortController): Promise<void> => {
+    const optionsText = pending.candidates
+      .map((candidate, index) => `Option ${index + 1}: ${candidate.title}`)
+      .join(". ");
+    safeSetText(reviewStatus, "Which one?");
+    await speak(`Which one? ${optionsText}.`, { signal: controller.signal });
+  };
+
+  const runHandsFreeDisambiguation = async (failure: CommandFailure, fallbackTranscript: string, controller: AbortController): Promise<ResolvedCommand | null> => {
+    if (!showTargetAmbiguity(failure, fallbackTranscript) || !pendingDisambiguation) return null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      setFlowState("listen_disambiguation");
+      await speakDisambiguationPrompt(pendingDisambiguation, controller);
+      if (!isActiveHandsFreeRun(controller)) return null;
+      safeSetText(listenStatus, "Say one, two, or three");
+      const speech = await startOneShotRecognition({ signal: controller.signal, timeoutMs: 8000 });
+      if (!isActiveHandsFreeRun(controller)) return null;
+      const choice = parseDisambiguationAlternatives(speech.alternatives, pendingDisambiguation.candidates.length);
+      if (isCommandFailure(choice)) {
+        safeSetText(listenStatus, attempt === 0 ? "Please say one, two, or three." : "Choice not understood.");
+        continue;
+      }
+      return resolvePendingDisambiguation(choice.value, controller);
+    }
+    setFlowState("error");
+    safeSetText(reviewStatus, "Choice not understood.");
+    return null;
+  };
+
   const runHandsFreeCommand = async () => {
     listenController?.abort();
     reviewController?.abort();
@@ -532,24 +704,33 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
       if (closed || controller.signal.aborted || listenController !== controller) return;
       const parsed = await parseAlternatives(speech.alternatives, options, controller.signal);
       if (closed || controller.signal.aborted || listenController !== controller) return;
+      let resolvedCommand: ResolvedCommand;
       if (isCommandFailure(parsed)) {
         if (transcript && speech.alternatives[0]) transcript.value = speech.alternatives[0];
-        safeSetText(listenStatus, parsed.message);
-        setFlowState("error");
-        return;
+        const disambiguated = await runHandsFreeDisambiguation(parsed, speech.alternatives[0] || "", controller);
+        if (closed || controller.signal.aborted || listenController !== controller) return;
+        if (!disambiguated) {
+          if (!isTargetAmbiguity(parsed)) safeSetText(listenStatus, parsed.message);
+          setFlowState("error");
+          return;
+        }
+        resolvedCommand = disambiguated;
+      } else {
+        if (transcript) transcript.value = parsed.value.transcript;
+        resolvedCommand = parsed.value.resolved;
+        setFlowState("parsed");
+        applyResolved(resolvedCommand);
+        setFlowState("show_feedback");
       }
-      if (transcript) transcript.value = parsed.value.transcript;
-      setFlowState("parsed");
-      applyResolved(parsed.value.resolved);
-      setFlowState("show_feedback");
-      const shouldConfirm = shouldConfirmHandsFreeCommand(parsed.value.resolved);
+      if (flowState === "resolved_target") setFlowState("show_feedback");
+      const shouldConfirm = shouldConfirmHandsFreeCommand(resolvedCommand);
       if (shouldConfirm) {
-        const confirmed = await runHandsFreeConfirmation(parsed.value.resolved, controller);
+        const confirmed = await runHandsFreeConfirmation(resolvedCommand, controller);
         if (!confirmed) return;
       }
       setFlowState("execute");
       safeSetText(reviewStatus, "Running...");
-      const executed = await executeReviewedCommand(parsed.value.resolved, controller);
+      const executed = await executeReviewedCommand(resolvedCommand, controller);
       if (!executed) return;
       setFlowState("success");
       notify("Command complete");
@@ -597,6 +778,19 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
   reviewBtn?.addEventListener("click", () => {
     void reviewTranscript();
   });
+  disambiguation?.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>(".voice-command__candidate");
+    if (!button) return;
+    const index = Number(button.dataset.index);
+    if (!Number.isInteger(index)) return;
+    reviewController?.abort();
+    const controller = new AbortController();
+    reviewController = controller;
+    safeSetText(reviewStatus, "Resolving...");
+    void resolvePendingDisambiguation(index, controller).finally(() => {
+      if (reviewController === controller) reviewController = null;
+    });
+  });
 
   listenBtn?.addEventListener("click", async () => {
     if (mode === "hands-free") {
@@ -620,6 +814,7 @@ export function openVoiceCommandDialog(options: OpenVoiceCommandOptions): void {
       if (closed || controller.signal.aborted || listenController !== controller) return;
       if (isCommandFailure(parsed)) {
         if (transcript && speech.alternatives[0]) transcript.value = speech.alternatives[0];
+        if (showTargetAmbiguity(parsed, speech.alternatives[0] || "")) return;
         safeSetText(listenStatus, parsed.message);
         return;
       }

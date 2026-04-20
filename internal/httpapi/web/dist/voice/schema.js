@@ -1,5 +1,5 @@
-function fail(code, message) {
-    return { ok: false, code, message };
+function fail(code, message, extra = {}) {
+    return { ok: false, code, message, ...extra };
 }
 function objectKeys(value) {
     if (value === null || typeof value !== "object" || Array.isArray(value))
@@ -89,8 +89,8 @@ export function validateCommandIR(value, context) {
             return fail("invalid_schema", "Command intent is unsupported.");
     }
 }
-export function commandFailure(code, message) {
-    return fail(code, message);
+export function commandFailure(code, message, extra = {}) {
+    return fail(code, message, extra);
 }
 export function isCommandFailure(result) {
     return result.ok === false;
