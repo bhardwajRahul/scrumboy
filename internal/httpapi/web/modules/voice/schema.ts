@@ -2,6 +2,15 @@ import type { Board } from '../types.js';
 
 export type CommandIntent = "todos.create" | "todos.move" | "todos.delete" | "todos.assign" | "open_todo";
 
+export type TodoTargetReference =
+  | { kind: "id"; localId: number; ambiguousId?: boolean; display: string }
+  | { kind: "title"; phrase: string; display: string };
+
+export type TodoTargetCandidate = {
+  localId: number;
+  title: string;
+};
+
 export type CommandIR =
   | {
       intent: "todos.create";
@@ -36,10 +45,10 @@ export type CommandIR =
 
 export type ParsedCommandDraft =
   | { intent: "todos.create"; title: string; display: string }
-  | { intent: "todos.move"; localId: number; rawStatus: string; ambiguousId?: boolean; display: string }
-  | { intent: "todos.delete"; localId: number; ambiguousId?: boolean; display: string }
-  | { intent: "todos.assign"; localId: number; rawUser: string; ambiguousId?: boolean; display: string }
-  | { intent: "open_todo"; localId: number; ambiguousId?: boolean; display: string };
+  | { intent: "todos.move"; target: TodoTargetReference; rawStatus: string; display: string }
+  | { intent: "todos.delete"; target: TodoTargetReference; display: string }
+  | { intent: "todos.assign"; target: TodoTargetReference; rawUser: string; display: string }
+  | { intent: "open_todo"; target: TodoTargetReference; display: string };
 
 export type CommandFailureCode =
   | "unsupported"
@@ -49,6 +58,7 @@ export type CommandFailureCode =
   | "unknown_status"
   | "ambiguous_status"
   | "unknown_story"
+  | "ambiguous_story"
   | "unknown_user"
   | "ambiguous_user"
   | "invalid_schema"
@@ -62,6 +72,9 @@ export type CommandFailure = {
   ok: false;
   code: CommandFailureCode;
   message: string;
+  candidates?: TodoTargetCandidate[];
+  draft?: ParsedCommandDraft;
+  transcript?: string;
 };
 
 export type CommandSuccess<T> = {
@@ -88,8 +101,8 @@ export type ValidationContext = {
   board: Board;
 };
 
-function fail(code: CommandFailureCode, message: string): CommandFailure {
-  return { ok: false, code, message };
+function fail(code: CommandFailureCode, message: string, extra: Partial<CommandFailure> = {}): CommandFailure {
+  return { ok: false, code, message, ...extra };
 }
 
 function objectKeys(value: unknown): string[] | null {
@@ -183,8 +196,8 @@ export function validateCommandIR(value: unknown, context: ValidationContext): C
   }
 }
 
-export function commandFailure(code: CommandFailureCode, message: string): CommandFailure {
-  return fail(code, message);
+export function commandFailure(code: CommandFailureCode, message: string, extra: Partial<CommandFailure> = {}): CommandFailure {
+  return fail(code, message, extra);
 }
 
 export function isCommandFailure<T>(result: CommandResult<T>): result is CommandFailure {

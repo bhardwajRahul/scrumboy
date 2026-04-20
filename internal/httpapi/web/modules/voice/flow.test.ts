@@ -23,6 +23,7 @@ import {
   parseAlternatives,
   parseAndResolveCommand,
   parseConfirmationAlternatives,
+  parseDisambiguationAlternatives,
   type OpenVoiceCommandOptions,
   type VoiceCommandDialogContext,
 } from './flow.js';
@@ -59,6 +60,20 @@ function makeBoard(overrides: Partial<Board> = {}): Board {
   };
 }
 
+function makeAmbiguousLoginBoard(): Board {
+  return makeBoard({
+    columns: {
+      backlog: [
+        { id: 1, localId: 12, title: 'Fix login redirect', status: 'backlog' },
+        { id: 2, localId: 13, title: 'Fix login validation', status: 'backlog' },
+        { id: 3, localId: 14, title: 'Fix login button style', status: 'backlog' },
+      ],
+      doing: [],
+      done: [],
+    },
+  });
+}
+
 function makeContext(board = makeBoard()): VoiceCommandDialogContext {
   return {
     projectId: 1,
@@ -82,7 +97,7 @@ function makeOptions(getContext: () => VoiceCommandDialogContext | null): OpenVo
 }
 
 async function flushAsync(): Promise<void> {
-  for (let i = 0; i < 14; i += 1) {
+  for (let i = 0; i < 30; i += 1) {
     await Promise.resolve();
   }
 }
@@ -189,6 +204,31 @@ describe('voice command flow', () => {
     }
   });
 
+  it('accepts title speech alternatives that resolve to the same command IR', async () => {
+    const board = makeBoard({
+      columns: {
+        backlog: [{ id: 11, localId: 11, title: 'Little Duck', status: 'backlog' }],
+        doing: [],
+        done: [],
+      },
+    });
+
+    const result = await parseAlternatives([
+      'move little duck to in progress',
+      'move Little Duck to doing',
+    ], makeOptions(() => makeContext(board)));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.transcript).toBe('move todo little duck to in progress');
+      expect(result.value.resolved.ir).toMatchObject({
+        intent: 'todos.move',
+        entities: { localId: 11, toColumnKey: 'doing' },
+      });
+      expect(result.value.resolved.summary).toBe('Move todo #11: Little Duck to In Progress');
+    }
+  });
+
   it('rejects structured alternatives that resolve to different command IRs', async () => {
     const board = makeBoard({
       columnOrder: [
@@ -235,6 +275,24 @@ describe('voice command flow', () => {
     expect(callMcpToolMock).toHaveBeenCalledWith('todos.get', { projectSlug: 'alpha', localId: 99 }, { signal: undefined });
   });
 
+  it('rejects title alternatives that resolve to different command IRs', async () => {
+    const getContext = vi.fn(() => makeContext(makeAmbiguousLoginBoard()));
+
+    const result = await parseAlternatives([
+      'open login redirect',
+      'open login validation',
+    ], makeOptions(getContext));
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'unsupported',
+      message: 'Speech matched more than one command. Review the text and try again.',
+    });
+    expect(getContext).toHaveBeenCalledTimes(1);
+    expect(callMcpToolMock).toHaveBeenCalledWith('todos.search', { projectSlug: 'alpha', query: 'login redirect', limit: 10 }, { signal: undefined });
+    expect(callMcpToolMock).toHaveBeenCalledWith('todos.search', { projectSlug: 'alpha', query: 'login validation', limit: 10 }, { signal: undefined });
+  });
+
   it('normalizes to do speech alternatives into canonical todo text', async () => {
     const options = makeOptions(() => makeContext());
 
@@ -273,6 +331,22 @@ describe('voice command flow', () => {
       message: 'Confirmation was ambiguous.',
     });
     expect(parseConfirmationAlternatives(['maybe']).ok).toBe(false);
+  });
+
+  it('normalizes constrained disambiguation alternatives only', () => {
+    expect(parseDisambiguationAlternatives(['first one'], 3)).toEqual({ ok: true, value: 0 });
+    expect(parseDisambiguationAlternatives(['number two'], 3)).toEqual({ ok: true, value: 1 });
+    expect(parseDisambiguationAlternatives(['3'], 3)).toEqual({ ok: true, value: 2 });
+    expect(parseDisambiguationAlternatives(['three'], 2)).toEqual({
+      ok: false,
+      code: 'unsupported',
+      message: 'Please say one, two, or three.',
+    });
+    expect(parseDisambiguationAlternatives(['one', 'two'], 3)).toEqual({
+      ok: false,
+      code: 'unsupported',
+      message: 'Choice was ambiguous.',
+    });
   });
 
   it('aborts dialog-local speech recognition on cancel', async () => {
@@ -329,6 +403,37 @@ describe('voice command flow', () => {
 
     expect((document.getElementById('voiceTranscript') as HTMLTextAreaElement).value).toBe('delete todo 56');
     expect(document.getElementById('voiceSummary')?.textContent).toBe('Delete todo #56: Fix login');
+  });
+
+  it('shows Safe-Mode title disambiguation candidates and executes the selected todo', async () => {
+    executeCommandIRMock.mockResolvedValue({});
+    openVoiceCommandDialog(makeOptions(() => makeContext(makeAmbiguousLoginBoard())));
+    const transcript = document.getElementById('voiceTranscript') as HTMLTextAreaElement;
+    const form = document.getElementById('voiceCommandForm') as HTMLFormElement;
+    transcript.value = 'open login';
+
+    document.getElementById('voiceReviewBtn')?.click();
+    await flushAsync();
+
+    expect(document.getElementById('voiceDisambiguation')?.textContent).toContain('1. #12 Fix login redirect');
+    expect(document.getElementById('voiceDisambiguation')?.textContent).toContain('2. #13 Fix login validation');
+
+    document.querySelectorAll<HTMLButtonElement>('.voice-command__candidate')[1].click();
+    await flushAsync();
+
+    expect(document.getElementById('voiceSummary')?.textContent).toBe('Open todo #13: Fix login validation');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flushAsync();
+
+    expect(executeCommandIRMock).toHaveBeenCalledWith(
+      {
+        intent: 'open_todo',
+        projectId: 1,
+        projectSlug: 'alpha',
+        entities: { localId: 13 },
+      },
+      expect.any(Object),
+    );
   });
 
   it('hides the Hands-Free confirmation toggle in Safe-Mode', () => {
@@ -444,6 +549,102 @@ describe('voice command flow', () => {
     expect(executeCommandIRMock.mock.calls[0][0]).toMatchObject({
       intent: 'open_todo',
       entities: { localId: 56 },
+    });
+  });
+
+  it('uses Hands-Free spoken disambiguation before opening a title match', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    executeCommandIRMock.mockResolvedValue({});
+    startOneShotRecognitionMock
+      .mockResolvedValueOnce({ alternatives: ['open login'] })
+      .mockResolvedValueOnce({ alternatives: ['second one'] });
+
+    openVoiceCommandDialog(makeOptions(() => makeContext(makeAmbiguousLoginBoard())));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(2);
+    expect(speakMock).toHaveBeenCalledWith(
+      'Which one? Option 1: Fix login redirect. Option 2: Fix login validation. Option 3: Fix login button style.',
+      expect.any(Object),
+    );
+    expect(executeCommandIRMock.mock.calls[0][0]).toMatchObject({
+      intent: 'open_todo',
+      entities: { localId: 13 },
+    });
+  });
+
+  it('aborts Hands-Free disambiguation listening when the user stops the run', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    let disambiguationAborted = false;
+    startOneShotRecognitionMock
+      .mockResolvedValueOnce({ alternatives: ['open login'] })
+      .mockImplementationOnce(({ signal }: { signal: AbortSignal }) =>
+        new Promise(() => {
+          signal.addEventListener('abort', () => {
+            disambiguationAborted = true;
+          });
+        })
+      );
+
+    openVoiceCommandDialog(makeOptions(() => makeContext(makeAmbiguousLoginBoard())));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(2);
+    document.getElementById('voiceStopBtn')?.click();
+    await flushAsync();
+
+    expect(disambiguationAborted).toBe(true);
+    expect(executeCommandIRMock).not.toHaveBeenCalled();
+    expect(document.getElementById('voiceFlowState')?.textContent).toBe('cancelled');
+  });
+
+  it('supersedes an in-flight Hands-Free disambiguation run cleanly', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    executeCommandIRMock.mockResolvedValue({});
+    let firstDisambiguationAborted = false;
+    startOneShotRecognitionMock
+      .mockResolvedValueOnce({ alternatives: ['open login'] })
+      .mockImplementationOnce(({ signal }: { signal: AbortSignal }) =>
+        new Promise(() => {
+          signal.addEventListener('abort', () => {
+            firstDisambiguationAborted = true;
+          });
+        })
+      )
+      .mockResolvedValueOnce({ alternatives: ['open todo 56'] });
+
+    let context = makeContext(makeAmbiguousLoginBoard());
+    openVoiceCommandDialog(makeOptions(() => context));
+    await flushAsync();
+
+    context = makeContext();
+    document.getElementById('voiceModeHandsFree')?.click();
+    await flushAsync();
+
+    expect(firstDisambiguationAborted).toBe(true);
+    expect(executeCommandIRMock).toHaveBeenCalledTimes(1);
+    expect(executeCommandIRMock.mock.calls[0][0]).toMatchObject({
+      intent: 'open_todo',
+      entities: { localId: 56 },
+    });
+  });
+
+  it('keeps Hands-Free delete confirmation after title disambiguation', async () => {
+    localStorage.setItem(VOICE_FLOW_MODE_STORAGE_KEY, 'hands-free');
+    executeCommandIRMock.mockResolvedValue({});
+    startOneShotRecognitionMock
+      .mockResolvedValueOnce({ alternatives: ['delete login'] })
+      .mockResolvedValueOnce({ alternatives: ['second one'] })
+      .mockResolvedValueOnce({ alternatives: ['yes'] });
+
+    openVoiceCommandDialog(makeOptions(() => makeContext(makeAmbiguousLoginBoard())));
+    await flushAsync();
+
+    expect(startOneShotRecognitionMock).toHaveBeenCalledTimes(3);
+    expect(speakMock).toHaveBeenCalledWith('Delete todo #13: Fix login validation. Confirm?', expect.any(Object));
+    expect(executeCommandIRMock.mock.calls[0][0]).toMatchObject({
+      intent: 'todos.delete',
+      entities: { localId: 13 },
     });
   });
 
