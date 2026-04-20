@@ -63,6 +63,9 @@ export function normalizeLookup(input) {
         .replace(/\s+/g, " ")
         .trim();
 }
+export function normalizeTitleReference(input) {
+    return normalizeLookup(input);
+}
 export function stripWrappingQuotes(input) {
     const trimmed = input.trim();
     if (trimmed.length >= 2) {

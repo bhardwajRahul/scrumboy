@@ -224,4 +224,159 @@ describe('voice command resolution', () => {
       message: 'Assignee matches more than one project member.',
     });
   });
+
+  it('auto-resolves exact title matches inside the active project', async () => {
+    const sourceBoard = board({
+      columns: {
+        backlog: [{ id: 1, localId: 12, title: 'Login Page', status: 'backlog' }],
+        not_started: [],
+        doing: [],
+        testing: [],
+        done: [],
+      },
+    });
+
+    const resolved = await parseAndResolve('open login page', sourceBoard);
+
+    expect(resolved).toMatchObject({
+      ok: true,
+      value: {
+        ir: {
+          intent: 'open_todo',
+          projectSlug: 'alpha',
+          entities: { localId: 12 },
+        },
+        summary: 'Open todo #12: Login Page',
+      },
+    });
+  });
+
+  it('uses active-project todos.search as title candidate generation for unloaded todos', async () => {
+    const parsed = parseCommand('move login redirect to done');
+    if (!parsed.ok) throw new Error('parse failed');
+    const callTool = vi.fn(async (tool: string, input: Record<string, unknown>) => {
+      if (tool === 'todos.search') {
+        return {
+          items: [
+            { projectSlug: 'alpha', localId: 12, title: 'Fix login redirect' },
+            { projectSlug: 'other', localId: 44, title: 'Fix login redirect' },
+          ],
+        };
+      }
+      if (tool === 'todos.get' && input.projectSlug === 'alpha' && input.localId === 12) {
+        return { todo: { id: 12, localId: 12, title: 'Fix login redirect', status: 'backlog' } };
+      }
+      throw new Error('unexpected call');
+    });
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: board({ columns: { backlog: [], not_started: [], doing: [], testing: [], done: [] } }),
+      members,
+      callTool,
+    });
+
+    expect(callTool).toHaveBeenCalledWith('todos.search', { projectSlug: 'alpha', query: 'login redirect', limit: 10 });
+    expect(callTool).toHaveBeenCalledWith('todos.get', { projectSlug: 'alpha', localId: 12 });
+    expect(resolved).toMatchObject({
+      ok: true,
+      value: { ir: { intent: 'todos.move', entities: { localId: 12, toColumnKey: 'done' } } },
+    });
+  });
+
+  it('returns top three ambiguous title candidates without guessing', async () => {
+    const parsed = parseCommand('open login');
+    if (!parsed.ok) throw new Error('parse failed');
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: board({
+        columns: {
+          backlog: [
+            { id: 1, localId: 12, title: 'Fix login redirect', status: 'backlog' },
+            { id: 2, localId: 13, title: 'Fix login validation', status: 'backlog' },
+            { id: 3, localId: 14, title: 'Fix login button style', status: 'backlog' },
+            { id: 4, localId: 15, title: 'Fix login tooltip', status: 'backlog' },
+          ],
+          not_started: [],
+          doing: [],
+          testing: [],
+          done: [],
+        },
+      }),
+      members,
+    });
+
+    expect(resolved).toEqual({
+      ok: false,
+      code: 'ambiguous_story',
+      message: 'More than one todo matched. Choose one.',
+      candidates: [
+        { localId: 12, title: 'Fix login redirect' },
+        { localId: 13, title: 'Fix login validation' },
+        { localId: 14, title: 'Fix login button style' },
+      ],
+      draft: parsed.value,
+    });
+  });
+
+  it('refuses weak title matches instead of presenting junk contenders', async () => {
+    const parsed = parseCommand('delete dashboard');
+    if (!parsed.ok) throw new Error('parse failed');
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: board({
+        columns: {
+          backlog: [{ id: 1, localId: 12, title: 'Fix login redirect', status: 'backlog' }],
+          not_started: [],
+          doing: [],
+          testing: [],
+          done: [],
+        },
+      }),
+      members,
+    });
+
+    expect(resolved).toEqual({
+      ok: false,
+      code: 'unknown_story',
+      message: 'No strong todo title match was found in this project.',
+    });
+  });
+
+  it('resolves an ambiguous title only through an explicit selected active-project local ID', async () => {
+    const parsed = parseCommand('delete login');
+    if (!parsed.ok) throw new Error('parse failed');
+    const sourceBoard = board({
+      columns: {
+        backlog: [
+          { id: 1, localId: 12, title: 'Fix login redirect', status: 'backlog' },
+          { id: 2, localId: 13, title: 'Fix login validation', status: 'backlog' },
+        ],
+        not_started: [],
+        doing: [],
+        testing: [],
+        done: [],
+      },
+    });
+
+    const resolved = await resolveCommandDraft(parsed.value, {
+      projectId: 1,
+      projectSlug: 'alpha',
+      board: sourceBoard,
+      members,
+    }, { selectedLocalId: 13 });
+
+    expect(resolved).toMatchObject({
+      ok: true,
+      value: {
+        ir: { intent: 'todos.delete', projectSlug: 'alpha', entities: { localId: 13 } },
+        summary: 'Delete todo #13: Fix login validation',
+      },
+    });
+  });
 });

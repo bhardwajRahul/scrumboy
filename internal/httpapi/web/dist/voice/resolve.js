@@ -1,6 +1,7 @@
 import { normalizeLookup } from './normalize.js';
 import { commandFailure, isCommandFailure, validateCommandIR } from './schema.js';
 import { BUILTIN_STATUS_ALIASES } from './vocabulary.js';
+import { resolveTodoTarget } from './target-resolver.js';
 function boardLanes(board) {
     if (board.columnOrder && board.columnOrder.length > 0) {
         return board.columnOrder.map((lane) => ({
@@ -14,35 +15,6 @@ function boardLanes(board) {
         name: key.replace(/_/g, " "),
         isDone: key === "done",
     }));
-}
-function findTodoInBoard(board, localId) {
-    for (const todos of Object.values(board.columns ?? {})) {
-        const found = todos.find((todo) => todo.localId === localId);
-        if (found)
-            return found;
-    }
-    return null;
-}
-async function resolveTodo(localId, context) {
-    const fromBoard = findTodoInBoard(context.board, localId);
-    if (fromBoard)
-        return { ok: true, value: fromBoard };
-    if (!context.callTool) {
-        return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
-    }
-    try {
-        const data = await context.callTool("todos.get", {
-            projectSlug: context.projectSlug,
-            localId,
-        });
-        if (data?.todo?.localId === localId) {
-            return { ok: true, value: data.todo };
-        }
-        return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
-    }
-    catch {
-        return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
-    }
 }
 function addAlias(aliases, alias, lane) {
     const key = normalizeLookup(alias);
@@ -131,7 +103,21 @@ function validateResolvedIR(ir, context) {
         board: context.board,
     });
 }
-export async function resolveCommandDraft(draft, context) {
+function withDraft(failure, draft) {
+    return { ...failure, draft };
+}
+async function resolveDraftTarget(draft, context, options) {
+    const resolved = await resolveTodoTarget(draft.target, {
+        projectSlug: context.projectSlug,
+        board: context.board,
+        callTool: context.callTool,
+    }, options.selectedLocalId);
+    if (isCommandFailure(resolved)) {
+        return resolved.code === "ambiguous_story" ? withDraft(resolved, draft) : resolved;
+    }
+    return resolved;
+}
+export async function resolveCommandDraft(draft, context, options = {}) {
     if (draft.intent === "todos.create") {
         const ir = {
             intent: "todos.create",
@@ -153,15 +139,16 @@ export async function resolveCommandDraft(draft, context) {
             },
         };
     }
-    const todo = await resolveTodo(draft.localId, context);
-    if (isCommandFailure(todo))
-        return todo;
     if (draft.intent === "open_todo") {
+        const target = await resolveDraftTarget(draft, context, options);
+        if (isCommandFailure(target))
+            return target;
+        const todo = target.value.todo;
         const ir = {
             intent: "open_todo",
             projectId: context.projectId,
             projectSlug: context.projectSlug,
-            entities: { localId: draft.localId },
+            entities: { localId: todo.localId },
         };
         const validated = validateResolvedIR(ir, context);
         if (isCommandFailure(validated))
@@ -170,20 +157,24 @@ export async function resolveCommandDraft(draft, context) {
             ok: true,
             value: {
                 ir: validated.value,
-                summary: `Open todo #${draft.localId}: ${todo.value.title}`,
+                summary: `Open todo #${todo.localId}: ${todo.title}`,
                 confirmLabel: "Open",
                 danger: false,
-                requiresConfirmation: !!draft.ambiguousId,
-                storyTitle: todo.value.title,
+                requiresConfirmation: !!target.value.ambiguousId,
+                storyTitle: todo.title,
             },
         };
     }
     if (draft.intent === "todos.delete") {
+        const target = await resolveDraftTarget(draft, context, options);
+        if (isCommandFailure(target))
+            return target;
+        const todo = target.value.todo;
         const ir = {
             intent: "todos.delete",
             projectId: context.projectId,
             projectSlug: context.projectSlug,
-            entities: { localId: draft.localId },
+            entities: { localId: todo.localId },
         };
         const validated = validateResolvedIR(ir, context);
         if (isCommandFailure(validated))
@@ -192,11 +183,11 @@ export async function resolveCommandDraft(draft, context) {
             ok: true,
             value: {
                 ir: validated.value,
-                summary: `Delete todo #${draft.localId}: ${todo.value.title}`,
+                summary: `Delete todo #${todo.localId}: ${todo.title}`,
                 confirmLabel: "Delete",
                 danger: true,
                 requiresConfirmation: true,
-                storyTitle: todo.value.title,
+                storyTitle: todo.title,
             },
         };
     }
@@ -204,11 +195,15 @@ export async function resolveCommandDraft(draft, context) {
         const lane = resolveStatus(draft.rawStatus, context.board);
         if (isCommandFailure(lane))
             return lane;
+        const target = await resolveDraftTarget(draft, context, options);
+        if (isCommandFailure(target))
+            return target;
+        const todo = target.value.todo;
         const ir = {
             intent: "todos.move",
             projectId: context.projectId,
             projectSlug: context.projectSlug,
-            entities: { localId: draft.localId, toColumnKey: lane.value.key },
+            entities: { localId: todo.localId, toColumnKey: lane.value.key },
         };
         const validated = validateResolvedIR(ir, context);
         if (isCommandFailure(validated))
@@ -217,11 +212,11 @@ export async function resolveCommandDraft(draft, context) {
             ok: true,
             value: {
                 ir: validated.value,
-                summary: `Move todo #${draft.localId}: ${todo.value.title} to ${lane.value.name}`,
+                summary: `Move todo #${todo.localId}: ${todo.title} to ${lane.value.name}`,
                 confirmLabel: "Move",
                 danger: false,
                 requiresConfirmation: true,
-                storyTitle: todo.value.title,
+                storyTitle: todo.title,
                 statusName: lane.value.name,
             },
         };
@@ -229,11 +224,15 @@ export async function resolveCommandDraft(draft, context) {
     const member = await resolveMember(draft.rawUser, context);
     if (isCommandFailure(member))
         return member;
+    const target = await resolveDraftTarget(draft, context, options);
+    if (isCommandFailure(target))
+        return target;
+    const todo = target.value.todo;
     const ir = {
         intent: "todos.assign",
         projectId: context.projectId,
         projectSlug: context.projectSlug,
-        entities: { localId: draft.localId, assigneeUserId: member.value.userId },
+        entities: { localId: todo.localId, assigneeUserId: member.value.userId },
     };
     const validated = validateResolvedIR(ir, context);
     if (isCommandFailure(validated))
@@ -242,11 +241,11 @@ export async function resolveCommandDraft(draft, context) {
         ok: true,
         value: {
             ir: validated.value,
-            summary: `Assign todo #${draft.localId}: ${todo.value.title} to ${member.value.name || member.value.email}`,
+            summary: `Assign todo #${todo.localId}: ${todo.title} to ${member.value.name || member.value.email}`,
             confirmLabel: "Assign",
             danger: false,
             requiresConfirmation: true,
-            storyTitle: todo.value.title,
+            storyTitle: todo.title,
             assigneeName: member.value.name || member.value.email,
         },
     };

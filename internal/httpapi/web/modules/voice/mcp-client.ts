@@ -1,6 +1,7 @@
 export type McpToolName =
   | "todos.create"
   | "todos.get"
+  | "todos.search"
   | "todos.move"
   | "todos.delete"
   | "todos.update"

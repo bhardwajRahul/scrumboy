@@ -21,4 +21,19 @@ describe('voice interaction state machine', () => {
     expect(transitionVoiceInteractionState('listening_confirmation', 'error')).toBe('error');
     expect(transitionVoiceInteractionState('listening_confirmation', 'cancel')).toBe('cancelled');
   });
+
+  it('keeps command, target disambiguation, and confirmation listening separate', () => {
+    let state = transitionVoiceInteractionState('idle', 'start_command');
+    expect(state).toBe('listening_command');
+    state = transitionVoiceInteractionState(state, 'resolve_target');
+    expect(state).toBe('resolving_target');
+    state = transitionVoiceInteractionState(state, 'prompt_disambiguation');
+    expect(state).toBe('disambiguation_prompt');
+    state = transitionVoiceInteractionState(state, 'listen_disambiguation');
+    expect(state).toBe('listening_disambiguation');
+    state = transitionVoiceInteractionState(state, 'target_resolved');
+    expect(state).toBe('resolved_target');
+    state = transitionVoiceInteractionState(state, 'show_feedback');
+    expect(state).toBe('showing_feedback_or_confirmation');
+  });
 });

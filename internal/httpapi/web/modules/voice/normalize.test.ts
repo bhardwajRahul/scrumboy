@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeLookup, parseSpokenNumber } from './normalize.js';
-import { normalizeConfirmationResponse, normalizeEntityAlias } from './vocabulary.js';
+import { normalizeConfirmationResponse, normalizeDisambiguationChoice, normalizeEntityAlias } from './vocabulary.js';
 
 describe('voice command normalization', () => {
   it('normalizes supported story ID forms', () => {
@@ -41,5 +41,12 @@ describe('voice command normalization', () => {
     expect(normalizeConfirmationResponse('nope')).toBe('no');
     expect(normalizeConfirmationResponse('stop')).toBe('cancel');
     expect(normalizeConfirmationResponse('maybe')).toBeNull();
+  });
+
+  it('normalizes constrained disambiguation choices only', () => {
+    expect(normalizeDisambiguationChoice('first one')).toBe('option_1');
+    expect(normalizeDisambiguationChoice('number two')).toBe('option_2');
+    expect(normalizeDisambiguationChoice('3')).toBe('option_3');
+    expect(normalizeDisambiguationChoice('the login one')).toBeNull();
   });
 });
