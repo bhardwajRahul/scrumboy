@@ -170,6 +170,8 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 
 - VoiceFlow - deterministic voice commands (see `docs/VOICEFLOW.md`).
 
+- Sticky-Note Wall - per-project scratchpad of draggable sticky notes on the board (see `docs/WALL.md`).
+
 ---
 
 ## Integrations & API Access

@@ -34,6 +34,7 @@ import { clearSelection, pruneSelection, setSelection, syncSelectionDom, toggleS
 import { beginDrag as beginDragController, startResize as startResizeController, } from "./wall-drag-controller.js";
 import { applyTransient as applyTransientImpl, refetchDoc as refetchDocImpl, startRealtime, } from "./wall-realtime.js";
 import { beginEdit as beginEditController } from "./wall-edit-controller.js";
+import { openWallNoteContextMenu } from "./wall-note-context-menu.js";
 const TEARDOWN_MARKER = Symbol("wallMounted");
 // Public entry: open the wall dialog and boot its full lifecycle.
 export async function openWallDialog(opts) {
@@ -553,16 +554,32 @@ function bindSurfaceHandlers(state) {
         if (noteEl) {
             ev.preventDefault();
             const noteId = noteEl.dataset.noteId || "";
-            if (noteId) {
-                // Defensive clear in case an input sequence armed a color timer
-                // before the contextmenu event arrived.
-                cancelColorTimer(state, noteId);
-                void confirmDelete("Delete this note?").then((confirmed) => {
-                    if (confirmed) {
+            if (!noteId)
+                return;
+            // Defensive clear in case an input sequence armed a color timer
+            // before the contextmenu event arrived.
+            cancelColorTimer(state, noteId);
+            void openWallNoteContextMenu(ev.clientX, ev.clientY, state.abort.signal).then(async (choice) => {
+                if (choice === "create-todo") {
+                    const note = findNote(noteId);
+                    if (!note)
+                        return;
+                    // Dynamic import keeps todo.ts out of the wall bundle so the
+                    // lazy-loaded wall module stays small; the todo dialog is only
+                    // pulled in the first time a user picks this action.
+                    const mod = await import("./todo.js");
+                    await mod.openTodoDialog({
+                        mode: "create",
+                        role: state.role,
+                        initialTitle: note.text,
+                    });
+                }
+                else if (choice === "delete") {
+                    const confirmed = await confirmDelete("Delete this note?");
+                    if (confirmed)
                         void deleteNote(noteId);
-                    }
-                });
-            }
+                }
+            });
             return;
         }
         ev.preventDefault();
