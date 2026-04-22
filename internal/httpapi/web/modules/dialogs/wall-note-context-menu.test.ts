@@ -133,6 +133,55 @@ describe("openWallNoteContextMenu", () => {
     expect(wallDialogEl.querySelector(".wall-note-context-menu")).toBeNull();
   });
 
+  it("hides the Create Todo item when showCreateTodo is false and only renders Delete", async () => {
+    const { openWallNoteContextMenu } = await import("./wall-note-context-menu.js");
+    const ac = new AbortController();
+    void openWallNoteContextMenu(100, 100, ac.signal, { showCreateTodo: false });
+    await flushPromises();
+
+    const menu = wallDialogEl.querySelector(".wall-note-context-menu");
+    expect(menu).toBeTruthy();
+    expect(menu!.querySelector('[data-action="create-todo"]')).toBeNull();
+    const items = menu!.querySelectorAll<HTMLButtonElement>(".context-menu__item");
+    expect(items).toHaveLength(1);
+    expect(items[0].dataset.action).toBe("delete");
+    ac.abort();
+  });
+
+  it("uses the overridden deleteLabel for the Delete button", async () => {
+    const { openWallNoteContextMenu } = await import("./wall-note-context-menu.js");
+    const ac = new AbortController();
+    void openWallNoteContextMenu(100, 100, ac.signal, {
+      showCreateTodo: false,
+      deleteLabel: "Delete 3 notes",
+    });
+    await flushPromises();
+
+    const deleteBtn = wallDialogEl.querySelector<HTMLButtonElement>(
+      '.wall-note-context-menu [data-action="delete"]',
+    );
+    expect(deleteBtn).toBeTruthy();
+    expect(deleteBtn!.textContent).toBe("Delete 3 notes");
+    ac.abort();
+  });
+
+  it("resolves with 'delete' when the group-mode Delete button is clicked", async () => {
+    const { openWallNoteContextMenu } = await import("./wall-note-context-menu.js");
+    const ac = new AbortController();
+    const p = openWallNoteContextMenu(100, 100, ac.signal, {
+      showCreateTodo: false,
+      deleteLabel: "Delete 2 notes",
+    });
+    await flushPromises();
+
+    wallDialogEl
+      .querySelector<HTMLButtonElement>('.wall-note-context-menu [data-action="delete"]')!
+      .click();
+    const result = await p;
+    expect(result).toBe("delete");
+    expect(wallDialogEl.querySelector(".wall-note-context-menu")).toBeNull();
+  });
+
   it("clamps the menu's left/top to stay inside the viewport", async () => {
     const { openWallNoteContextMenu } = await import("./wall-note-context-menu.js");
     const ac = new AbortController();

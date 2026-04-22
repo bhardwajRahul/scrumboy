@@ -559,8 +559,25 @@ function bindSurfaceHandlers(state) {
             // Defensive clear in case an input sequence armed a color timer
             // before the contextmenu event arrived.
             cancelColorTimer(state, noteId);
-            void openWallNoteContextMenu(ev.clientX, ev.clientY, state.abort.signal).then(async (choice) => {
+            // Parity with wall-drag-controller.ts drag-to-trash: treat this as a
+            // group op only when the right-clicked note is itself part of a
+            // multi-selection. A right-click on an unselected note (even if other
+            // notes are selected) deletes only that note and leaves selection alone.
+            const isGroup = state.selected.has(noteId) && state.selected.size > 1;
+            const groupIds = isGroup ? Array.from(state.selected) : [noteId];
+            const deleteLabel = isGroup ? `Delete ${groupIds.length} notes` : "Delete";
+            const confirmPrompt = isGroup
+                ? `Delete ${groupIds.length} notes?`
+                : "Delete this note?";
+            void openWallNoteContextMenu(ev.clientX, ev.clientY, state.abort.signal, {
+                showCreateTodo: !isGroup,
+                deleteLabel,
+            }).then(async (choice) => {
                 if (choice === "create-todo") {
+                    // Defensive: the Create-Todo item is hidden in the group case, so
+                    // this branch can only run for single-note menus.
+                    if (isGroup)
+                        return;
                     const note = findNote(noteId);
                     if (!note)
                         return;
@@ -575,9 +592,13 @@ function bindSurfaceHandlers(state) {
                     });
                 }
                 else if (choice === "delete") {
-                    const confirmed = await confirmDelete("Delete this note?");
-                    if (confirmed)
-                        void deleteNote(noteId);
+                    const confirmed = await confirmDelete(confirmPrompt);
+                    if (!confirmed)
+                        return;
+                    for (const id of groupIds)
+                        void deleteNote(id);
+                    if (isGroup)
+                        clearSelection();
                 }
             });
             return;
