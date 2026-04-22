@@ -19,3 +19,6 @@ Sticky-note board for durable projects. Open it from the board topbar (desktop o
 - **Move a group** - With multiple notes selected, drag one of them; all selected notes move together. Selection clears when you release the drag.
 - **Delete several at once** - Drag the group over the trash; one confirmation lists how many notes will be deleted.
 
+## Disabling the wall
+
+The wall is on by default. To turn it off for the whole server, set **`SCRUMBOY_WALL_ENABLED`** before starting Scrumboy. Any of these values disables it (trimmed, case-insensitive): **`0`**, **`false`**, **`off`**, **`no`**. If the variable is unset or empty, the wall stays enabled. Restart the process after changing env vars.
