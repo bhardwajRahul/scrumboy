@@ -43,6 +43,11 @@ type Config struct {
 	VAPIDPrivateKey string
 	VAPIDSubscriber string // mailto: or https: URL for VAPID JWT sub; plain email normalized to mailto:
 	PushDebug       bool   // SCRUMBOY_DEBUG_PUSH=1
+
+	// Scrumbaby (sticky-note wall). Defaults to on for new installs. Set
+	// SCRUMBOY_WALL_ENABLED=0 (or false/off/no, case-insensitive) to disable.
+	// Durable projects only; anonymous/temp boards never expose the wall.
+	WallEnabled bool
 }
 
 func FromEnv() Config {
@@ -85,6 +90,22 @@ func FromEnv() Config {
 		VAPIDPrivateKey:      strings.TrimSpace(os.Getenv("SCRUMBOY_VAPID_PRIVATE_KEY")),
 		VAPIDSubscriber:      NormalizeVAPIDSubscriber(os.Getenv("SCRUMBOY_VAPID_SUBSCRIBER")),
 		PushDebug: strings.TrimSpace(os.Getenv("SCRUMBOY_DEBUG_PUSH")) == "1",
+
+		WallEnabled: wallEnabledFromEnv(),
+	}
+}
+
+// wallEnabledFromEnv returns whether the Scrumbaby wall is enabled. Default
+// is true when the variable is unset or empty so fresh installs get the
+// feature without extra configuration. Explicit opt-out: SCRUMBOY_WALL_ENABLED=0
+// (also accepts false, off, no — trimmed, case-insensitive).
+func wallEnabledFromEnv() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("SCRUMBOY_WALL_ENABLED")))
+	switch v {
+	case "0", "false", "off", "no":
+		return false
+	default:
+		return true
 	}
 }
 
