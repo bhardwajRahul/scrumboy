@@ -4645,35 +4645,29 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   background: var(--wall-bg-page);
   color: var(--wall-fg);
 }
-/* Floating close button — header bar is removed to reclaim vertical space
-   for the canvas. Button hovers over the top-right of the surface, sits
-   above notes and edges but below the dragging-note stack (z 1000) and the
-   trash (z 1500) so an in-flight drag still beats it visually. */
+/* Floating close — glyph only (no chip); still a comfortable hit target. */
 .wall-close-btn {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 36px;
-  height: 36px;
+  top: 10px;
+  right: 10px;
+  min-width: 40px;
+  min-height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.45);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--wall-fg);
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
   z-index: 1400;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  transition: color 120ms ease, opacity 120ms ease;
 }
 .wall-close-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.24);
+  opacity: 0.75;
 }
 .wall-close-btn:focus-visible {
   outline: 2px solid var(--accent, #5aa3ff);
