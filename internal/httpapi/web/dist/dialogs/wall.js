@@ -24,7 +24,7 @@
 //   out SSE wall.transient events. GET /wall is side-effect-free.
 import { wallDialog, wallSurface, closeWallBtn, wallTrash, } from "../dom/elements.js";
 import { apiFetch } from "../api.js";
-import { showToast } from "../utils.js";
+import { confirmDelete, showToast } from "../utils.js";
 import { on, off } from "../events.js";
 import { getUser } from "../state/selectors.js";
 import { canEditWall } from "./wall-permissions.js";
@@ -586,8 +586,12 @@ function bindSurfaceHandlers(state) {
             const edgeId = groupNode && groupNode instanceof SVGGElement
                 ? groupNode.dataset?.edgeId || ""
                 : "";
-            if (edgeId && window.confirm("Delete this connection?")) {
-                void deleteEdge(edgeId);
+            if (edgeId) {
+                void confirmDelete("Delete this connection?").then((confirmed) => {
+                    if (confirmed) {
+                        void deleteEdge(edgeId);
+                    }
+                });
             }
             return;
         }
@@ -887,14 +891,15 @@ function beginDrag(state, ev, noteEl, noteId, downX, downY) {
             }
             const n = participants.length;
             const prompt = n === 1 ? "Delete this note?" : `Delete ${n} notes?`;
-            const ok = window.confirm(prompt);
-            if (ok) {
-                for (const p of participants) {
-                    void deleteNote(p.id);
+            void confirmDelete(prompt).then((ok) => {
+                if (ok) {
+                    for (const p of participants) {
+                        void deleteNote(p.id);
+                    }
                 }
-            }
-            if (isGroup)
-                clearSelection();
+                if (isGroup)
+                    clearSelection();
+            });
             return;
         }
         // Final transient flush + durable PATCH for each moved participant.
