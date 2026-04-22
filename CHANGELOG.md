@@ -2,6 +2,21 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** unless noted below.
 
+## [3.14.2] - 2026-04-22
+
+### Improvements
+
+- **Wall (Scrumbaby)** - Wall client code split into focused modules (state, selection, API, drag/resize, realtime, edit controller) for easier maintenance and safer future changes.
+- **Wall (Scrumbaby)** - Failed `POST /wall/transient` calls are counted and logged on a throttle; set **`window.__scrumboyWallDebug = true`** to surface **`console.warn`** for operator debugging without spamming normal sessions.
+- **Tests** - Broader wall gesture and modal regression coverage (including confirm-dialog close paths and outside-click behavior).
+
+### Fixes
+
+- **Delete confirmation dialogs** - `showConfirmDialog` resolves reliably on every close path (including programmatic close), so follow-up flows such as drag-to-trash on desktop are not left with a hung promise.
+- **Wall dialog** - Fullscreen wall uses an explicit modal contract (`data-dialog-content-root`, `data-no-outside-close`) so global outside-click handling does not treat in-canvas clicks as “outside” the dialog.
+
+---
+
 ## [3.14.1] - 2026-04-21
 
 ### Enhancements
