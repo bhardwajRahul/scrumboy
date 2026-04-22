@@ -239,6 +239,50 @@ describe("wall gesture × modality regression matrix", () => {
     expect(posPatches.length).toBeGreaterThan(0);
   });
 
+  it("drag transient coalescing × repeated rAF ticks → throttled POSTs within DRAG_TRANSIENT_COALESCE_MS window (Phase 1)", async () => {
+    vi.useFakeTimers();
+    await openWall();
+
+    const noteEl = getNoteEl("n1");
+    wallSurfaceEl.getBoundingClientRect = () => rect(0, 0, 800, 600);
+    noteEl.getBoundingClientRect = () => rect(20, 20, 160, 100);
+
+    const transientPostsAt = () =>
+      apiFetchMock.mock.calls.filter(
+        ([url, init]) =>
+          typeof url === "string" &&
+          url.endsWith("/wall/transient") &&
+          (init as RequestInit | undefined)?.method === "POST",
+      ).length;
+
+    dispatchPointer(noteEl, "pointerdown", { button: 0, clientX: 50, clientY: 50 });
+    // First pointermove promotes arm→drag; second reaches the drag
+    // controller's move handler and triggers the rAF + initial group flush.
+    dispatchPointer(document, "pointermove", { button: 0, clientX: 120, clientY: 120 });
+    dispatchPointer(document, "pointermove", { button: 0, clientX: 125, clientY: 125 });
+    await flushRaf();
+    const afterFirstFrame = transientPostsAt();
+    expect(afterFirstFrame).toBeGreaterThanOrEqual(1);
+
+    // Several rapid rAF ticks within the coalescing window: the group-timer
+    // is armed exactly once; no new POSTs fire until the window elapses.
+    dispatchPointer(document, "pointermove", { button: 0, clientX: 140, clientY: 140 });
+    await flushRaf();
+    dispatchPointer(document, "pointermove", { button: 0, clientX: 160, clientY: 160 });
+    await flushRaf();
+    dispatchPointer(document, "pointermove", { button: 0, clientX: 180, clientY: 180 });
+    await flushRaf();
+    expect(transientPostsAt()).toBe(afterFirstFrame);
+
+    // Drop: final position flush is posted explicitly via scheduleTransient +
+    // flushTransient, independent of the group timer (which was cleared in
+    // onUp). This proves the drop path still posts the final coalesced state.
+    dispatchPointer(document, "pointerup", { button: 0, clientX: 180, clientY: 180 });
+    vi.advanceTimersByTime(500);
+    await flushPromises();
+    expect(transientPostsAt()).toBeGreaterThanOrEqual(afterFirstFrame + 1);
+  });
+
   it("right-click delete on note × confirm=true → DELETE /wall/notes/{id}", async () => {
     confirmDeleteMock.mockResolvedValue(true);
     await openWall();

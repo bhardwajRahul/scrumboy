@@ -30,6 +30,13 @@ export const DRAG_THRESHOLD_PX = 10;
 // §5.2 target of ~100ms between transient emits per note).
 export const TRANSIENT_COALESCE_MS = 100;
 
+// Drag-specific coalescing window used by the group-timer path in
+// `wall-drag-controller.ts`. Slightly wider than TRANSIENT_COALESCE_MS to
+// cut per-drag POST pressure on remote/NAS deployments without making
+// follower updates visibly choppy. Kept fixed (non-adaptive) per the
+// Phase 1 plan: simplicity over cleverness.
+export const DRAG_TRANSIENT_COALESCE_MS = 150;
+
 // Default canvas size for a freshly created note (Postbaby-ish dimensions,
 // clamped to the Scrumboy backend width/height limits elsewhere).
 export const DEFAULT_NOTE_WIDTH = 200;
