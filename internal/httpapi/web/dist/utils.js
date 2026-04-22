@@ -209,16 +209,23 @@ export function getAppVersion() {
 /**
  * Shows a custom confirmation dialog matching the site's design.
  * Returns a Promise that resolves to true if confirmed, false if cancelled.
+ *
+ * Lifecycle contract (important for drag-to-trash and other gestures that
+ * might trigger a programmatic `dialog.close()` from an outer listener):
+ *   - The native `close` event is the single source of truth. Button handlers
+ *     set an "intent" flag and then call `dialog.close()`; the `close` handler
+ *     resolves the promise with that intent exactly once.
+ *   - Any external `dialog.close()` (e.g. a global outside-click helper)
+ *     resolves with `false` instead of leaving the caller hung.
+ *
  * @param message - Body text
  * @param title - Dialog title (default "Confirm")
  * @param confirmLabel - Label for confirm button (default "Confirm")
  */
 export function showConfirmDialog(message, title = "Confirm", confirmLabel = "Confirm") {
-    return new Promise((resolve) => {
-        // Create dialog element
+    return new Promise((resolve, reject) => {
         const dialog = document.createElement('dialog');
         dialog.className = 'dialog';
-        // Create dialog content
         dialog.innerHTML = `
       <div class="dialog__form">
         <div class="dialog__header">
@@ -235,40 +242,49 @@ export function showConfirmDialog(message, title = "Confirm", confirmLabel = "Co
         </div>
       </div>
     `;
-        // Add to DOM
         document.body.appendChild(dialog);
-        // Show dialog
-        dialog.showModal();
-        // Handle close button
+        // Intent recorded by button handlers before calling dialog.close(); the
+        // native `close` handler is what actually resolves the promise.
+        let intent = false;
+        let settled = false;
+        const settle = (value) => {
+            if (settled)
+                return;
+            settled = true;
+            if (dialog.parentNode)
+                dialog.remove();
+            resolve(value);
+        };
+        dialog.addEventListener('close', () => settle(intent), { once: true });
+        const onCancelClose = () => {
+            intent = false;
+            dialog.close();
+        };
+        const onConfirmClick = () => {
+            intent = true;
+            dialog.close();
+        };
         const closeBtn = dialog.querySelector('#confirmDialogClose');
-        closeBtn.addEventListener('click', () => {
-            dialog.close();
-            dialog.remove();
-            resolve(false);
-        });
-        // Handle cancel button
+        closeBtn.addEventListener('click', onCancelClose);
         const cancelBtn = dialog.querySelector('#confirmDialogCancel');
-        cancelBtn.addEventListener('click', () => {
-            dialog.close();
-            dialog.remove();
-            resolve(false);
-        });
-        // Handle confirm button
+        cancelBtn.addEventListener('click', onCancelClose);
         const confirmBtn = dialog.querySelector('#confirmDialogConfirm');
-        confirmBtn.addEventListener('click', () => {
-            dialog.close();
-            dialog.remove();
-            resolve(true);
+        confirmBtn.addEventListener('click', onConfirmClick);
+        // ESC (native cancel event) should resolve false; let the default close
+        // behavior fire so the `close` handler still runs exactly once.
+        dialog.addEventListener('cancel', () => {
+            intent = false;
         });
-        // Handle ESC key (native dialog behavior)
-        dialog.addEventListener('cancel', (e) => {
-            e.preventDefault();
-            dialog.close();
-            dialog.remove();
-            resolve(false);
-        });
-        // Focus the cancel button by default (safer)
-        cancelBtn.focus();
+        try {
+            dialog.showModal();
+            cancelBtn.focus();
+        }
+        catch (err) {
+            // Extremely rare (detached from DOM / not an HTMLDialogElement); surface
+            // the error instead of silently hanging the promise.
+            settle(false);
+            reject(err);
+        }
     });
 }
 /**
