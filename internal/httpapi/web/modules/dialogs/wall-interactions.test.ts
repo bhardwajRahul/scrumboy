@@ -5,6 +5,7 @@ const apiFetchMock = vi.hoisted(() => vi.fn());
 const confirmDeleteMock = vi.hoisted(() => vi.fn());
 const onMock = vi.hoisted(() => vi.fn());
 const offMock = vi.hoisted(() => vi.fn());
+const openTodoDialogMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 const wallDialogEl = vi.hoisted(() => document.createElement("dialog"));
 const wallSurfaceEl = vi.hoisted(() => document.createElement("div"));
@@ -38,6 +39,10 @@ vi.mock("../dom/elements.js", () => ({
   wallSurface: wallSurfaceEl,
   closeWallBtn: closeWallBtnEl,
   wallTrash: wallTrashEl,
+}));
+
+vi.mock("./todo.js", () => ({
+  openTodoDialog: openTodoDialogMock,
 }));
 
 function installDialogPolyfill(): void {
@@ -114,6 +119,8 @@ describe("wall interactions", () => {
     confirmDeleteMock.mockReset();
     onMock.mockReset();
     offMock.mockReset();
+    openTodoDialogMock.mockReset();
+    openTodoDialogMock.mockResolvedValue(undefined);
     apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.includes("/wall") && !init?.method) {
         return createWallDoc();
@@ -143,7 +150,24 @@ describe("wall interactions", () => {
     vi.useRealTimers();
   });
 
-  it("deletes a note on right-click when confirmation is accepted", async () => {
+  it("opens the note context menu on right-click (no immediate confirm)", async () => {
+    const mod = await import("./wall.js");
+    await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
+    await flushPromises();
+
+    const noteEl = wallSurfaceEl.querySelector(".wall-note");
+    if (!(noteEl instanceof HTMLElement)) throw new Error("missing wall note");
+    noteEl.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 30, clientY: 30 }));
+    await flushPromises();
+
+    const menu = wallDialogEl.querySelector(".wall-note-context-menu");
+    expect(menu).toBeTruthy();
+    expect(menu?.querySelector('[data-action="create-todo"]')?.textContent).toBe("Create Todo from Note");
+    expect(menu?.querySelector('[data-action="delete"]')?.textContent).toBe("Delete");
+    expect(confirmDeleteMock).not.toHaveBeenCalled();
+  });
+
+  it("deletes a note after choosing Delete in the context menu and confirming", async () => {
     confirmDeleteMock.mockResolvedValue(true);
     const mod = await import("./wall.js");
     await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
@@ -151,15 +175,20 @@ describe("wall interactions", () => {
 
     const noteEl = wallSurfaceEl.querySelector(".wall-note");
     if (!(noteEl instanceof HTMLElement)) throw new Error("missing wall note");
-    const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 30, clientY: 30 });
-    noteEl.dispatchEvent(ev);
+    noteEl.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 30, clientY: 30 }));
+    await flushPromises();
+
+    const deleteBtn = wallDialogEl.querySelector<HTMLButtonElement>('.wall-note-context-menu [data-action="delete"]');
+    if (!deleteBtn) throw new Error("missing delete menu item");
+    deleteBtn.click();
     await flushPromises();
 
     expect(confirmDeleteMock).toHaveBeenCalledWith("Delete this note?");
     expect(apiFetchMock).toHaveBeenCalledWith("/api/board/alpha/wall/notes/n1", { method: "DELETE" });
+    expect(wallDialogEl.querySelector(".wall-note-context-menu")).toBeNull();
   });
 
-  it("does not delete a note on right-click when confirmation is cancelled", async () => {
+  it("does not delete a note when confirmation is cancelled after Delete menu click", async () => {
     confirmDeleteMock.mockResolvedValue(false);
     const mod = await import("./wall.js");
     await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
@@ -170,7 +199,57 @@ describe("wall interactions", () => {
     noteEl.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 30, clientY: 30 }));
     await flushPromises();
 
+    const deleteBtn = wallDialogEl.querySelector<HTMLButtonElement>('.wall-note-context-menu [data-action="delete"]');
+    if (!deleteBtn) throw new Error("missing delete menu item");
+    deleteBtn.click();
+    await flushPromises();
+
     expect(confirmDeleteMock).toHaveBeenCalledWith("Delete this note?");
+    expect(apiFetchMock).not.toHaveBeenCalledWith("/api/board/alpha/wall/notes/n1", { method: "DELETE" });
+  });
+
+  it("opens the todo dialog seeded with the note text when Create Todo is chosen", async () => {
+    const mod = await import("./wall.js");
+    await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
+    await flushPromises();
+
+    const noteEl = wallSurfaceEl.querySelector(".wall-note");
+    if (!(noteEl instanceof HTMLElement)) throw new Error("missing wall note");
+    noteEl.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 30, clientY: 30 }));
+    await flushPromises();
+
+    const createBtn = wallDialogEl.querySelector<HTMLButtonElement>('.wall-note-context-menu [data-action="create-todo"]');
+    if (!createBtn) throw new Error("missing create-todo menu item");
+    createBtn.click();
+    // Dynamic import + two awaited then-chains inside wall.ts; flush a few
+    // extra microtask turns so vitest's module resolver settles.
+    await flushPromises(20);
+
+    expect(openTodoDialogMock).toHaveBeenCalledTimes(1);
+    const call = openTodoDialogMock.mock.calls[0][0];
+    expect(call).toMatchObject({ mode: "create", role: "maintainer", initialTitle: "Hello" });
+    expect(confirmDeleteMock).not.toHaveBeenCalled();
+    expect(apiFetchMock).not.toHaveBeenCalledWith("/api/board/alpha/wall/notes/n1", { method: "DELETE" });
+    expect(wallDialogEl.querySelector(".wall-note-context-menu")).toBeNull();
+    expect(wallDialogEl.open).toBe(true);
+  });
+
+  it("dismisses the context menu without action when user clicks outside", async () => {
+    const mod = await import("./wall.js");
+    await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
+    await flushPromises();
+
+    const noteEl = wallSurfaceEl.querySelector(".wall-note");
+    if (!(noteEl instanceof HTMLElement)) throw new Error("missing wall note");
+    noteEl.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: 30, clientY: 30 }));
+    await flushPromises();
+    expect(wallDialogEl.querySelector(".wall-note-context-menu")).toBeTruthy();
+
+    document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true }));
+    await flushPromises();
+
+    expect(wallDialogEl.querySelector(".wall-note-context-menu")).toBeNull();
+    expect(confirmDeleteMock).not.toHaveBeenCalled();
     expect(apiFetchMock).not.toHaveBeenCalledWith("/api/board/alpha/wall/notes/n1", { method: "DELETE" });
   });
 

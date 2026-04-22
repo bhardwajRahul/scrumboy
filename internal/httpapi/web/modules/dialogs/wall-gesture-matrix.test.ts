@@ -283,12 +283,18 @@ describe("wall gesture × modality regression matrix", () => {
     expect(transientPostsAt()).toBeGreaterThanOrEqual(afterFirstFrame + 1);
   });
 
-  it("right-click delete on note × confirm=true → DELETE /wall/notes/{id}", async () => {
+  it("right-click on note × menu Delete + confirm=true → DELETE /wall/notes/{id}", async () => {
     confirmDeleteMock.mockResolvedValue(true);
     await openWall();
     const noteEl = getNoteEl("n1");
 
     dispatchMouse(noteEl, "contextmenu", { button: 2, clientX: 30, clientY: 30 });
+    await flushPromises();
+    const deleteBtn = wallDialogEl.querySelector<HTMLButtonElement>(
+      '.wall-note-context-menu [data-action="delete"]',
+    );
+    expect(deleteBtn).toBeTruthy();
+    deleteBtn!.click();
     await flushPromises();
 
     expect(confirmDeleteMock).toHaveBeenCalledWith("Delete this note?");
@@ -298,13 +304,18 @@ describe("wall gesture × modality regression matrix", () => {
     );
   });
 
-  it("right-click delete on note × confirm=false → no DELETE, no color PATCH (3.14.x regression)", async () => {
+  it("right-click on note × menu Delete + confirm=false → no DELETE, no color PATCH (3.14.x regression)", async () => {
     vi.useFakeTimers();
     confirmDeleteMock.mockResolvedValue(false);
     await openWall();
     const noteEl = getNoteEl("n1");
 
     dispatchMouse(noteEl, "contextmenu", { button: 2, clientX: 30, clientY: 30 });
+    const deleteBtn = wallDialogEl.querySelector<HTMLButtonElement>(
+      '.wall-note-context-menu [data-action="delete"]',
+    );
+    expect(deleteBtn).toBeTruthy();
+    deleteBtn!.click();
     vi.advanceTimersByTime(500);
     await flushPromises();
 
@@ -320,11 +331,11 @@ describe("wall gesture × modality regression matrix", () => {
     expect(colorPatches).toHaveLength(0);
   });
 
-  it("right-click delete on note × full pointer sequence → no color PATCH even after DOUBLE_TAP_MS", async () => {
+  it("right-click on note × full pointer sequence → no color PATCH even after DOUBLE_TAP_MS", async () => {
     // Real browsers fire pointerdown → contextmenu → pointerup around a
     // right-click. Without the primary-button guard in the pointerdown
     // handler, pointerdown arms armNoteInteraction which then schedules
-    // a color-cycle timer on pointerup, racing the delete confirm. This
+    // a color-cycle timer on pointerup, racing the right-click menu. This
     // characterization replays the full sequence so the bug cannot hide
     // again behind a bare contextmenu dispatch.
     vi.useFakeTimers();
