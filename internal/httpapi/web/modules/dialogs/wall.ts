@@ -29,27 +29,25 @@ import {
   closeWallBtn,
   wallTrash,
 } from "../dom/elements.js";
-import { apiFetch } from "../api.js";
+import {
+  createEdgeRemote,
+  createNote as createNoteRemote,
+  deleteEdgeRemote,
+  deleteNoteRemote,
+  patchNoteRemote,
+} from "./wall-api.js";
 import { confirmDelete, showToast } from "../utils.js";
-import { on, off } from "../events.js";
 import { getUser } from "../state/selectors.js";
 import { canEditWall, type WallRole } from "./wall-permissions.js";
 import {
   buildNoteElement,
   renderEmptyWallHtml,
-  clampDim,
-  enterEditMode,
-  exitEditMode,
   isEditing,
   ensureEdgeOverlay,
   renderEdges,
   updateEdgesForNote,
   beginEdgePreview,
   getNoteCenterFromElement,
-  MIN_NOTE_WIDTH,
-  MIN_NOTE_HEIGHT,
-  MAX_NOTE_WIDTH,
-  MAX_NOTE_HEIGHT,
   type WallDocument,
   type WallEdge,
   type WallNote,
@@ -57,12 +55,34 @@ import {
 import {
   DOUBLE_TAP_MS,
   DRAG_THRESHOLD_PX,
-  TRANSIENT_COALESCE_MS,
   DEFAULT_NOTE_WIDTH,
   DEFAULT_NOTE_HEIGHT,
   RAINBOW_COLORS,
   nextColor,
 } from "./wall-postbaby-constants.js";
+import {
+  getMounted,
+  setMounted,
+  resetEditGuards,
+  type Mounted,
+} from "./wall-state.js";
+import {
+  clearSelection,
+  pruneSelection,
+  setSelection,
+  syncSelectionDom,
+  toggleSelection,
+} from "./wall-selection.js";
+import {
+  beginDrag as beginDragController,
+  startResize as startResizeController,
+} from "./wall-drag-controller.js";
+import {
+  applyTransient as applyTransientImpl,
+  refetchDoc as refetchDocImpl,
+  startRealtime,
+} from "./wall-realtime.js";
+import { beginEdit as beginEditController } from "./wall-edit-controller.js";
 
 export interface OpenWallDialogOptions {
   projectId: number;
@@ -72,45 +92,6 @@ export interface OpenWallDialogOptions {
 
 const TEARDOWN_MARKER = Symbol("wallMounted");
 
-type TransientEntry = {
-  lastX: number;
-  lastY: number;
-  lastSentAt: number;
-  timer: ReturnType<typeof setTimeout> | null;
-};
-
-type Mounted = {
-  projectId: number;
-  slug: string;
-  role: WallRole;
-  canEdit: boolean;
-  doc: WallDocument;
-  userId: number | null;
-  onRefreshNeeded: () => void;
-  onTransient: (payload: unknown) => void;
-  abort: AbortController;
-  prevHtmlOverflow: string;
-  // Per-note transient coalescing. One map entry per actively dragging note.
-  transient: Map<string, TransientEntry>;
-  // Pending single-click color-cycle timers per note.
-  colorTimers: Map<string, ReturnType<typeof setTimeout>>;
-  // Track last-clicked timestamp per note for mouse dblclick fallback.
-  lastTapAt: Map<string, number>;
-  // Multi-select: ids of notes currently selected (marquee / Ctrl-click).
-  selected: Set<string>;
-};
-
-let mounted: Mounted | null = null;
-
-// Guard against SSE-driven `refetchDoc` blowing away an in-progress edit. A
-// freshly right-clicked note enters edit mode synchronously, but the server's
-// `wall.refresh_needed` echo would otherwise re-render `#wallSurface` and
-// destroy the textarea (and focus) before the user can type a single key.
-// While this is non-null the refetch path defers; when the edit finishes we
-// flush any deferred refresh.
-let activeWallEditNoteId: string | null = null;
-let pendingRefetchWhileEditing = false;
-
 // Public entry: open the wall dialog and boot its full lifecycle.
 export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void> {
   if (!wallDialog || !wallSurface) {
@@ -118,7 +99,7 @@ export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void>
     return;
   }
   const dialog = wallDialog as HTMLDialogElement;
-  if (mounted) {
+  if (getMounted()) {
     if (!dialog.open) dialog.showModal();
     return;
   }
@@ -141,7 +122,7 @@ export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void>
     lastTapAt: new Map(),
     selected: new Set<string>(),
   };
-  mounted = state;
+  setMounted(state);
   (dialog as any)[TEARDOWN_MARKER] = true;
 
   wallSurface.classList.toggle("wall-surface--readonly", !canEdit);
@@ -153,8 +134,11 @@ export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void>
   dialog.addEventListener("close", teardown, { signal: state.abort.signal, once: true });
   dialog.addEventListener("cancel", () => dialog.close(), { signal: state.abort.signal });
 
-  on("wall:refresh_needed", state.onRefreshNeeded);
-  on("wall:transient", state.onTransient);
+  const stopRealtime = startRealtime({
+    onRefreshNeeded: state.onRefreshNeeded,
+    onTransient: state.onTransient,
+  });
+  state.abort.signal.addEventListener("abort", stopRealtime, { once: true });
 
   bindSurfaceHandlers(state);
 
@@ -166,10 +150,8 @@ export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void>
 }
 
 function teardown(): void {
-  const state = mounted;
+  const state = getMounted();
   if (!state) return;
-  off("wall:refresh_needed", state.onRefreshNeeded);
-  off("wall:transient", state.onTransient);
   for (const t of state.colorTimers.values()) clearTimeout(t);
   state.colorTimers.clear();
   for (const entry of state.transient.values()) {
@@ -185,39 +167,21 @@ function teardown(): void {
   }
   if (wallDialog) (wallDialog as any)[TEARDOWN_MARKER] = false;
   document.documentElement.style.overflow = state.prevHtmlOverflow;
-  mounted = null;
-  activeWallEditNoteId = null;
-  pendingRefetchWhileEditing = false;
+  setMounted(null);
+  resetEditGuards();
 }
 
-async function refetchDoc(): Promise<void> {
-  const state = mounted;
-  if (!state) return;
-  // Don't nuke the DOM while the user is typing into a freshly created note.
-  // We'll re-run this refetch the moment the edit commits or is cancelled.
-  if (activeWallEditNoteId) {
-    pendingRefetchWhileEditing = true;
-    return;
-  }
-  try {
-    const doc = await apiFetch<WallDocument>(`/api/board/${encodeURIComponent(state.slug)}/wall`);
-    if (!mounted || mounted !== state) return;
-    // Second check: the user may have right-clicked to create a note while
-    // this GET was in flight. Respect the freshly active edit and postpone.
-    if (activeWallEditNoteId) {
-      pendingRefetchWhileEditing = true;
-      return;
-    }
-    state.doc = normalizeDoc(doc);
-    renderSurface();
-  } catch (err: any) {
-    if (err?.status === 404) {
-      showToast("This board does not have a wall.");
-      (wallDialog as HTMLDialogElement | null)?.close();
-      return;
-    }
-    console.warn("wall refetch failed", err);
-  }
+function refetchDoc(): Promise<void> {
+  return refetchDocImpl({
+    onApplyDoc: (state, doc) => {
+      state.doc = normalizeDoc(doc);
+      renderSurface();
+    },
+  });
+}
+
+function applyTransient(payload: unknown): void {
+  applyTransientImpl(payload, noteElementById);
 }
 
 function normalizeDoc(doc: WallDocument | null | undefined): WallDocument {
@@ -231,7 +195,7 @@ function normalizeDoc(doc: WallDocument | null | undefined): WallDocument {
 }
 
 function renderSurface(): void {
-  const state = mounted;
+  const state = getMounted();
   if (!state || !wallSurface) return;
   wallSurface.innerHTML = "";
   if (state.doc.notes.length === 0) {
@@ -250,51 +214,6 @@ function renderSurface(): void {
   // Drop selection entries whose notes no longer exist (remote delete,
   // server-side reconcile), then reapply the `--selected` class.
   pruneSelection();
-  syncSelectionDom();
-}
-
-// ---- Multi-select state -------------------------------------------------
-
-function syncSelectionDom(): void {
-  const state = mounted;
-  if (!state || !wallSurface) return;
-  const all = wallSurface.querySelectorAll<HTMLElement>(".wall-note");
-  all.forEach((el) => {
-    const id = el.dataset.noteId || "";
-    el.classList.toggle("wall-note--selected", state.selected.has(id));
-  });
-}
-
-function pruneSelection(): void {
-  const state = mounted;
-  if (!state) return;
-  if (state.selected.size === 0) return;
-  const live = new Set(state.doc.notes.map((n) => n.id));
-  for (const id of Array.from(state.selected)) {
-    if (!live.has(id)) state.selected.delete(id);
-  }
-}
-
-function clearSelection(): void {
-  const state = mounted;
-  if (!state) return;
-  if (state.selected.size === 0) return;
-  state.selected.clear();
-  syncSelectionDom();
-}
-
-function setSelection(ids: Iterable<string>): void {
-  const state = mounted;
-  if (!state) return;
-  state.selected = new Set(ids);
-  syncSelectionDom();
-}
-
-function toggleSelection(id: string): void {
-  const state = mounted;
-  if (!state) return;
-  if (state.selected.has(id)) state.selected.delete(id);
-  else state.selected.add(id);
   syncSelectionDom();
 }
 
@@ -327,32 +246,29 @@ function updateNoteElement(note: WallNote): void {
 }
 
 function findNote(id: string): WallNote | undefined {
-  return mounted?.doc.notes.find((n) => n.id === id);
+  return getMounted()?.doc.notes.find((n) => n.id === id);
 }
 
 function replaceNoteInDoc(updated: WallNote): void {
-  const state = mounted;
+  const state = getMounted();
   if (!state) return;
   const idx = state.doc.notes.findIndex((n) => n.id === updated.id);
   if (idx >= 0) state.doc.notes[idx] = updated;
 }
 
 async function createNoteAt(x: number, y: number): Promise<void> {
-  const state = mounted;
+  const state = getMounted();
   if (!state || !state.canEdit) return;
   try {
-    const created = await apiFetch<WallNote>(`/api/board/${encodeURIComponent(state.slug)}/wall/notes`, {
-      method: "POST",
-      body: JSON.stringify({
-        x: Math.max(0, Math.round(x)),
-        y: Math.max(0, Math.round(y)),
-        width: DEFAULT_NOTE_WIDTH,
-        height: DEFAULT_NOTE_HEIGHT,
-        color: RAINBOW_COLORS[0],
-        text: "",
-      }),
+    const created = await createNoteRemote(state.slug, {
+      x: Math.max(0, Math.round(x)),
+      y: Math.max(0, Math.round(y)),
+      width: DEFAULT_NOTE_WIDTH,
+      height: DEFAULT_NOTE_HEIGHT,
+      color: RAINBOW_COLORS[0],
+      text: "",
     });
-    if (!mounted || mounted !== state) return;
+    if (getMounted() !== state) return;
     state.doc.notes.push(created);
     renderSurface();
     // Drop straight into edit mode so the user can type right away.
@@ -365,16 +281,13 @@ async function createNoteAt(x: number, y: number): Promise<void> {
 }
 
 async function patchNote(id: string, patch: Partial<Pick<WallNote, "x" | "y" | "width" | "height" | "color" | "text">>): Promise<void> {
-  const state = mounted;
+  const state = getMounted();
   if (!state) return;
   const current = findNote(id);
   if (!current) return;
   try {
-    const updated = await apiFetch<WallNote>(`/api/board/${encodeURIComponent(state.slug)}/wall/notes/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ ifVersion: current.version, ...patch }),
-    });
-    if (!mounted || mounted !== state) return;
+    const updated = await patchNoteRemote(state.slug, id, { ifVersion: current.version, ...patch });
+    if (getMounted() !== state) return;
     replaceNoteInDoc(updated);
     updateNoteElement(updated);
   } catch (err: any) {
@@ -389,13 +302,11 @@ async function patchNote(id: string, patch: Partial<Pick<WallNote, "x" | "y" | "
 }
 
 async function deleteNote(id: string): Promise<void> {
-  const state = mounted;
+  const state = getMounted();
   if (!state) return;
   try {
-    await apiFetch(`/api/board/${encodeURIComponent(state.slug)}/wall/notes/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
-    if (!mounted || mounted !== state) return;
+    await deleteNoteRemote(state.slug, id);
+    if (getMounted() !== state) return;
     state.doc.notes = state.doc.notes.filter((n) => n.id !== id);
     // Drop dependent edges client-side too; server already does the same on
     // DELETE /notes/{id}, this just keeps the local doc consistent before
@@ -411,7 +322,7 @@ async function deleteNote(id: string): Promise<void> {
 }
 
 async function createEdge(fromId: string, toId: string): Promise<void> {
-  const state = mounted;
+  const state = getMounted();
   if (!state || !state.canEdit) return;
   if (fromId === toId) return;
   // Local duplicate guard so we don't fire a useless POST when the user
@@ -421,11 +332,8 @@ async function createEdge(fromId: string, toId: string): Promise<void> {
   );
   if (existing) return;
   try {
-    const created = await apiFetch<WallEdge>(`/api/board/${encodeURIComponent(state.slug)}/wall/edges`, {
-      method: "POST",
-      body: JSON.stringify({ from: fromId, to: toId }),
-    });
-    if (!mounted || mounted !== state) return;
+    const created = await createEdgeRemote(state.slug, fromId, toId);
+    if (getMounted() !== state) return;
     if (!state.doc.edges) state.doc.edges = [];
     // Server returns the existing edge on duplicate (idempotent); de-dupe.
     if (!state.doc.edges.some((e) => e.id === created.id)) {
@@ -439,13 +347,11 @@ async function createEdge(fromId: string, toId: string): Promise<void> {
 }
 
 async function deleteEdge(edgeId: string): Promise<void> {
-  const state = mounted;
+  const state = getMounted();
   if (!state || !state.canEdit) return;
   try {
-    await apiFetch(`/api/board/${encodeURIComponent(state.slug)}/wall/edges/${encodeURIComponent(edgeId)}`, {
-      method: "DELETE",
-    });
-    if (!mounted || mounted !== state) return;
+    await deleteEdgeRemote(state.slug, edgeId);
+    if (getMounted() !== state) return;
     if (state.doc.edges) {
       state.doc.edges = state.doc.edges.filter((e) => e.id !== edgeId);
     }
@@ -453,80 +359,6 @@ async function deleteEdge(edgeId: string): Promise<void> {
   } catch (err) {
     console.warn("wall edge delete failed", err);
     showToast("Could not delete connection");
-  }
-}
-
-// ---- Transient (non-durable) drag fanout ---------------------------------
-
-function scheduleTransient(state: Mounted, noteId: string, x: number, y: number): void {
-  let entry = state.transient.get(noteId);
-  if (!entry) {
-    entry = { lastX: x, lastY: y, lastSentAt: 0, timer: null };
-    state.transient.set(noteId, entry);
-  }
-  entry.lastX = x;
-  entry.lastY = y;
-  const now = performance.now();
-  const elapsed = now - entry.lastSentAt;
-  if (elapsed >= TRANSIENT_COALESCE_MS) {
-    sendTransientNow(state, noteId);
-    return;
-  }
-  if (!entry.timer) {
-    entry.timer = setTimeout(() => {
-      if (!mounted || mounted !== state) return;
-      sendTransientNow(state, noteId);
-    }, TRANSIENT_COALESCE_MS - elapsed);
-  }
-}
-
-function flushTransient(state: Mounted, noteId: string): void {
-  const entry = state.transient.get(noteId);
-  if (!entry) return;
-  if (entry.timer) {
-    clearTimeout(entry.timer);
-    entry.timer = null;
-  }
-  sendTransientNow(state, noteId);
-  state.transient.delete(noteId);
-}
-
-function sendTransientNow(state: Mounted, noteId: string): void {
-  const entry = state.transient.get(noteId);
-  if (!entry) return;
-  if (entry.timer) {
-    clearTimeout(entry.timer);
-    entry.timer = null;
-  }
-  entry.lastSentAt = performance.now();
-  void apiFetch(`/api/board/${encodeURIComponent(state.slug)}/wall/transient`, {
-    method: "POST",
-    body: JSON.stringify({ noteId, x: entry.lastX, y: entry.lastY }),
-  }).catch(() => {});
-}
-
-function applyTransient(payload: unknown): void {
-  const state = mounted;
-  if (!state || !wallSurface) return;
-  const envelope = payload as any;
-  const p = envelope?.payload ?? envelope;
-  if (!p || typeof p !== "object") return;
-  const noteId = typeof p.noteId === "string" ? p.noteId : null;
-  const x = typeof p.x === "number" ? p.x : null;
-  const y = typeof p.y === "number" ? p.y : null;
-  const by = typeof p.by === "number" ? p.by : null;
-  if (!noteId || x === null || y === null) return;
-  // Echo suppression: ignore transients this user originated.
-  if (by !== null && state.userId !== null && by === state.userId) return;
-  const el = noteElementById(noteId);
-  if (!el) return;
-  if (el.classList.contains("wall-note--dragging")) return; // ignore for locally-dragging notes
-  el.style.left = `${Math.round(x)}px`;
-  el.style.top = `${Math.round(y)}px`;
-  // Keep edges glued during remote-driven moves too, so other clients see
-  // their connection lines follow the moving note in real time.
-  if (wallSurface) {
-    updateEdgesForNote(wallSurface, noteId, x + el.offsetWidth / 2, y + el.offsetHeight / 2);
   }
 }
 
@@ -575,7 +407,16 @@ function bindSurfaceHandlers(state: Mounted): void {
       const noteId = noteEl.dataset.noteId || "";
       if (noteId) {
         ev.preventDefault();
-        startResize(state, ev, noteEl, noteId);
+        startResizeController({
+          state,
+          ev,
+          noteEl,
+          noteId,
+          findNote,
+          onCommitResize: (id, width, height) => {
+            void patchNote(id, { width, height });
+          },
+        });
       }
       return;
     }
@@ -812,7 +653,31 @@ function armNoteInteraction(state: Mounted, ev: PointerEvent, noteEl: HTMLElemen
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
       document.removeEventListener("pointercancel", onUp);
-      beginDrag(state, mv, noteEl, noteId, startX, startY);
+      beginDragController({
+        state,
+        ev: mv,
+        noteEl,
+        noteId,
+        downX: startX,
+        downY: startY,
+        findNote,
+        noteElementById,
+        cancelColorTimer,
+        onCommitDragPositions: (commits) => {
+          for (const c of commits) void patchNote(c.id, { x: c.x, y: c.y });
+        },
+        onDropOnTrash: (participantIds, isGroup) => {
+          const n = participantIds.length;
+          const prompt = n === 1 ? "Delete this note?" : `Delete ${n} notes?`;
+          void confirmDelete(prompt).then((ok) => {
+            if (ok) {
+              for (const id of participantIds) void deleteNote(id);
+            }
+            if (isGroup) clearSelection();
+          });
+        },
+        onClearSelectionAfterGroupDrop: () => clearSelection(),
+      });
     }
   };
   const onUp = (up: PointerEvent) => {
@@ -855,239 +720,11 @@ function armNoteInteraction(state: Mounted, ev: PointerEvent, noteEl: HTMLElemen
   document.addEventListener("pointercancel", onUp, { signal: state.abort.signal });
 }
 
-// ---- Drag (document-scoped, rAF) ----------------------------------------
-
-type DragParticipant = {
-  id: string;
-  el: HTMLElement;
-  startX: number;
-  startY: number;
-  note: WallNote;
-};
-
-function beginDrag(state: Mounted, ev: PointerEvent, noteEl: HTMLElement, noteId: string, downX: number, downY: number): void {
-  const primary = findNote(noteId);
-  if (!primary) return;
-  cancelColorTimer(state, noteId);
-
-  const surface = wallSurface!;
-  const surfaceRect = surface.getBoundingClientRect();
-  const noteRect = noteEl.getBoundingClientRect();
-  // shiftX/shiftY: offset from pointer-down position to the primary note's
-  // top-left, measured within the surface. Using the original downX/downY
-  // (rather than current pointer position) preserves the visual feel of
-  // Postbaby's `shiftX = clientX - rect.left` so the note doesn't jump.
-  const shiftX = downX - noteRect.left;
-  const shiftY = downY - noteRect.top;
-
-  // Group drag when the grabbed note is part of a multi-selection; otherwise
-  // single-note drag (and clear any stale lingering selection if user grabs
-  // a note that isn't in it — the armNoteInteraction path already replaced
-  // the selection by now, so this is cheap to double-check).
-  const isGroup = state.selected.has(noteId) && state.selected.size > 1;
-  const participants: DragParticipant[] = [];
-  if (isGroup) {
-    for (const id of state.selected) {
-      const n = findNote(id);
-      const el = noteElementById(id);
-      if (!n || !el) continue;
-      participants.push({ id, el, startX: n.x, startY: n.y, note: n });
-    }
-  } else {
-    participants.push({ id: noteId, el: noteEl, startX: primary.x, startY: primary.y, note: primary });
-  }
-
-  for (const p of participants) p.el.classList.add("wall-note--dragging");
-  showTrash(true);
-
-  let animationFrameId: number | null = null;
-  let lastClientX = ev.clientX;
-  let lastClientY = ev.clientY;
-
-  function moveAt(clientX: number, clientY: number) {
-    lastClientX = clientX;
-    lastClientY = clientY;
-    if (animationFrameId !== null) return;
-    animationFrameId = requestAnimationFrame(() => {
-      animationFrameId = null;
-      // Primary note's new top-left, clamped to surface origin.
-      const rawX = lastClientX - surfaceRect.left - shiftX;
-      const rawY = lastClientY - surfaceRect.top - shiftY;
-      // Cap the delta so no participant crosses x=0 or y=0. This preserves
-      // the group's internal spacing when one member bumps the wall edge.
-      let minDeltaX = rawX - primary.x;
-      let minDeltaY = rawY - primary.y;
-      for (const p of participants) {
-        if (p.startX + minDeltaX < 0) minDeltaX = -p.startX;
-        if (p.startY + minDeltaY < 0) minDeltaY = -p.startY;
-      }
-      for (const p of participants) {
-        const nx = p.startX + minDeltaX;
-        const ny = p.startY + minDeltaY;
-        p.el.style.left = `${Math.round(nx)}px`;
-        p.el.style.top = `${Math.round(ny)}px`;
-        scheduleTransient(state, p.id, nx, ny);
-        if (wallSurface) {
-          updateEdgesForNote(wallSurface, p.id, nx + p.el.offsetWidth / 2, ny + p.el.offsetHeight / 2);
-        }
-      }
-      updateTrashHoverAny(participants);
-    });
-  }
-
-  const onMove = (mv: PointerEvent) => {
-    mv.preventDefault();
-    moveAt(mv.clientX, mv.clientY);
-  };
-  const onUp = (up: PointerEvent) => {
-    document.removeEventListener("pointermove", onMove);
-    document.removeEventListener("pointerup", onUp);
-    document.removeEventListener("pointercancel", onUp);
-    if (animationFrameId !== null) {
-      cancelAnimationFrame(animationFrameId);
-      animationFrameId = null;
-    }
-    for (const p of participants) p.el.classList.remove("wall-note--dragging");
-
-    const overlappingTrash = participants.some((p) => isOverTrash(p.el));
-    showTrash(false);
-
-    if (overlappingTrash) {
-      // Revert visuals to starting positions before confirming so notes
-      // don't sit over the trash while the native dialog is up.
-      for (const p of participants) {
-        p.el.style.left = `${Math.round(p.startX)}px`;
-        p.el.style.top = `${Math.round(p.startY)}px`;
-        if (wallSurface) {
-          updateEdgesForNote(wallSurface, p.id, p.startX + p.el.offsetWidth / 2, p.startY + p.el.offsetHeight / 2);
-        }
-      }
-      const n = participants.length;
-      const prompt = n === 1 ? "Delete this note?" : `Delete ${n} notes?`;
-      void confirmDelete(prompt).then((ok) => {
-        if (ok) {
-          for (const p of participants) {
-            void deleteNote(p.id);
-          }
-        }
-        if (isGroup) clearSelection();
-      });
-      return;
-    }
-
-    // Final transient flush + durable PATCH for each moved participant.
-    for (const p of participants) {
-      const finalX = parseInt(p.el.style.left || "0", 10);
-      const finalY = parseInt(p.el.style.top || "0", 10);
-      scheduleTransient(state, p.id, finalX, finalY);
-      flushTransient(state, p.id);
-      if (finalX !== p.note.x || finalY !== p.note.y) {
-        void patchNote(p.id, { x: finalX, y: finalY });
-      }
-    }
-    // Drop clears the group selection (user-requested behavior).
-    if (isGroup) clearSelection();
-    void up;
-  };
-  document.addEventListener("pointermove", onMove, { signal: state.abort.signal, passive: false });
-  document.addEventListener("pointerup", onUp, { signal: state.abort.signal });
-  document.addEventListener("pointercancel", onUp, { signal: state.abort.signal });
-}
-
-function startResize(state: Mounted, ev: PointerEvent, noteEl: HTMLElement, noteId: string): void {
-  const note = findNote(noteId);
-  if (!note) return;
-  const startX = ev.clientX;
-  const startY = ev.clientY;
-  const origW = note.width;
-  const origH = note.height;
-
-  const onMove = (mv: PointerEvent) => {
-    mv.preventDefault();
-    const dw = mv.clientX - startX;
-    const dh = mv.clientY - startY;
-    const w = clampDim(origW + dw, MIN_NOTE_WIDTH, MAX_NOTE_WIDTH);
-    const h = clampDim(origH + dh, MIN_NOTE_HEIGHT, MAX_NOTE_HEIGHT);
-    noteEl.style.width = `${Math.round(w)}px`;
-    noteEl.style.height = `${Math.round(h)}px`;
-  };
-  const onUp = () => {
-    document.removeEventListener("pointermove", onMove);
-    document.removeEventListener("pointerup", onUp);
-    document.removeEventListener("pointercancel", onUp);
-    const finalW = parseInt(noteEl.style.width || "0", 10);
-    const finalH = parseInt(noteEl.style.height || "0", 10);
-    if (finalW !== origW || finalH !== origH) {
-      void patchNote(noteId, { width: finalW, height: finalH });
-    }
-  };
-  document.addEventListener("pointermove", onMove, { signal: state.abort.signal, passive: false });
-  document.addEventListener("pointerup", onUp, { signal: state.abort.signal });
-  document.addEventListener("pointercancel", onUp, { signal: state.abort.signal });
-}
-
 // ---- Edit mode ----------------------------------------------------------
 
 function beginEdit(noteEl: HTMLElement, note: WallNote): void {
-  const state = mounted;
-  if (!state || !state.canEdit) return;
-  if (isEditing(noteEl)) return;
-  activeWallEditNoteId = note.id;
-  const ta = enterEditMode(noteEl, note.text);
-  ta.focus();
-  const end = ta.value.length;
-  try { ta.setSelectionRange(end, end); } catch { /* ignore */ }
-
-  let finished = false;
-  const finish = (commit: boolean) => {
-    if (finished) return;
-    finished = true;
-    activeWallEditNoteId = null;
-    const newText = ta.value;
-    exitEditMode(noteEl, commit ? newText : note.text);
-    ta.removeEventListener("blur", onBlur);
-    ta.removeEventListener("keydown", onKey);
-    if (commit && newText !== note.text) {
-      void patchNote(note.id, { text: newText });
-    }
-    // Flush any refresh_needed events that arrived while the user was typing.
-    if (pendingRefetchWhileEditing) {
-      pendingRefetchWhileEditing = false;
-      void refetchDoc();
-    }
-  };
-  const onBlur = () => finish(true);
-  const onKey = (ev: KeyboardEvent) => {
-    if (ev.key === "Escape") {
-      ev.preventDefault();
-      finish(false);
-    } else if (ev.key === "Enter" && !ev.shiftKey) {
-      ev.preventDefault();
-      finish(true);
-    }
-    // Shift+Enter falls through to native newline insertion.
-  };
-  ta.addEventListener("blur", onBlur);
-  ta.addEventListener("keydown", onKey);
-}
-
-// ---- Trash strip -------------------------------------------------------
-
-function showTrash(visible: boolean): void {
-  if (!wallTrash) return;
-  wallTrash.classList.toggle("wall-trash--visible", visible);
-  if (!visible) wallTrash.classList.remove("wall-trash--active");
-}
-
-function updateTrashHoverAny(participants: Array<{ el: HTMLElement }>): void {
-  if (!wallTrash) return;
-  const active = participants.some((p) => isOverTrash(p.el));
-  wallTrash.classList.toggle("wall-trash--active", active);
-}
-
-function isOverTrash(noteEl: HTMLElement): boolean {
-  if (!wallTrash) return false;
-  const a = noteEl.getBoundingClientRect();
-  const b = wallTrash.getBoundingClientRect();
-  return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+  beginEditController(noteEl, note, {
+    onCommitText: (id, text) => { void patchNote(id, { text }); },
+    onFlushDeferredRefetch: () => { void refetchDoc(); },
+  });
 }

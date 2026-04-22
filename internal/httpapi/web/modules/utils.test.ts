@@ -1,18 +1,20 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
-import { confirmDelete } from "./utils.js";
+import { confirmDelete, showConfirmDialog } from "./utils.js";
 
 function installDialogPolyfill(): void {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
     configurable: true,
     value(this: HTMLDialogElement) {
-      this.open = true;
+      this.setAttribute("open", "");
     },
   });
   Object.defineProperty(HTMLDialogElement.prototype, "close", {
     configurable: true,
     value(this: HTMLDialogElement) {
-      this.open = false;
+      if (!this.hasAttribute("open")) return;
+      this.removeAttribute("open");
+      this.dispatchEvent(new Event("close"));
     },
   });
 }
@@ -57,6 +59,57 @@ describe("confirmDelete", () => {
     expect(confirmBtn.textContent).toBe("Yes, delete");
 
     cancelBtn.click();
+    await expect(resultPromise).resolves.toBe(false);
+  });
+});
+
+describe("showConfirmDialog lifecycle", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    installDialogPolyfill();
+  });
+
+  it("resolves true exactly once even on double-click confirm", async () => {
+    const resultPromise = showConfirmDialog("Proceed?");
+    const confirmBtn = document.getElementById("confirmDialogConfirm") as HTMLButtonElement;
+    confirmBtn.click();
+    confirmBtn.click();
+    await expect(resultPromise).resolves.toBe(true);
+    // Dialog DOM cleaned up after settle.
+    expect(document.getElementById("confirmDialogConfirm")).toBeNull();
+  });
+
+  it("resolves false when the close (x) button is pressed", async () => {
+    const resultPromise = showConfirmDialog("Proceed?");
+    const closeBtn = document.getElementById("confirmDialogClose") as HTMLButtonElement;
+    closeBtn.click();
+    await expect(resultPromise).resolves.toBe(false);
+  });
+
+  it("resolves false when the dialog is closed externally (regression for drag-to-trash)", async () => {
+    const resultPromise = showConfirmDialog("Proceed?");
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+    // Simulate a global outside-click helper calling close() without ever
+    // interacting with any button inside the confirm dialog.
+    dialog.close();
+    await expect(resultPromise).resolves.toBe(false);
+  });
+
+  it("resolves false once and ignores subsequent close() calls", async () => {
+    const resultPromise = showConfirmDialog("Proceed?");
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+    dialog.close();
+    // Second programmatic close should not dispatch a second event (polyfill
+    // guards against double-close) and the Promise must already be settled.
+    dialog.close();
+    await expect(resultPromise).resolves.toBe(false);
+  });
+
+  it("resolves false when the native cancel (ESC) event fires", async () => {
+    const resultPromise = showConfirmDialog("Proceed?");
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+    dialog.dispatchEvent(new Event("cancel"));
+    dialog.close();
     await expect(resultPromise).resolves.toBe(false);
   });
 });
