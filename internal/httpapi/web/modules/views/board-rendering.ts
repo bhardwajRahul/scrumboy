@@ -45,6 +45,7 @@ type BuildTopbarHtmlArgs = {
   showVoiceCommands?: boolean;
   user: any;
   backLabel: string;
+  wallEnabled?: boolean;
 };
 
 type BuildBoardColumnsHtmlArgs = {
@@ -254,9 +255,19 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
     showVoiceCommands,
     user,
     backLabel,
+    wallEnabled,
   } = args;
   const voiceCommandClass = showVoiceCommands ? "topbar--voice-commands-on" : "topbar--voice-commands-off";
   const voiceCommandTriggerHTML = showVoiceCommands ? renderVoiceCommandTriggerHtml() : "";
+  // Scrumbaby is durable-projects-only; temp/anonymous boards never see the entry point.
+  // Desktop only: to the right of the mic (voice trigger) in the topbar flex order.
+  const wallButtonHTML =
+    wallEnabled &&
+    !isMobile &&
+    !isTemporaryBoard(board) &&
+    (currentUserProjectRole === "maintainer" || currentUserProjectRole === "contributor")
+      ? `<button class="btn btn--ghost" type="button" id="wallBtn" title="Open wall" aria-label="Open wall"><img src="/postit.svg" alt="" width="20" height="20" decoding="async" /></button>`
+      : "";
 
   if (minimalTopbar) {
     return `
@@ -272,6 +283,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
         <div class="brand">${escapeHTML(board.project.name)}</div>
         <div class="spacer"></div>
         ${voiceCommandTriggerHTML}
+        ${wallButtonHTML}
         <div class="search-input-wrapper">
           <input
             type="text"
@@ -305,6 +317,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
         <div class="brand">${escapeHTML(board.project.name)}</div>
         <div class="spacer"></div>
         ${voiceCommandTriggerHTML}
+        ${wallButtonHTML}
         <div class="search-input-wrapper">
           <input
             type="text"

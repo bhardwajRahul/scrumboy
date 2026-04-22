@@ -1296,7 +1296,8 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 
 .voice-command-trigger,
 #newTodoBtn,
-#deleteProjectBtn {
+#deleteProjectBtn,
+#wallBtn {
   white-space: nowrap;
   width: 40px;
   min-width: 40px;
@@ -1310,7 +1311,8 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 .voice-command-trigger svg,
 .voice-command-trigger img,
 #newTodoBtn img,
-#deleteProjectBtn img {
+#deleteProjectBtn img,
+#wallBtn img {
   width: 20px;
   height: 20px;
   max-width: 20px;
@@ -1321,7 +1323,8 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 
 .voice-command-trigger img,
 #newTodoBtn img,
-#deleteProjectBtn img {
+#deleteProjectBtn img,
+#wallBtn img {
   display: block;
   filter: var(--voice-command-icon-filter);
   object-fit: contain;
@@ -3239,6 +3242,12 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
     margin-top: var(--s-8);
   }
 
+  /* Wall is desktop-only; HTML can still contain #wallBtn after a wide→narrow
+     resize because topbar is not re-built on breakpoint cross. */
+  .topbar #wallBtn {
+    display: none !important;
+  }
+
   .topbar #deleteProjectBtn {
     order: 6;
     margin-top: var(--s-8);
@@ -4584,3 +4593,259 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   }
 }
 
+
+/* ==========================================================================
+   Scrumbaby sticky-note wall dialog (Postbaby-parity).
+   Fullscreen entered-screen; dark theme tokens scoped to #wallDialog so they
+   do not leak into the rest of the Scrumboy UI. Durable projects only.
+   ========================================================================== */
+#wallDialog.dialog--wall-fullscreen {
+  /* Scoped Postbaby dark tokens. */
+  --wall-bg-page: #1a1b1a;
+  --wall-bg-header: #202120;
+  --wall-fg: #e6e6e1;
+  --wall-fg-muted: #9a9b95;
+  --wall-border: #2f302e;
+  --wall-textarea-bg: #1f201e;
+  --wall-textarea-border: #4a4b47;
+  --wall-note-text: #111;
+  --wall-note-shadow:
+    0 4px 8px 0 rgba(0, 0, 0, 0.35),
+    0 6px 20px 0 rgba(0, 0, 0, 0.3);
+  --wall-trash-bg: rgba(255, 255, 255, 0.04);
+  --wall-trash-bg-active: rgba(224, 87, 75, 0.24);
+  --wall-trash-border: rgba(255, 255, 255, 0.08);
+
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  transform: none;
+  background: var(--wall-bg-page);
+  color: var(--wall-fg);
+  overflow: hidden;
+}
+#wallDialog.dialog--wall-fullscreen::backdrop {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.wall-dialog__shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  position: relative;
+  background: var(--wall-bg-page);
+  color: var(--wall-fg);
+}
+/* Floating close — glyph only (no chip); still a comfortable hit target. */
+.wall-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--wall-fg);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1400;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+.wall-close-btn:hover {
+  opacity: 0.75;
+}
+.wall-close-btn:focus-visible {
+  outline: 2px solid var(--accent, #5aa3ff);
+  outline-offset: 2px;
+}
+
+.wall-surface {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--wall-bg-page);
+  outline: none;
+  touch-action: none;
+  user-select: none;
+  cursor: default;
+}
+.wall-surface--readonly { cursor: default; }
+
+.wall-note {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 16px 20px;
+  border-radius: 15px;
+  box-shadow: var(--wall-note-shadow);
+  background: #4CAF50;
+  color: var(--wall-note-text);
+  z-index: 2;
+  user-select: none;
+  touch-action: none;
+  cursor: grab;
+  overflow: hidden;
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+.wall-note--dragging {
+  cursor: grabbing;
+  z-index: 1000;
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.45),
+    0 14px 40px rgba(0, 0, 0, 0.35);
+  transition: none;
+}
+/* Selected notes pulled to a mid z-index so they float above unselected
+   peers while a marquee or group drag is underway, without eclipsing the
+   actively-dragged stack (1000). Outline is layout-neutral. */
+.wall-note--selected {
+  z-index: 3;
+  outline: 2px solid var(--accent, #5aa3ff);
+  outline-offset: 2px;
+}
+.wall-note--selected.wall-note--dragging {
+  z-index: 1000;
+}
+/* Postbaby parity: `.grid-item` keeps the note color; only `.edit-textarea`
+   uses `--textarea-bg`. Do not paint the whole note dark here. */
+.wall-note--editing {
+  cursor: text;
+  border-radius: 10px; /* matches inner textarea; Postbaby tightens corners in edit */
+}
+.wall-surface--readonly .wall-note { cursor: default; }
+
+/* Shared inner inset so display ↔ edit does not move text; breathing room
+   between copy and the editor’s inset edge (same numbers on both). */
+.wall-note__display,
+.wall-note__editor {
+  padding: 8px;
+}
+
+.wall-note__display {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: hidden;
+  color: inherit;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+/* Inset ring only (no border) so layout matches `.wall-note__display`; thin
+   line reads lighter next to the padded text block. */
+.wall-note__editor {
+  width: 100%;
+  height: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  margin: 0;
+  resize: none;
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  background: var(--wall-textarea-bg);
+  color: var(--wall-fg);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 0.5px var(--wall-textarea-border);
+}
+
+.wall-note__resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  opacity: 0.5;
+  background:
+    linear-gradient(135deg, transparent 40%, rgba(0,0,0,0.6) 40% 50%, transparent 50% 65%, rgba(0,0,0,0.6) 65% 75%, transparent 75%);
+}
+.wall-note__resize-handle:hover { opacity: 0.9; }
+
+/* Edge overlay - SVG that connects notes via Shift+drag (Postbaby parity).
+   The container ignores pointer events; only `.wall-edge-hit` opts in so the
+   user can right-click a connection to delete it. Visual line is painted on
+   top and is non-interactive. */
+.wall-edge-overlay {
+  overflow: visible;
+  /* Below .wall-note (z-index: 2) so connections read like Postbaby */
+  z-index: 0;
+}
+.wall-edge-hit:hover + .wall-edge-line,
+.wall-edge-group:hover .wall-edge-line {
+  stroke: #d6e8ff;
+  stroke-opacity: 1;
+  stroke-width: 3;
+}
+
+/* Wall trash image (scrumbabytrash.png) docked bottom-right — layout matches
+   Postbaby's `.trash { position: fixed; bottom: 10px; right: 10px; ... }`. */
+.wall-trash {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.55;
+  transition: transform 200ms ease, opacity 200ms ease, filter 200ms ease;
+  z-index: 1500;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
+}
+.wall-trash--visible { opacity: 0.85; }
+.wall-trash--active {
+  opacity: 1;
+  transform: scale(1.2);
+  filter: drop-shadow(0 6px 14px rgba(224, 87, 75, 0.55));
+}
+
+/* Marquee selection rectangle painted on `#wallSurface` during empty-canvas
+   left-drag. Pointer-events disabled so the active pointermove/up listeners
+   on document continue to fire untouched. */
+.wall-marquee {
+  position: absolute;
+  border: 1px dashed var(--accent, #5aa3ff);
+  background: rgba(90, 163, 255, 0.12);
+  pointer-events: none;
+  z-index: 1200;
+}
+
+.wall-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  color: var(--wall-fg-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+.wall-empty .muted { color: var(--wall-fg-muted); opacity: 0.75; }
