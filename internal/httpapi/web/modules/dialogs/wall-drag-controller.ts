@@ -25,9 +25,35 @@ import {
   MIN_NOTE_WIDTH,
   type WallNote,
 } from "./wall-rendering.js";
-import { TRANSIENT_COALESCE_MS } from "./wall-postbaby-constants.js";
+import { DRAG_TRANSIENT_COALESCE_MS, TRANSIENT_COALESCE_MS } from "./wall-postbaby-constants.js";
 import { postTransient } from "./wall-api.js";
 import { getMounted, type Mounted } from "./wall-state.js";
+
+// Phase 0 debug counters. Lifetime-accumulating across all drags in the
+// current session; reset via __resetDragCounters() in tests. Per-drag deltas
+// are also emitted via console.debug when window.__scrumboyWallDebug is true.
+const dragCounters = {
+  edgeUpdateBatches: 0,
+  edgeUpdateCalls: 0,
+};
+
+function debugEnabled(): boolean {
+  return (globalThis as any).__scrumboyWallDebug === true;
+}
+
+/** Test helper: read the Phase 0 drag counters. */
+export function __getDragCounters(): { edgeUpdateBatches: number; edgeUpdateCalls: number } {
+  return {
+    edgeUpdateBatches: dragCounters.edgeUpdateBatches,
+    edgeUpdateCalls: dragCounters.edgeUpdateCalls,
+  };
+}
+
+/** Test helper: reset the Phase 0 drag counters between test cases. */
+export function __resetDragCounters(): void {
+  dragCounters.edgeUpdateBatches = 0;
+  dragCounters.edgeUpdateCalls = 0;
+}
 
 type DragParticipant = {
   id: string;
@@ -173,6 +199,55 @@ export function beginDrag(opts: BeginDragOptions): void {
   let lastClientX = ev.clientX;
   let lastClientY = ev.clientY;
 
+  // Phase 0 per-drag stats; aggregated into module-level `dragCounters` when
+  // this drag ends so tests / operators can inspect a full session.
+  const dragStats = { edgeUpdateBatches: 0, edgeUpdateCalls: 0, startedAt: performance.now() };
+
+  // Phase 1: single group-timer (one setTimeout shared by all participants)
+  // instead of N per-note timers. Per-note positions still fan out when the
+  // timer fires via sendTransientNow, so the HTTP payload shape is unchanged;
+  // only the wake-up count collapses from N to 1 per DRAG_TRANSIENT_COALESCE_MS
+  // window. The primary drag id keys the timer so teardown/close is obvious.
+  let groupTransientTimer: ReturnType<typeof setTimeout> | null = null;
+  let groupTransientLastSentAt = 0;
+
+  function storeTransientPosition(id: string, x: number, y: number): void {
+    let entry = state.transient.get(id);
+    if (!entry) {
+      entry = { lastX: x, lastY: y, lastSentAt: 0, timer: null };
+      state.transient.set(id, entry);
+    } else {
+      entry.lastX = x;
+      entry.lastY = y;
+    }
+  }
+
+  function flushGroupTransientsNow(): void {
+    if (groupTransientTimer !== null) {
+      clearTimeout(groupTransientTimer);
+      groupTransientTimer = null;
+    }
+    groupTransientLastSentAt = performance.now();
+    for (const p of participants) {
+      if (state.transient.has(p.id)) sendTransientNow(state, p.id);
+    }
+  }
+
+  function scheduleGroupTransient(): void {
+    const now = performance.now();
+    const elapsed = now - groupTransientLastSentAt;
+    if (elapsed >= DRAG_TRANSIENT_COALESCE_MS) {
+      flushGroupTransientsNow();
+      return;
+    }
+    if (groupTransientTimer !== null) return;
+    groupTransientTimer = setTimeout(() => {
+      groupTransientTimer = null;
+      if (getMounted() !== state) return;
+      flushGroupTransientsNow();
+    }, DRAG_TRANSIENT_COALESCE_MS - elapsed);
+  }
+
   function moveAt(clientX: number, clientY: number) {
     lastClientX = clientX;
     lastClientY = clientY;
@@ -187,15 +262,22 @@ export function beginDrag(opts: BeginDragOptions): void {
         if (p.startX + minDeltaX < 0) minDeltaX = -p.startX;
         if (p.startY + minDeltaY < 0) minDeltaY = -p.startY;
       }
+      let edgeCallsThisTick = 0;
       for (const p of participants) {
         const nx = p.startX + minDeltaX;
         const ny = p.startY + minDeltaY;
         p.el.style.left = `${Math.round(nx)}px`;
         p.el.style.top = `${Math.round(ny)}px`;
-        scheduleTransient(state, p.id, nx, ny);
+        storeTransientPosition(p.id, nx, ny);
         if (wallSurface) {
           updateEdgesForNote(wallSurface, p.id, nx + p.el.offsetWidth / 2, ny + p.el.offsetHeight / 2);
+          edgeCallsThisTick += 1;
         }
+      }
+      scheduleGroupTransient();
+      if (edgeCallsThisTick > 0) {
+        dragStats.edgeUpdateBatches += 1;
+        dragStats.edgeUpdateCalls += edgeCallsThisTick;
       }
       updateTrashHoverAny(participants);
     });
@@ -213,10 +295,31 @@ export function beginDrag(opts: BeginDragOptions): void {
       cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
     }
+    // Cancel any pending group-timer wake-up; the drop path below will
+    // schedule+flush each participant's final position explicitly, so the
+    // coalesced mid-drag POST is no longer needed.
+    if (groupTransientTimer !== null) {
+      clearTimeout(groupTransientTimer);
+      groupTransientTimer = null;
+    }
     for (const p of participants) p.el.classList.remove("wall-note--dragging");
 
     const overlappingTrash = participants.some((p) => isOverTrash(p.el));
     showTrash(false);
+
+    const finalizeDragStats = (outcome: "trash" | "commit") => {
+      dragCounters.edgeUpdateBatches += dragStats.edgeUpdateBatches;
+      dragCounters.edgeUpdateCalls += dragStats.edgeUpdateCalls;
+      if (debugEnabled()) {
+        console.debug("wall drag ended", {
+          outcome,
+          participants: participants.length,
+          edgeUpdateBatches: dragStats.edgeUpdateBatches,
+          edgeUpdateCalls: dragStats.edgeUpdateCalls,
+          durationMs: Math.round(performance.now() - dragStats.startedAt),
+        });
+      }
+    };
 
     if (overlappingTrash) {
       // Revert visuals to starting positions before confirming so notes
@@ -229,6 +332,7 @@ export function beginDrag(opts: BeginDragOptions): void {
         }
       }
       opts.onDropOnTrash(participants.map((p) => p.id), isGroup);
+      finalizeDragStats("trash");
       return;
     }
 
@@ -244,6 +348,7 @@ export function beginDrag(opts: BeginDragOptions): void {
     }
     if (commits.length > 0) opts.onCommitDragPositions(commits);
     if (isGroup) opts.onClearSelectionAfterGroupDrop();
+    finalizeDragStats("commit");
     void up;
   };
   document.addEventListener("pointermove", onMove, { signal: state.abort.signal, passive: false });

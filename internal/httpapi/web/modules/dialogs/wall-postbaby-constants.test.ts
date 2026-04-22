@@ -4,6 +4,7 @@ import {
   DOUBLE_TAP_MS,
   DRAG_THRESHOLD_PX,
   TRANSIENT_COALESCE_MS,
+  DRAG_TRANSIENT_COALESCE_MS,
   colorIndexFromHex,
   nextColor,
   normalizeHex,
@@ -27,6 +28,11 @@ describe('wall-postbaby-constants', () => {
     expect(DOUBLE_TAP_MS).toBe(300);
     expect(DRAG_THRESHOLD_PX).toBe(10);
     expect(TRANSIENT_COALESCE_MS).toBe(100);
+  });
+
+  it('exposes a wider drag-specific coalescing window >= the per-note default', () => {
+    expect(DRAG_TRANSIENT_COALESCE_MS).toBe(150);
+    expect(DRAG_TRANSIENT_COALESCE_MS).toBeGreaterThanOrEqual(TRANSIENT_COALESCE_MS);
   });
 
   it('normalizes hex values for case-insensitive palette lookup', () => {
