@@ -25,7 +25,7 @@ import {
   MIN_NOTE_WIDTH,
   type WallNote,
 } from "./wall-rendering.js";
-import { TRANSIENT_COALESCE_MS } from "./wall-postbaby-constants.js";
+import { DRAG_TRANSIENT_COALESCE_MS, TRANSIENT_COALESCE_MS } from "./wall-postbaby-constants.js";
 import { postTransient } from "./wall-api.js";
 import { getMounted, type Mounted } from "./wall-state.js";
 
@@ -203,6 +203,51 @@ export function beginDrag(opts: BeginDragOptions): void {
   // this drag ends so tests / operators can inspect a full session.
   const dragStats = { edgeUpdateBatches: 0, edgeUpdateCalls: 0, startedAt: performance.now() };
 
+  // Phase 1: single group-timer (one setTimeout shared by all participants)
+  // instead of N per-note timers. Per-note positions still fan out when the
+  // timer fires via sendTransientNow, so the HTTP payload shape is unchanged;
+  // only the wake-up count collapses from N to 1 per DRAG_TRANSIENT_COALESCE_MS
+  // window. The primary drag id keys the timer so teardown/close is obvious.
+  let groupTransientTimer: ReturnType<typeof setTimeout> | null = null;
+  let groupTransientLastSentAt = 0;
+
+  function storeTransientPosition(id: string, x: number, y: number): void {
+    let entry = state.transient.get(id);
+    if (!entry) {
+      entry = { lastX: x, lastY: y, lastSentAt: 0, timer: null };
+      state.transient.set(id, entry);
+    } else {
+      entry.lastX = x;
+      entry.lastY = y;
+    }
+  }
+
+  function flushGroupTransientsNow(): void {
+    if (groupTransientTimer !== null) {
+      clearTimeout(groupTransientTimer);
+      groupTransientTimer = null;
+    }
+    groupTransientLastSentAt = performance.now();
+    for (const p of participants) {
+      if (state.transient.has(p.id)) sendTransientNow(state, p.id);
+    }
+  }
+
+  function scheduleGroupTransient(): void {
+    const now = performance.now();
+    const elapsed = now - groupTransientLastSentAt;
+    if (elapsed >= DRAG_TRANSIENT_COALESCE_MS) {
+      flushGroupTransientsNow();
+      return;
+    }
+    if (groupTransientTimer !== null) return;
+    groupTransientTimer = setTimeout(() => {
+      groupTransientTimer = null;
+      if (getMounted() !== state) return;
+      flushGroupTransientsNow();
+    }, DRAG_TRANSIENT_COALESCE_MS - elapsed);
+  }
+
   function moveAt(clientX: number, clientY: number) {
     lastClientX = clientX;
     lastClientY = clientY;
@@ -223,12 +268,13 @@ export function beginDrag(opts: BeginDragOptions): void {
         const ny = p.startY + minDeltaY;
         p.el.style.left = `${Math.round(nx)}px`;
         p.el.style.top = `${Math.round(ny)}px`;
-        scheduleTransient(state, p.id, nx, ny);
+        storeTransientPosition(p.id, nx, ny);
         if (wallSurface) {
           updateEdgesForNote(wallSurface, p.id, nx + p.el.offsetWidth / 2, ny + p.el.offsetHeight / 2);
           edgeCallsThisTick += 1;
         }
       }
+      scheduleGroupTransient();
       if (edgeCallsThisTick > 0) {
         dragStats.edgeUpdateBatches += 1;
         dragStats.edgeUpdateCalls += edgeCallsThisTick;
@@ -248,6 +294,13 @@ export function beginDrag(opts: BeginDragOptions): void {
     if (animationFrameId !== null) {
       cancelAnimationFrame(animationFrameId);
       animationFrameId = null;
+    }
+    // Cancel any pending group-timer wake-up; the drop path below will
+    // schedule+flush each participant's final position explicitly, so the
+    // coalesced mid-drag POST is no longer needed.
+    if (groupTransientTimer !== null) {
+      clearTimeout(groupTransientTimer);
+      groupTransientTimer = null;
     }
     for (const p of participants) p.el.classList.remove("wall-note--dragging");
 
