@@ -11,34 +11,47 @@ import { wallDialog } from "../dom/elements.js";
 
 export type WallNoteMenuChoice = "create-todo" | "delete";
 
+export interface WallNoteMenuOptions {
+  /** Hides the "Create Todo from Note" item when false. Defaults to true. */
+  showCreateTodo?: boolean;
+  /** Overrides the Delete item's label. Defaults to "Delete". */
+  deleteLabel?: string;
+}
+
 export function openWallNoteContextMenu(
   clientX: number,
   clientY: number,
   signal: AbortSignal,
+  options?: WallNoteMenuOptions,
 ): Promise<WallNoteMenuChoice | null> {
   return new Promise<WallNoteMenuChoice | null>((resolve) => {
     const host = (wallDialog as HTMLElement | null) ?? document.body;
+    const showCreateTodo = options?.showCreateTodo !== false;
+    const deleteLabel = options?.deleteLabel ?? "Delete";
 
     const menu = document.createElement("div");
     menu.className = "context-menu wall-note-context-menu";
     menu.setAttribute("role", "menu");
     menu.dataset.testid = "wallNoteContextMenu";
 
-    const createBtn = document.createElement("button");
-    createBtn.type = "button";
-    createBtn.className = "context-menu__item";
-    createBtn.setAttribute("role", "menuitem");
-    createBtn.dataset.action = "create-todo";
-    createBtn.textContent = "Create Todo from Note";
+    let createBtn: HTMLButtonElement | null = null;
+    if (showCreateTodo) {
+      createBtn = document.createElement("button");
+      createBtn.type = "button";
+      createBtn.className = "context-menu__item";
+      createBtn.setAttribute("role", "menuitem");
+      createBtn.dataset.action = "create-todo";
+      createBtn.textContent = "Create Todo from Note";
+      menu.appendChild(createBtn);
+    }
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "context-menu__item";
     deleteBtn.setAttribute("role", "menuitem");
     deleteBtn.dataset.action = "delete";
-    deleteBtn.textContent = "Delete";
+    deleteBtn.textContent = deleteLabel;
 
-    menu.appendChild(createBtn);
     menu.appendChild(deleteBtn);
 
     // Position off-screen first so we can measure, then clamp to viewport.
@@ -80,11 +93,13 @@ export function openWallNoteContextMenu(
     }
     signal.addEventListener("abort", () => finish(null), { once: true, signal: localAc.signal });
 
-    createBtn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      finish("create-todo");
-    }, listenerOpts);
+    if (createBtn) {
+      createBtn.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        finish("create-todo");
+      }, listenerOpts);
+    }
 
     deleteBtn.addEventListener("click", (ev) => {
       ev.preventDefault();
@@ -130,9 +145,11 @@ export function openWallNoteContextMenu(
     window.addEventListener("resize", () => finish(null), listenerOpts);
     window.addEventListener("blur", () => finish(null), listenerOpts);
 
-    // Focus the first item so keyboard users can act immediately.
+    // Focus the first rendered item so keyboard users can act immediately.
+    // When Create-Todo is hidden, Delete is the first (and only) item.
     requestAnimationFrame(() => {
-      if (!settled) createBtn.focus();
+      if (settled) return;
+      (createBtn ?? deleteBtn).focus();
     });
   });
 }
