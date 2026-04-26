@@ -8,7 +8,7 @@ type Options struct {
 
 type invokeEnvelope struct {
 	Tool      string          `json:"tool"`
-	Arguments json.RawMessage `json:"arguments,omitempty"`
+	Arguments json.RawMessage `json:"arguments"`
 }
 
 type emptyDiscover struct{}

@@ -147,6 +147,10 @@ func (h *handler) serveInvoke(w http.ResponseWriter, r *http.Request) {
 		h.writeAdapterError(w, http.StatusBadRequest, "missing tool")
 		return
 	}
+	if len(env.Arguments) == 0 {
+		h.writeAdapterError(w, http.StatusBadRequest, "missing arguments")
+		return
+	}
 	if err := validateArgumentsOuterShape(env.Arguments); err != nil {
 		h.writeAdapterError(w, http.StatusBadRequest, err.Error())
 		return

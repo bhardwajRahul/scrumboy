@@ -93,6 +93,10 @@ The MCP handler is mounted at **`/mcp`** on the same origin as the Scrumboy HTTP
 
 There are no other MCP paths under `/mcp/` in the current implementation.
 
+## Agoragentic HTTP adapter (Agora)
+
+For **Agoragentic**-style listings (HTTP envelope and fixed paths), Scrumboy exposes **`POST /agora/v1/discover`** and **`POST /agora/v1/invoke`**, which delegate in-process to the same JSON-RPC **`tools/list`** and **`tools/call`** flow as **`POST /mcp/rpc`**. **`/mcp`** and **`/mcp/rpc`** remain the canonical MCP surfaces; this layer is an edge adapter only. Request/response shapes, required fields, and schema notes are documented in **`docs/agoragentic.md`**, with a minimal example manifest at **`docs/examples/agoragentic-manifest.json`**.
+
 ## Choosing an Interface
 
 Claude and other MCP-style clients should use the **JSON-RPC** interface (**`/mcp/rpc`**).

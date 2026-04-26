@@ -423,6 +423,136 @@ func TestAgora_ProtocolErrorFromMCP(t *testing.T) {
 	if int(er["code"].(float64)) != -32600 {
 		t.Fatalf("code: %v", er)
 	}
+	if out["result"] != nil {
+		t.Fatalf("result: %v", out["result"])
+	}
+}
+
+func TestAgora_JSONRPCErrorDataPassthrough(t *testing.T) {
+	t.Parallel()
+	mcpH := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":"invalid request","data":{"foo":1}}}`))
+	})
+	h := agora.New(mcpH, agora.Options{MaxRequestBytes: 1 << 20})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+	cl := &http.Client{}
+	resp := postRaw(t, cl, ts.URL+"/agora/v1/discover", "application/json", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	er, _ := out["error"].(map[string]any)
+	if er == nil {
+		t.Fatal("missing error")
+	}
+	data, _ := er["data"].(map[string]any)
+	if data == nil || data["foo"].(float64) != 1 {
+		t.Fatalf("data: %v", er)
+	}
+}
+
+func TestAgora_InvokeMissingArgumentsKey(t *testing.T) {
+	t.Parallel()
+	ts, _, cleanup := newAgoraTestServer(t, "full", true)
+	defer cleanup()
+	cl := &http.Client{}
+	resp := postRaw(t, cl, ts.URL+"/agora/v1/invoke", "application/json", []byte(`{"tool":"system.getCapabilities"}`))
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: %d body=%s", resp.StatusCode, b)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	er, _ := out["error"].(map[string]any)
+	if er["message"] != "missing arguments" {
+		t.Fatalf("error: %v", out)
+	}
+	if out["result"] != nil {
+		t.Fatalf("result: %v", out["result"])
+	}
+}
+
+func TestAgora_InvokeArgumentsJSONNullNormalizes(t *testing.T) {
+	t.Parallel()
+	ts, _, cleanup := newAgoraTestServer(t, "full", true)
+	defer cleanup()
+	cl := &http.Client{}
+	resp := postRaw(t, cl, ts.URL+"/agora/v1/invoke", "application/json", []byte(`{"tool":"system.getCapabilities","arguments":null}`))
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d: %s", resp.StatusCode, b)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["ok"] != true {
+		t.Fatalf("ok: %v", out)
+	}
+}
+
+func TestAgora_InvokeResultAllowsArrayFromStructuredContent(t *testing.T) {
+	t.Parallel()
+	mcpH := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[],"structuredContent":[1,2,3],"isError":false}}`))
+	})
+	h := agora.New(mcpH, agora.Options{MaxRequestBytes: 1 << 20})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+	cl := &http.Client{}
+	resp := postRaw(t, cl, ts.URL+"/agora/v1/invoke", "application/json", []byte(`{"tool":"any.name","arguments":{}}`))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	var out map[string]any
+	if err := json.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["ok"] != true {
+		t.Fatalf("ok: %v", out)
+	}
+	arr, ok := out["result"].([]any)
+	if !ok || len(arr) != 3 {
+		t.Fatalf("want array result, got %T %v", out["result"], out["result"])
+	}
+}
+
+func TestAgora_DiscoverEnvelopeHasRequiredTopLevelKeys(t *testing.T) {
+	t.Parallel()
+	ts, _, cleanup := newAgoraTestServer(t, "full", true)
+	defer cleanup()
+	cl := &http.Client{}
+	resp := postRaw(t, cl, ts.URL+"/agora/v1/discover", "application/json", []byte(`{}`))
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status: %d", resp.StatusCode)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"ok", "result", "error"} {
+		if _, ok := raw[k]; !ok {
+			t.Fatalf("missing key %q", k)
+		}
+	}
 }
 
 func TestAgora_AgoraRouteNotUnderMCP(t *testing.T) {
