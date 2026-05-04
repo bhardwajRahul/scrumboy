@@ -936,7 +936,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         </div>
       </div>
       ${wallpaperSectionHTML}
-      ${renderVoiceFlowCustomizationHTML()}
+      ${getAuthStatusAvailable() ? renderVoiceFlowCustomizationHTML() : ""}
       <div class="settings-section">
         <div class="settings-section__title">Desktop notifications</div>
         <div class="settings-section__description muted">OS-level alerts when someone assigns you a todo (works when this tab is in the background).</div>
