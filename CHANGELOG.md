@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** unless noted below.
 
+## [3.15.4] - 2026-05-05
+
+### Features
+
+- **Trello import (v1)** - Import Trello boards into Scrumboy from exported Trello JSON so you can migrate existing projects without recreating cards by hand.
+
 ## [3.15.3] - 2026-05-05
 
 ### Improvements
