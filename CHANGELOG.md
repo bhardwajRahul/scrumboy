@@ -2,6 +2,16 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** unless noted below.
 
+## [3.15.3] - 2026-05-05
+
+### Improvements
+
+- **Windows launcher key resolution** - Added a launcher helper flow to resolve and apply `SCRUMBOY_ENCRYPTION_KEY` from supported local sources for `win_run_full.bat` and `win_run_anonymous.bat`.
+
+### Documentation
+
+- **README and env example alignment** - Updated docs and examples to match the launcher-based encryption key guidance for local Windows runs.
+
 ## [3.15.2] - 2026-05-03
 
 ### Improvements
