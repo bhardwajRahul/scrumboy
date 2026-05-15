@@ -72,11 +72,14 @@ function isSafeLinkHref(href: string): boolean {
   if (
     value.startsWith("#") ||
     value.startsWith("?") ||
-    value.startsWith("/") ||
+    (value.startsWith("/") && !value.startsWith("//")) ||
     value.startsWith("./") ||
     value.startsWith("../")
   ) {
     return true;
+  }
+  if (value.startsWith("//")) {
+    return false;
   }
 
   const normalized = value.replace(/[\u0000-\u001f\u007f\s]+/g, "");
@@ -86,12 +89,12 @@ function isSafeLinkHref(href: string): boolean {
   }
 
   const scheme = schemeMatch[1].toLowerCase();
-  return scheme === "http" || scheme === "https" || scheme === "mailto" || scheme === "tel";
+  return scheme === "http" || scheme === "https";
 }
 
 function isExternalHref(href: string): boolean {
   const value = href.trim().toLowerCase();
-  return value.startsWith("http://") || value.startsWith("https://") || value.startsWith("//");
+  return value.startsWith("http://") || value.startsWith("https://");
 }
 
 function sanitizeMarkdownHtml(markdownHtml: string): string {
