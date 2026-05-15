@@ -1,6 +1,28 @@
 # Changelog
 
-> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** unless noted below.
+> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** unless noted below.
+
+## [3.16.0] - 2026-05-15
+
+### Features
+
+- **Todo notes Markdown preview (Phase 1)** - When **`SCRUMBOY_MARKDOWN_NOTES_ENABLED=1`** (also accepts **`true`** / **`on`** / **`yes`**), the todo dialog Notes field gains **markdown** / **preview** tabs with a sanitized Markdown preview (headings, emphasis, lists, blockquotes, inline/fenced code, horizontal rules, and safe **`http`** / **`https`** links). Todo **Title** and board card titles stay plain text; notes still persist as the raw **`todos.body`** string with no schema changes.
+
+- **Auth status flag** - **`/api/auth/status`** and bootstrap auth payloads expose **`markdownNotesEnabled`** so the UI only shows preview controls when the server has opted in.
+
+### Improvements
+
+- **Markdown preview hardening** - Preview rendering uses **markdown-it** with HTML disabled, **DOMPurify** with a tight tag/attribute allow-list, image syntax rendered as escaped text (no inline images), stripping of **`iframe`** / **`object`** / **`embed`** / **`script`**, and link filtering that allows **`http`** / **`https`** plus safe relative/hash/query links while rejecting protocol-relative URLs and non-web schemes (**`javascript:`**, **`data:`**, **`mailto:`**, **`tel:`**, etc.). External links get **`rel="noopener noreferrer"`** and **`target="_blank"`**.
+
+### Frontend
+
+- **Vendor assets** - Ships **`/vendor/markdown-it.min.js`** and **`/vendor/purify.min.js`** (eager-loaded, service-worker precached) with **`verify-vendor`** / **`sync-vendor`** scripts to guard missing browser dependencies.
+
+### Tests
+
+- **Markdown preview** - Supported subset rendering, safe vs rejected link schemes, and neutralization of raw HTML, dangerous links, and image syntax.
+- **Todo dialog** - markdown/preview tab behavior gated on **`markdownNotesEnabled`**.
+- **Server/config** - **`SCRUMBOY_MARKDOWN_NOTES_ENABLED`** parsing and **`markdownNotesEnabled`** on auth status responses.
 
 ## [3.15.4] - 2026-05-05
 

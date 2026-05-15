@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.15.4-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.16.0-blue" alt="version" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   </a>
@@ -142,7 +142,7 @@ The Docker image and `go run` embed prebuilt assets under `internal/httpapi/web/
 ```bash
 cd internal/httpapi/web
 npm install
-npx tsc
+npm run build
 ```
 
 Then run `docker compose up --build` or `go run ./cmd/scrumboy` again from the repository root.
@@ -192,6 +192,8 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 - VoiceFlow - deterministic voice commands (see `docs/VOICEFLOW.md`).
 
 - Sticky-Note Wall - per-project scratchpad of draggable sticky notes on the board (see `docs/WALL.md`).
+
+- Todo notes Markdown preview - markdown/preview tabs in the todo Notes field (see `FAQ.md`, `docs/markdown.md`).
 
 ---
 
@@ -391,7 +393,7 @@ In **anonymous mode**, full-scope import is not allowed; you can only import int
 - `internal/migrate`: DB migrations.
 - `internal/store`: data model and persistence (projects, todos, tags, auth, backup, ordering, memberships, audit, links, sprints, workflows, etc.).
 - `internal/httpapi`: HTTP server, routing, auth cookies, SPA serve, embedded web FS.
-- `internal/httpapi/web`: frontend (TS, CSS, HTML); built with `npx tsc` in `internal/httpapi/web`; output under `web/dist` and embedded by server.
+- `internal/httpapi/web`: frontend (TS, CSS, HTML); built with `npm run build` in `internal/httpapi/web`; output under `web/dist` and embedded by server.
 
 Invariants (e.g. canonical URL `/{slug}`, no UI links to `/p/{id}`) are enforced in code and tests; see `internal/httpapi` and `internal/store` for the authoritative behavior.
 

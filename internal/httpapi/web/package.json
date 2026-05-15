@@ -3,8 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "node -e \"const fs=require('fs'); const path=require('path'); const src=path.join('node_modules','uplot','dist'); const dest='vendor'; if (!fs.existsSync(dest)) fs.mkdirSync(dest); try { fs.copyFileSync(path.join(src,'uPlot.iife.min.js'), path.join(dest,'uplot.min.js')); fs.copyFileSync(path.join(src,'uPlot.min.css'), path.join(dest,'uplot.min.css')); } catch (e) { console.warn('uPlot copy skipped:', e.message); }\"",
-    "test": "vitest run",
+    "postinstall": "node scripts/sync-vendor.mjs",
+    "sync:vendor": "node scripts/sync-vendor.mjs",
+    "verify:vendor": "node scripts/verify-vendor.mjs",
+    "build": "node scripts/verify-vendor.mjs && tsc",
+    "test": "node scripts/verify-vendor.mjs && vitest run",
     "lint:delete-confirms": "node scripts/check-delete-confirms.mjs"
   },
   "devDependencies": {
@@ -13,6 +16,8 @@
     "vitest": "^2.1.9"
   },
   "dependencies": {
+    "dompurify": "3.4.3",
+    "markdown-it": "14.1.1",
     "uplot": "^1.6.32"
   }
 }

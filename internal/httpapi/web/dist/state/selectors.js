@@ -73,6 +73,9 @@ export function getLocalAuthEnabled() {
 export function getWallEnabled() {
     return !!current._wallEnabled;
 }
+export function getMarkdownNotesEnabled() {
+    return !!current._markdownNotesEnabled;
+}
 export function getProjectsTab() {
     return current.projectsTab;
 }

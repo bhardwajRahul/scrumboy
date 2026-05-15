@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
 import type { Board } from '../types.js';
-import { buildTopbarHtml } from './board-rendering.js';
+import { buildTopbarHtml, renderTodoCard } from './board-rendering.js';
 import { buildTopbarHtml as buildTopbarHtmlDist } from '../../dist/views/board-rendering.js';
 
 function board(): Board {
@@ -67,5 +67,21 @@ describe('board topbar rendering', () => {
     expect(distHtml.indexOf('id="voiceCommandBtn"')).toBeGreaterThan(-1);
     expect(distHtml.indexOf('id="searchInput"')).toBeGreaterThan(-1);
     expect(distHtml.indexOf('id="voiceCommandBtn"')).toBeLessThan(distHtml.indexOf('id="searchInput"'));
+  });
+
+  it('renders plain escaped titles on cards and never renders markdown from todo bodies', () => {
+    const html = renderTodoCard({
+      id: 7,
+      localId: 12,
+      title: '**Plain** <Title>',
+      body: '# Hidden body heading',
+      status: 'BACKLOG',
+      tags: [],
+    });
+
+    expect(html).toContain('**Plain** &lt;Title&gt;');
+    expect(html).not.toContain('<strong>Plain</strong>');
+    expect(html).not.toContain('Hidden body heading');
+    expect(html).not.toContain('<h1>');
   });
 });
