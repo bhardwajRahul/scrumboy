@@ -145,7 +145,7 @@ describe("todo markdown preview", () => {
     expect((document.getElementById("todoBodyPreview") as HTMLElement).hidden).toBe(true);
   });
 
-  it("shows the write/preview toggle and empty preview state when enabled", async () => {
+  it("shows the markdown/preview toggle and empty preview state when enabled", async () => {
     mockTodoModule(true);
     const { openTodoDialog } = await import("./todo.js");
 
@@ -184,7 +184,7 @@ describe("todo markdown preview", () => {
     const title = document.getElementById("todoTitle") as HTMLInputElement;
     const body = document.getElementById("todoBody") as HTMLTextAreaElement;
     const previewTab = document.getElementById("todoBodyPreviewTab") as HTMLButtonElement;
-    const writeTab = document.getElementById("todoBodyWriteTab") as HTMLButtonElement;
+    const markdownTab = document.getElementById("todoBodyWriteTab") as HTMLButtonElement;
     const preview = document.getElementById("todoBodyPreview") as HTMLElement;
 
     expect(title.value).toBe(rawTitle);
@@ -195,7 +195,7 @@ describe("todo markdown preview", () => {
     expect(preview.innerHTML).toContain("<h1>Heading</h1>");
     expect(preview.innerHTML).toContain("<strong>bold</strong>");
 
-    writeTab.click();
+    markdownTab.click();
     expect(body.hidden).toBe(false);
     expect(body.value).toBe(rawBody);
   });

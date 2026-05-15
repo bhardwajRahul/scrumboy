@@ -51,9 +51,9 @@ export {
   setupTagAutocomplete,
 } from './todo-tags.js';
 
-type TodoNotesMode = "write" | "preview";
+type TodoNotesMode = "markdown" | "preview";
 
-let todoNotesMode: TodoNotesMode = "write";
+let todoNotesMode: TodoNotesMode = "markdown";
 let todoNotesPreviewBound = false;
 
 export function resolveColumnKey(raw: string | undefined | null): string {
@@ -138,7 +138,7 @@ function renderTodoNotesPreview(): void {
     );
   } catch (err: any) {
     showToast(err?.message || "Markdown preview is unavailable");
-    todoNotesMode = "write";
+    todoNotesMode = "markdown";
     syncTodoNotesModeUI();
   }
 }
@@ -149,7 +149,7 @@ function syncTodoNotesModeUI(): void {
     (todoBodyToggle as HTMLElement).hidden = !previewEnabled;
   }
   if (!previewEnabled) {
-    todoNotesMode = "write";
+    todoNotesMode = "markdown";
   }
 
   const isPreview = previewEnabled && todoNotesMode === "preview";
@@ -187,7 +187,7 @@ function bindTodoNotesPreviewControls(): void {
 
   if (todoBodyWriteTab) {
     (todoBodyWriteTab as HTMLButtonElement).addEventListener("click", () => {
-      setTodoNotesMode("write");
+      setTodoNotesMode("markdown");
     });
   }
   if (todoBodyPreviewTab) {
@@ -441,7 +441,7 @@ export async function openTodoDialog(opts: {
     if (shareTodoBtn) (shareTodoBtn as HTMLElement).style.display = "";
     setDates(todo.createdAt, todo.updatedAt);
   }
-  setTodoNotesMode("write");
+  setTodoNotesMode("markdown");
 
   const tagInputEl = document.getElementById("todoTags") as HTMLInputElement | null;
   if (tagInputEl) {

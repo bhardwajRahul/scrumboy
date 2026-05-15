@@ -46,7 +46,7 @@ type Options struct {
 	// set SCRUMBOY_WALL_ENABLED=0 to disable (see config.FromEnv semantics).
 	WallEnabled bool
 
-	// MarkdownNotesEnabled gates the todo notes write/preview experience in the
+	// MarkdownNotesEnabled gates the todo notes markdown/preview experience in the
 	// SPA. When false, the frontend behaves exactly as before.
 	MarkdownNotesEnabled bool
 }

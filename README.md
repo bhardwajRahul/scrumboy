@@ -193,6 +193,8 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 
 - Sticky-Note Wall - per-project scratchpad of draggable sticky notes on the board (see `docs/WALL.md`).
 
+- Todo notes Markdown preview - markdown/preview tabs in the todo Notes field (see `FAQ.md`, `docs/markdown.md`).
+
 ---
 
 ## Integrations & API Access

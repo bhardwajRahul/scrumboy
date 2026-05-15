@@ -6,7 +6,7 @@
 
 ### Features
 
-- **Todo notes Markdown preview (Phase 1)** - When **`SCRUMBOY_MARKDOWN_NOTES_ENABLED=1`** (also accepts **`true`** / **`on`** / **`yes`**), the todo dialog Notes field gains **Write** / **Preview** tabs with a sanitized Markdown preview (headings, emphasis, lists, blockquotes, inline/fenced code, horizontal rules, and safe **`http`** / **`https`** links). Todo **Title** and board card titles stay plain text; notes still persist as the raw **`todos.body`** string with no schema changes.
+- **Todo notes Markdown preview (Phase 1)** - When **`SCRUMBOY_MARKDOWN_NOTES_ENABLED=1`** (also accepts **`true`** / **`on`** / **`yes`**), the todo dialog Notes field gains **markdown** / **preview** tabs with a sanitized Markdown preview (headings, emphasis, lists, blockquotes, inline/fenced code, horizontal rules, and safe **`http`** / **`https`** links). Todo **Title** and board card titles stay plain text; notes still persist as the raw **`todos.body`** string with no schema changes.
 
 - **Auth status flag** - **`/api/auth/status`** and bootstrap auth payloads expose **`markdownNotesEnabled`** so the UI only shows preview controls when the server has opted in.
 
@@ -21,7 +21,7 @@
 ### Tests
 
 - **Markdown preview** - Supported subset rendering, safe vs rejected link schemes, and neutralization of raw HTML, dangerous links, and image syntax.
-- **Todo dialog** - Write/Preview tab behavior gated on **`markdownNotesEnabled`**.
+- **Todo dialog** - markdown/preview tab behavior gated on **`markdownNotesEnabled`**.
 - **Server/config** - **`SCRUMBOY_MARKDOWN_NOTES_ENABLED`** parsing and **`markdownNotesEnabled`** on auth status responses.
 
 ## [3.15.4] - 2026-05-05
