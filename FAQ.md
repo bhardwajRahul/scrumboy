@@ -4,6 +4,7 @@
 
 - [How do I enable Markdown in my notes?](#how-do-i-enable-markdown-in-my-notes)
 - [How do I edit several todos at once?](#how-do-i-edit-several-todos-at-once)
+- [What does the done lane mean for dashboard stats?](#what-does-the-done-lane-mean-for-dashboard-stats)
 - [Are tag colors personal, or shared with the team?](#are-tag-colors-personal-or-shared-with-the-team)
 - [How do I use Scrumboy with Claude or other MCP clients?](#how-do-i-use-scrumboy-with-claude-or-other-mcp-clients)
 - [Does Scrumboy use telemetry, tracking, or “phone home”?](#does-scrumboy-use-telemetry-tracking-or-phone-home)
@@ -31,6 +32,27 @@ On the board, hold **Ctrl** (Windows/Linux) or **⌘ Command** (Mac) and click t
 In that dialog, turn on only the changes you want (each field has its own checkbox), then click **Apply**. Updates apply to the selected todos only - not the whole board. Tags you add are merged onto each card; they do not remove existing tags.
 
 A normal click on a card (without Ctrl/⌘) opens the usual single-todo editor and clears the selection. Viewers cannot use multi-select; Ctrl/⌘+click still opens one todo for them.
+
+# Dashboard
+
+## What does the done lane mean for dashboard stats?
+
+Each project has **exactly one workflow lane marked as done** (in **Settings → Workflow**, the radio on the rightmost lane). That lane can be named anything (for example **Done** or **Shipped**); what matters is the **done** flag on the column, not the display name.
+
+**When you move a todo into the done lane**, Scrumboy records **`done_at`** (the completion time). That timestamp is set the **first** time a todo enters a done lane and is **not cleared** if you move it back out later.
+
+The dashboard uses that lane flag and timestamp like this:
+
+| What you see | Rule |
+|--------------|------|
+| **Your todo list** on the dashboard | Assigned todos **not** in the done lane |
+| **WIP**, **assigned** counts, **workload** | Same: anything assigned and **not** in the done lane |
+| **WIP split** (In progress vs Testing) | Only when the project still uses the default lane keys **`doing`** and **`testing`**. Custom workflows show a single WIP total |
+| **Sprint completion** (you and team) | Todos in the **active sprint**; **done** = currently in the done lane **and** `done_at` falls between the sprint’s start and end |
+| **Throughput** (last four weeks) | `done_at` in each calendar week (your timezone), while the todo is in the done lane |
+| **Avg. lead time** | `created_at` → `done_at` for completed todos in the done lane (sprint window when a sprint is active; otherwise roughly the last 30 days) |
+
+So dashboard “done” means **in the project’s designated done lane**, with completion time tracked via **`done_at`**. A todo sitting in **Review** or **Testing** counts as **WIP** until it reaches that done lane, even if you consider it finished informally.
 
 # Tags
 
