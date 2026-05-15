@@ -7,6 +7,8 @@
 - [What does the done lane mean for dashboard stats?](#what-does-the-done-lane-mean-for-dashboard-stats)
 - [Are tag colors personal, or shared with the team?](#are-tag-colors-personal-or-shared-with-the-team)
 - [How do I use Scrumboy with Claude or other MCP clients?](#how-do-i-use-scrumboy-with-claude-or-other-mcp-clients)
+- [What are VAPID keys, and do I need them?](#what-are-vapid-keys-and-do-i-need-them)
+- [How does auditing work, and where can I see it?](#how-does-auditing-work-and-where-can-i-see-it)
 - [Does Scrumboy use telemetry, tracking, or “phone home”?](#does-scrumboy-use-telemetry-tracking-or-phone-home)
 - [What do I need to do to contribute?](#what-do-i-need-to-do-to-contribute)
 
@@ -84,6 +86,63 @@ When you open a board, Scrumboy refreshes colors from that board so what you see
 - All traffic stays between the client and **your** Scrumboy server. Scrumboy does not host a cloud MCP relay for you.
 
 For tool names, auth rules, examples, and the optional Agora discover/invoke edge, see [`docs/mcp.md`](docs/mcp.md). For full HTTP behavior, see [`API.md`](API.md).
+
+# Notifications
+
+## What are VAPID keys, and do I need them?
+
+**Usually no.** VAPID keys are optional server credentials for **Web Push** - background alerts when someone **assigns you a todo** while the app is closed or in the background (best with an installed PWA). Boards, SSE live updates, and normal use work fine without them.
+
+**Two different notification paths:**
+
+| Setting / feature | What it does |
+|-------------------|--------------|
+| **Enable notifications** (Settings) | In-tab / desktop alerts while the browser still has Scrumboy open (Notification API) |
+| **Web Push** (needs VAPID on the server) | Can reach you when the tab is in the background or the PWA is not focused; uses the browser’s push service (e.g. Apple or Google) |
+
+Do not confuse them: turning on desktop notifications does **not** replace VAPID, and setting VAPID does **not** bypass the browser permission prompt.
+
+**If you want background assignment push**, set **both** on the server:
+
+- `SCRUMBOY_VAPID_PUBLIC_KEY`
+- `SCRUMBOY_VAPID_PRIVATE_KEY`
+
+(URL-safe base64 from a VAPID generator; see [`docs/pwa.md`](docs/pwa.md).) When both are set, signed-in clients may try to subscribe automatically; each user must still **allow notifications** in the browser. **Settings → Customization → Web Push** can turn push off or back on per device.
+
+Optional: `SCRUMBOY_VAPID_SUBSCRIBER` is a **contact hint for push providers** (plain email or `mailto:` / `https:` URL). It does **not** control who can sign in and does not need to match OIDC or user emails.
+
+**Not telemetry:** VAPID identifies **your** Scrumboy server to the push network so assignment events can be delivered. It is not product analytics and does not send board data to Scrumboy’s project maintainers.
+
+# Auditing
+
+## How does auditing work, and where can I see it?
+
+Scrumboy **records an audit trail automatically** while you use the product. There is nothing to turn on in Settings and no separate “audit mode.” When maintainers and contributors create or change todos, members, projects, or todo links, the server appends a row to the **`audit_events`** table in your SQLite database (typically under your `data` directory).
+
+**What is logged** (per project) includes, among others:
+
+- Todo created, updated, moved, or deleted
+- Members added, removed, or role changes
+- Project created, renamed, image updated, default sprint weeks changed, or deleted
+- Todo links added or removed
+
+Each event stores **who** did it (`actor_user_id`, or NULL on anonymous boards), **what** happened (`action`), **which entity** (`target_type` / `target_id`), and **JSON metadata** (for example column moves or changed field names - not full note bodies). Rows are **append-only** (the database blocks updates and deletes on `audit_events`).
+
+**Assignee changes** are tracked separately in **`todo_assignee_events`**, not duplicated in `audit_events`.
+
+**Where to view it today:** there is **no audit log screen in the web UI** and **no public HTTP API** to list events yet (planned for the future). To review history now, query the database directly, for example:
+
+```sql
+SELECT created_at, action, actor_user_id, target_type, target_id, metadata
+FROM audit_events
+WHERE project_id = ?
+ORDER BY created_at DESC
+LIMIT 50;
+```
+
+Project backups/exports may also include audit data depending on scope; see your backup workflow.
+
+For the full action list, metadata shapes, and security notes, see [`docs/audit_trail.md`](docs/audit_trail.md).
 
 # Privacy
 
