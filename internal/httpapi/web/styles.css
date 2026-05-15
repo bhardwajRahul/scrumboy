@@ -1773,16 +1773,17 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   }
 
   #todoDialog .field__label-row {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 
   #todoDialog .todo-notes-toggle {
-    width: 100%;
+    margin-left: auto;
+    width: auto;
   }
 
   #todoDialog .todo-notes-toggle__btn {
-    flex: 1 1 0;
+    flex: 0 0 auto;
     text-align: center;
   }
 
