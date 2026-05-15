@@ -5,7 +5,9 @@
 - [How do I enable Markdown in my notes?](#how-do-i-enable-markdown-in-my-notes)
 - [How do I edit several todos at once?](#how-do-i-edit-several-todos-at-once)
 - [Are tag colors personal, or shared with the team?](#are-tag-colors-personal-or-shared-with-the-team)
+- [How do I use Scrumboy with Claude or other MCP clients?](#how-do-i-use-scrumboy-with-claude-or-other-mcp-clients)
 - [Does Scrumboy use telemetry, tracking, or “phone home”?](#does-scrumboy-use-telemetry-tracking-or-phone-home)
+- [What do I need to do to contribute?](#what-do-i-need-to-do-to-contribute)
 
 # Notes
 ## How do I enable Markdown in my notes?
@@ -42,6 +44,25 @@ It depends on the kind of tag.
 
 When you open a board, Scrumboy refreshes colors from that board so what you see matches the rules above. Changing a color in **Settings → Tag Colors** saves it for next time and updates the board you have open. If something still looks wrong after a change, refresh the page or reopen the board so the latest colors load.
 
+# Integrations
+
+## How do I use Scrumboy with Claude or other MCP clients?
+
+**Yes.** Scrumboy exposes an **MCP-compatible HTTP API** on the instance you run. AI assistants and automation (Claude, Cursor, custom agents, scripts) can list and call tools to manage projects, todos, sprints, tags, members, and board snapshots - without using the web UI for every change.
+
+**Recommended for MCP-style clients:** `POST /mcp/rpc` with **JSON-RPC 2.0** (`initialize`, `tools/list`, `tools/call`). That is the same protocol shape many MCP clients expect, served over HTTP to your Scrumboy URL.
+
+**Also available:** `POST /mcp` with a simple `{"tool":"…","input":{…}}` envelope for scripts and older integrations.
+
+**Authentication:** sign in and use your session cookie, or create an **API access token** (starts with `sb_`) and send `Authorization: Bearer sb_…`. Tokens are created via the API while logged in (see the **Integrations & API Access** section in [`README.md`](README.md)).
+
+**Important limits today:**
+
+- Scrumboy is an **HTTP** MCP server on your host. It does **not** speak **stdio** MCP (the process-spawn model some desktop apps use). Clients must connect to your Scrumboy base URL over HTTP, or use a bridge that translates stdio to HTTP.
+- All traffic stays between the client and **your** Scrumboy server. Scrumboy does not host a cloud MCP relay for you.
+
+For tool names, auth rules, examples, and the optional Agora discover/invoke edge, see [`docs/mcp.md`](docs/mcp.md). For full HTTP behavior, see [`API.md`](API.md).
+
 # Privacy
 
 ## Does Scrumboy use telemetry, tracking, or “phone home”?
@@ -60,3 +81,19 @@ A few **optional** features can reach **other systems you control or enable**:
 Words like “analytics” or “activity” inside Scrumboy (for example dashboard stats or audit history) refer to **features that read your own database**, not third-party tracking.
 
 If you self-host, you are responsible for your deployment’s network exposure, backups, and any optional integrations above. The application source is available to inspect under the project license.
+
+# Contributing
+
+## What do I need to do to contribute?
+
+Fork the repo, make your changes on a branch, and open a pull request. For setup, tests, and PR expectations, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+When you commit, add the **`-s`** flag so Git records a **Signed-off-by** line (Developer Certificate of Origin). That is what our CI checks on pull requests.
+
+Example:
+
+```bash
+git commit -s -m "Fix board filter chip styling"
+```
+
+You do **not** need to sign a separate CLA, email a form, or use any other signing service. The **`-s`** on your commits is enough.

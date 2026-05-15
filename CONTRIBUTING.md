@@ -4,7 +4,17 @@ Thank you for considering contributing to Scrumboy. This document explains how t
 
 ## Before you begin
 
-**You must sign the [Contributor License Agreement (CLA)](CLA.md) before your contributions can be accepted.** By submitting a pull request, you agree to the terms in [CLA.md](CLA.md).
+Contributions use the **Developer Certificate of Origin (DCO)**. Sign off each commit with Git’s **`-s`** flag so the commit message includes a `Signed-off-by` line with your name and email.
+
+Example:
+
+```bash
+git commit -s -m "Fix board filter chip styling"
+```
+
+You do **not** need to sign a separate CLA, email a form, or use any other signing service. The **`-s`** on your commits is enough. Pull requests are checked by the [DCO workflow](.github/workflows/dco.yml); every commit in the PR must be signed off.
+
+By contributing, you certify that you have the right to submit your work under the project license (see [LICENSE](LICENSE)).
 
 ## Development setup
 
@@ -77,7 +87,7 @@ Binds `127.0.0.1:8080:8080` and uses the config in `docker-compose.yml`.
 
 ## Pull request guidelines
 
-1. **CLA:** Ensure you have agreed to the [CLA](CLA.md). Your first PR serves as your signature.
+1. **DCO:** Every commit must include `Signed-off-by` (use `git commit -s`, or amend with `git commit --amend -s --no-edit` if you forgot). You do not need any separate agreement or signature beyond that.
 2. **Tests:** Run `go test ./...` and ensure all tests pass.
 3. **Build:** Ensure `go build ./cmd/scrumboy` succeeds. If you change the frontend, run `npm run build` in `internal/httpapi/web` and include the built output.
 4. **Description:** Provide a clear description of the change and why it is needed.
