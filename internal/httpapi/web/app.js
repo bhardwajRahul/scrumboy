@@ -14,6 +14,7 @@ import { navigate, router } from './dist/router.js';
 import { getRoute, getProjectId, getBoard, getAuthStatusAvailable, getMobileTab, getSlug, getTag, getSearch, getSprintIdFromUrl, getProjectView, getProjectsTab, getProjects, getSettingsProjectId, getEditingTodo, getAvailableTags, getAutocompleteSuggestion, getAvailableTagsMap, getTagColors, getUser, getSettingsActiveTab, getBackupImportBtn, getBackupData, getBackupPreview, getAuthStatusChecked } from './dist/state/selectors.js';
 import { setProjectId, setBoard, setSlug, setTag, setMobileTab, setProjects, setProjectsTab, setProjectView, setEditingTodo, setAvailableTags, setAvailableTagsMap, setAutocompleteSuggestion, setTagColors, setSettingsProjectId, setSettingsActiveTab, setBackupImportBtn, setBackupData, setBackupPreview } from './dist/state/mutations.js';
 import { openTodoDialog, renderTagsChips, setupTagAutocomplete, removeTag, renderTagAutocomplete, getTagsFromChips, resetAssigneeSelect, getTodoFormPermissions } from './dist/dialogs/todo.js';
+import { buildTodoCreatePayload, buildTodoPatchPayload } from './dist/dialogs/todo-submit.js';
 import { renderSettingsModal, invalidateTagsCache } from './dist/dialogs/settings.js';
 import { initDnD, columnsSpec, dragInProgress, dragJustEnded } from './dist/features/drag-drop.js';
 import { setupContextMenuCloseHandler } from './dist/features/context-menu.js';
@@ -25,7 +26,6 @@ import { initKeybindings } from './dist/core/keybindings.js';
 import { initModalOutsideClickClose } from './dist/core/modal-outside-click.js';
 
 let tagInputHandlersSetup = false;
-const ALLOWED_ESTIMATION_POINTS = new Set([1, 2, 3, 5, 8, 13, 20, 40]);
 
 // PWA update: register service worker and "New version available" dialog (must run early)
 registerPwaGlobals();
@@ -132,9 +132,6 @@ todoForm.addEventListener("submit", async (e) => {
   const tags = getTagsFromChips();
   const columnKey = todoStatus.value;
   const estimationRaw = todoEstimationPoints?.value ?? "";
-  const estimationParsed = estimationRaw === "" ? null : Number.parseInt(estimationRaw, 10);
-  const hasValidEstimation = estimationParsed != null && ALLOWED_ESTIMATION_POINTS.has(estimationParsed);
-  const estimationPayload = hasValidEstimation ? { estimationPoints: estimationParsed } : {};
 
   const sprintEl = document.getElementById("todoSprint");
   const sprintField = document.getElementById("todoSprintField");
@@ -151,10 +148,16 @@ todoForm.addEventListener("submit", async (e) => {
           : assigneeEl
             ? null
             : undefined;
-      const patchPayload = { title, body, tags, assigneeUserId, ...estimationPayload };
-      if (showSprint) {
-        patchPayload.sprintId = sprintId;
-      }
+      const patchPayload = buildTodoPatchPayload({
+        title,
+        body,
+        tags,
+        estimationRaw,
+        assigneeEnabled: !!assigneeEl,
+        assigneeUserId,
+        sprintEnabled: !!showSprint,
+        sprintId,
+      });
       recordLocalMutation();
       await apiFetch(`/api/board/${getSlug()}/todos/${todo.localId}`, {
         method: "PATCH",
@@ -171,15 +174,20 @@ todoForm.addEventListener("submit", async (e) => {
       }
       showToast("Todo updated");
     } else {
-      const createPayload = { title, body, tags, columnKey, ...estimationPayload };
-      if (showSprint) {
-        createPayload.sprintId = sprintId;
-      }
       const assigneeEl = document.getElementById("todoAssignee");
-      if (assigneeEl) {
-        createPayload.assigneeUserId =
-          assigneeEl.value !== "" ? Number(assigneeEl.value) : null;
-      }
+      const assigneeUserId =
+        assigneeEl && assigneeEl.value !== "" ? Number(assigneeEl.value) : null;
+      const createPayload = buildTodoCreatePayload({
+        title,
+        body,
+        tags,
+        columnKey,
+        estimationRaw,
+        sprintEnabled: !!showSprint,
+        sprintId,
+        assigneeEnabled: !!assigneeEl,
+        assigneeUserId,
+      });
       recordLocalMutation();
       await apiFetch(`/api/board/${getSlug()}/todos`, {
         method: "POST",

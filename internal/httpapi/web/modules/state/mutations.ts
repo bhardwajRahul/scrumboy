@@ -110,6 +110,10 @@ export function setWallEnabled(enabled: boolean): void {
   current._wallEnabled = enabled;
 }
 
+export function setMarkdownNotesEnabled(enabled: boolean): void {
+  current._markdownNotesEnabled = enabled;
+}
+
 export function setProjectsTab(tab: string | undefined): void {
   current.projectsTab = tab;
 }

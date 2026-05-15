@@ -6,6 +6,10 @@ const todoForm = document.getElementById("todoForm");
 const todoDialogTitle = document.getElementById("todoDialogTitle");
 const todoTitle = document.getElementById("todoTitle");
 const todoBody = document.getElementById("todoBody");
+const todoBodyToggle = document.getElementById("todoBodyToggle");
+const todoBodyWriteTab = document.getElementById("todoBodyWriteTab");
+const todoBodyPreviewTab = document.getElementById("todoBodyPreviewTab");
+const todoBodyPreview = document.getElementById("todoBodyPreview");
 const todoTags = document.getElementById("todoTags");
 const addTagBtn = document.getElementById("addTagBtn");
 const todoStatus = document.getElementById("todoStatus");
@@ -36,6 +40,10 @@ export {
   todoDialogTitle,
   todoTitle,
   todoBody,
+  todoBodyToggle,
+  todoBodyWriteTab,
+  todoBodyPreviewTab,
+  todoBodyPreview,
   todoTags,
   addTagBtn,
   todoStatus,

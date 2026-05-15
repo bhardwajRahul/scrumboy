@@ -45,6 +45,10 @@ type Options struct {
 	// return 404 and the frontend hides the Wall topbar button. Defaults on;
 	// set SCRUMBOY_WALL_ENABLED=0 to disable (see config.FromEnv semantics).
 	WallEnabled bool
+
+	// MarkdownNotesEnabled gates the todo notes markdown/preview experience in the
+	// SPA. When false, the frontend behaves exactly as before.
+	MarkdownNotesEnabled bool
 }
 
 type Server struct {
@@ -81,7 +85,8 @@ type Server struct {
 
 	dataDir string // user-wallpapers storage; empty = disabled
 
-	wallEnabled bool // Scrumbaby wall; default on (SCRUMBOY_WALL_ENABLED=0 to disable)
+	wallEnabled          bool // Scrumbaby wall; default on (SCRUMBOY_WALL_ENABLED=0 to disable)
+	markdownNotesEnabled bool // Todo notes markdown preview; default off unless explicitly enabled
 }
 
 type storeAPI interface {
@@ -340,6 +345,7 @@ func NewServer(st storeAPI, opts Options) *Server {
 		pushVapidConfigured:       pushVapidConfigured,
 		pushDebug:                 pushDebug,
 		wallEnabled:               opts.WallEnabled,
+		markdownNotesEnabled:      opts.MarkdownNotesEnabled,
 	}
 }
 

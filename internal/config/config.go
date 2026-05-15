@@ -49,6 +49,10 @@ type Config struct {
 	// SCRUMBOY_WALL_ENABLED=0 (or false/off/no, case-insensitive) to disable.
 	// Durable projects only; anonymous/temp boards never expose the wall.
 	WallEnabled bool
+
+	// Markdown notes preview. Defaults off until explicitly enabled via
+	// SCRUMBOY_MARKDOWN_NOTES_ENABLED=1 (also accepts true/on/yes).
+	MarkdownNotesEnabled bool
 }
 
 func FromEnv() Config {
@@ -93,7 +97,8 @@ func FromEnv() Config {
 		VAPIDSubscriber: NormalizeVAPIDSubscriber(os.Getenv("SCRUMBOY_VAPID_SUBSCRIBER")),
 		PushDebug:       strings.TrimSpace(os.Getenv("SCRUMBOY_DEBUG_PUSH")) == "1",
 
-		WallEnabled: wallEnabledFromEnv(),
+		WallEnabled:          wallEnabledFromEnv(),
+		MarkdownNotesEnabled: markdownNotesEnabledFromEnv(),
 	}
 }
 
@@ -108,6 +113,19 @@ func wallEnabledFromEnv() bool {
 		return false
 	default:
 		return true
+	}
+}
+
+// markdownNotesEnabledFromEnv returns whether the Phase 1 markdown notes
+// preview is enabled. Default is false unless explicitly opted in with
+// 1/true/on/yes (trimmed, case-insensitive).
+func markdownNotesEnabledFromEnv() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("SCRUMBOY_MARKDOWN_NOTES_ENABLED")))
+	switch v {
+	case "1", "true", "on", "yes":
+		return true
+	default:
+		return false
 	}
 }
 

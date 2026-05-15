@@ -165,6 +165,7 @@ export interface AuthStatusResponse {
   oidcEnabled?: boolean;
   localAuthEnabled?: boolean;
   wallEnabled?: boolean;
+  markdownNotesEnabled?: boolean;
 }
 
 export interface BoardResponse extends Board {

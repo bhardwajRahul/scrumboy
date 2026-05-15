@@ -45,6 +45,10 @@ vi.mock('../dom/elements.js', () => ({
   deleteTodoBtn: document.getElementById('deleteTodoBtn'),
   shareTodoBtn: document.getElementById('shareTodoBtn'),
   todoBody: document.getElementById('todoBody'),
+  todoBodyPreview: document.getElementById('todoBodyPreview'),
+  todoBodyPreviewTab: document.getElementById('todoBodyPreviewTab'),
+  todoBodyToggle: document.getElementById('todoBodyToggle'),
+  todoBodyWriteTab: document.getElementById('todoBodyWriteTab'),
   todoDialog: document.getElementById('todoDialog'),
   todoDialogTitle: document.getElementById('todoDialogTitle'),
   todoEstimationField: document.getElementById('todoEstimationField'),
@@ -64,6 +68,7 @@ vi.mock('../state/selectors.js', () => ({
   getAvailableTagsMap: () => selectorState.availableTagsMap,
   getBoard: () => selectorState.board,
   getBoardMembers: () => selectorState.boardMembers,
+  getMarkdownNotesEnabled: () => false,
   getSlug: () => selectorState.slug,
   getTagColors: () => selectorState.tagColors,
   getUser: () => selectorState.user,
@@ -107,6 +112,12 @@ function renderTagShell(): void {
   document.body.innerHTML = `
     <dialog id="todoDialog"></dialog>
     <button id="shareTodoBtn" type="button">Share</button>
+    <div id="todoBodyToggle">
+      <button id="todoBodyWriteTab" type="button"></button>
+      <button id="todoBodyPreviewTab" type="button"></button>
+    </div>
+    <textarea id="todoBody"></textarea>
+    <div id="todoBodyPreview"></div>
     <div id="tagsChips"></div>
     <div class="tags-input-container">
       <input id="todoTags" type="text" />

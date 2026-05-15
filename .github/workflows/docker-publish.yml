@@ -40,7 +40,7 @@ jobs:
         run: |
           cd internal/httpapi/web
           npm install
-          npx tsc
+          npm run build
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

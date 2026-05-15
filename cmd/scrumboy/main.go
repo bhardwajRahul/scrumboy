@@ -95,20 +95,21 @@ func main() {
 	}
 	mcpH := mcp.New(st, mcp.Options{Mode: cfg.ScrumboyMode})
 	srv := httpapi.NewServer(st, httpapi.Options{
-		Logger:              logger,
-		MaxRequestBody:      cfg.MaxRequestBodyBytes,
-		MaxTrelloImportBody: cfg.MaxTrelloImportBytes,
-		ScrumboyMode:        cfg.ScrumboyMode,
-		DataDir:             cfg.DataDir,
-		MCPHandler:          mcpH,
-		AgoraHandler:        agora.New(mcpH, agora.Options{MaxRequestBytes: maxB}),
-		EncryptionKey:       encKey,
-		OIDCService:         oidcSvc,
-		VAPIDPublicKey:      cfg.VAPIDPublicKey,
-		VAPIDPrivateKey:     cfg.VAPIDPrivateKey,
-		VAPIDSubscriber:     cfg.VAPIDSubscriber,
-		PushDebug:           cfg.PushDebug,
-		WallEnabled:         cfg.WallEnabled,
+		Logger:               logger,
+		MaxRequestBody:       cfg.MaxRequestBodyBytes,
+		MaxTrelloImportBody:  cfg.MaxTrelloImportBytes,
+		ScrumboyMode:         cfg.ScrumboyMode,
+		DataDir:              cfg.DataDir,
+		MCPHandler:           mcpH,
+		AgoraHandler:         agora.New(mcpH, agora.Options{MaxRequestBytes: maxB}),
+		EncryptionKey:        encKey,
+		OIDCService:          oidcSvc,
+		VAPIDPublicKey:       cfg.VAPIDPublicKey,
+		VAPIDPrivateKey:      cfg.VAPIDPrivateKey,
+		VAPIDSubscriber:      cfg.VAPIDSubscriber,
+		PushDebug:            cfg.PushDebug,
+		WallEnabled:          cfg.WallEnabled,
+		MarkdownNotesEnabled: cfg.MarkdownNotesEnabled,
 	})
 	st.SetTodoAssignedPublisher(srv.PublishTodoAssigned)
 

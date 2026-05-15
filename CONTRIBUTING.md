@@ -50,7 +50,7 @@ The web UI lives in `internal/httpapi/web`. Build it with:
 ```bash
 cd internal/httpapi/web
 npm install
-npx tsc
+npm run build
 ```
 
 The output goes to `web/dist` and is embedded by the Go server at build time. The Docker build and CI run this step before building the binary.
@@ -79,7 +79,7 @@ Binds `127.0.0.1:8080:8080` and uses the config in `docker-compose.yml`.
 
 1. **CLA:** Ensure you have agreed to the [CLA](CLA.md). Your first PR serves as your signature.
 2. **Tests:** Run `go test ./...` and ensure all tests pass.
-3. **Build:** Ensure `go build ./cmd/scrumboy` succeeds. If you change the frontend, run `npx tsc` in `internal/httpapi/web` and include the built output.
+3. **Build:** Ensure `go build ./cmd/scrumboy` succeeds. If you change the frontend, run `npm run build` in `internal/httpapi/web` and include the built output.
 4. **Description:** Provide a clear description of the change and why it is needed.
 5. **Scope:** One logical change per PR when possible.
 

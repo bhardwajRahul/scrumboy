@@ -81,6 +81,9 @@ export function setLocalAuthEnabled(enabled) {
 export function setWallEnabled(enabled) {
     current._wallEnabled = enabled;
 }
+export function setMarkdownNotesEnabled(enabled) {
+    current._markdownNotesEnabled = enabled;
+}
 export function setProjectsTab(tab) {
     current.projectsTab = tab;
 }
