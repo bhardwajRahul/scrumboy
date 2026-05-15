@@ -130,13 +130,15 @@
         <div class="field todo-notes-field">
           <div class="field__label-row">
             <label class="field__label" for="todoBody">Notes</label>
-            <div class="todo-notes-toggle" id="todoBodyToggle" hidden aria-label="Notes editor mode">
-              <button class="todo-notes-toggle__btn is-active" type="button" id="todoBodyWriteTab" aria-pressed="true">Write</button>
-              <button class="todo-notes-toggle__btn" type="button" id="todoBodyPreviewTab" aria-pressed="false">Preview</button>
+            <div class="todo-notes-tabs" id="todoBodyToggle" hidden role="tablist" aria-label="Notes editor mode">
+              <button class="todo-notes-tab is-active" type="button" id="todoBodyWriteTab" role="tab" aria-pressed="true">write</button>
+              <button class="todo-notes-tab" type="button" id="todoBodyPreviewTab" role="tab" aria-pressed="false">markdown</button>
             </div>
           </div>
-          <textarea class="textarea" id="todoBody" name="body" rows="6" maxlength="20000"></textarea>
-          <div class="todo-markdown-preview" id="todoBodyPreview" hidden aria-live="polite"></div>
+          <div class="todo-notes-editor">
+            <textarea class="textarea todo-notes-input" id="todoBody" name="body" rows="6" maxlength="20000"></textarea>
+            <div class="todo-markdown-preview todo-notes-input" id="todoBodyPreview" hidden aria-live="polite"></div>
+          </div>
         </div>
 
         <label class="field">

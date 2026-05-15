@@ -889,38 +889,81 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   resize: vertical;
 }
 
-.todo-notes-toggle {
-  align-items: center;
-  display: inline-flex;
-  gap: var(--s-3);
+.todo-notes-editor {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.todo-notes-toggle__btn {
+.todo-notes-editor:focus-within {
+  border-color: rgba(96, 165, 250, 0.65);
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.15);
+}
+
+.todo-notes-field .field__label-row {
+  align-items: center;
+}
+
+.todo-notes-tabs {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--s-6);
+  margin-left: auto;
+}
+
+.todo-notes-tabs[hidden] {
+  display: none;
+}
+
+.todo-notes-tab {
   appearance: none;
   background: transparent;
-  border: 0;
-  border-radius: 999px;
-  color: var(--muted);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--muted) 42%, transparent);
   cursor: pointer;
-  font-size: var(--fs-12);
-  font-weight: 700;
-  padding: var(--s-5) var(--s-10);
+  font-size: var(--fs-10);
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0;
+  transition: color 0.15s ease;
 }
 
-.todo-notes-toggle__btn.is-active {
-  background: rgba(96, 165, 250, 0.18);
-  color: var(--text);
+.todo-notes-tab:hover {
+  color: color-mix(in srgb, var(--muted) 58%, transparent);
 }
 
-.todo-notes-toggle__btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.22);
+.todo-notes-tab.is-active {
+  color: color-mix(in srgb, var(--text) 50%, transparent);
+}
+
+.todo-notes-tab.is-active:hover {
+  color: color-mix(in srgb, var(--text) 62%, transparent);
+}
+
+.todo-notes-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.todo-notes-field .todo-notes-input {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.todo-notes-field .todo-notes-input:focus {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 #todoDialog .todo-markdown-preview {
   background: var(--panel2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-12);
   color: var(--text);
   line-height: 1.6;
   min-height: calc(8.75rem * var(--ui-scale));
@@ -1766,21 +1809,6 @@ html[data-wallpaper-active] #settingsDialog.dialog {
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
     overscroll-behavior-y: contain;
-  }
-
-  #todoDialog .field__label-row {
-    align-items: center;
-    flex-direction: row;
-  }
-
-  #todoDialog .todo-notes-toggle {
-    margin-left: auto;
-    width: auto;
-  }
-
-  #todoDialog .todo-notes-toggle__btn {
-    flex: 0 0 auto;
-    text-align: center;
   }
 
   #todoDialog .dialog__footer {
