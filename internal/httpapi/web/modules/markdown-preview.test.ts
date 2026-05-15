@@ -66,6 +66,27 @@ describe("markdown preview rendering", () => {
     expect(html).toContain("<br>");
   });
 
+  it("allows safe root-relative links but rejects protocol-relative and non-web schemes", async () => {
+    const { renderMarkdownToSafeHtml } = await import("./markdown-preview.js");
+
+    const html = renderMarkdownToSafeHtml(
+      [
+        "[root](/board/alpha)",
+        "[protocol-relative](//example.com/path)",
+        "[mailto](mailto:test@example.com)",
+        "[tel](tel:+15555550123)",
+      ].join("\n\n"),
+    );
+
+    expect(html).toContain('<a href="/board/alpha">root</a>');
+    expect(html).not.toContain('href="//example.com/path"');
+    expect(html).not.toContain('href="mailto:test@example.com"');
+    expect(html).not.toContain('href="tel:+15555550123"');
+    expect(html).toContain("<p>protocol-relative</p>");
+    expect(html).toContain("<p>mailto</p>");
+    expect(html).toContain("<p>tel</p>");
+  });
+
   it("neutralizes raw html, dangerous links, and image syntax", async () => {
     const { renderMarkdownToSafeHtml } = await import("./markdown-preview.js");
 
@@ -76,6 +97,7 @@ describe("markdown preview rendering", () => {
         "[x](javascript:alert(1))",
         "[x](data:text/html,<script>alert(1)</script>)",
         "[x](vbscript:msgbox(1))",
+        "[x](//example.com/path)",
         "<iframe src=\"https://example.com\"></iframe>",
         "<object data=\"https://example.com/file.swf\"></object>",
         "<embed src=\"https://example.com/file.swf\">",
@@ -91,6 +113,7 @@ describe("markdown preview rendering", () => {
     expect(html).not.toContain('href="javascript:');
     expect(html).not.toContain('href="data:text/html');
     expect(html).not.toContain('href="vbscript:');
+    expect(html).not.toContain('href="//example.com/path"');
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(html).toContain("![alt](https://example.com/x.png)");

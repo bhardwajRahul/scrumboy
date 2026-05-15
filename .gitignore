@@ -41,7 +41,10 @@ coverage.out
 *.test
 
 # Development related
-/docs/draft/
+/docs/draft/*
+!/docs/draft/text-field-enhancement/
+/docs/draft/text-field-enhancement/*
+!/docs/draft/text-field-enhancement/phase1-markdown-notes.md
 f.bat
 a.bat
 *.pem
