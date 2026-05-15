@@ -100,6 +100,10 @@ export function getWallEnabled(): boolean {
   return !!current._wallEnabled;
 }
 
+export function getMarkdownNotesEnabled(): boolean {
+  return !!current._markdownNotesEnabled;
+}
+
 export function getProjectsTab(): string | undefined {
   return current.projectsTab;
 }

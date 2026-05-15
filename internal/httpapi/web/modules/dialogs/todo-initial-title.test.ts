@@ -11,7 +11,12 @@ function installTodoDom(): HTMLInputElement {
       <h2 id="todoDialogTitle"></h2>
       <form id="todoForm">
         <input id="todoTitle" />
+        <div id="todoBodyToggle">
+          <button id="todoBodyWriteTab" type="button"></button>
+          <button id="todoBodyPreviewTab" type="button"></button>
+        </div>
         <textarea id="todoBody"></textarea>
+        <div id="todoBodyPreview"></div>
         <input id="todoTags" />
         <select id="todoStatus"></select>
         <select id="todoAssignee"></select>
@@ -73,6 +78,7 @@ describe("openTodoDialog initialTitle seeding", () => {
     vi.doMock("../state/selectors.js", () => ({
       getBoard: () => ({ columnOrder: [{ key: "backlog", name: "Backlog" }] }),
       getBoardMembers: () => [],
+      getMarkdownNotesEnabled: () => false,
       getSlug: () => "",
       getTagColors: () => ({}),
       getUser: () => null,
@@ -132,6 +138,7 @@ describe("openTodoDialog initialTitle seeding", () => {
     vi.doMock("../state/selectors.js", () => ({
       getBoard: () => ({ columnOrder: [{ key: "backlog", name: "Backlog" }] }),
       getBoardMembers: () => [],
+      getMarkdownNotesEnabled: () => false,
       getSlug: () => "",
       getTagColors: () => ({}),
       getUser: () => null,

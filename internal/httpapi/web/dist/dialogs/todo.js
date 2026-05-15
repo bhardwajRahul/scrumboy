@@ -1,6 +1,7 @@
-import { addTagBtn, closeTodoBtn, deleteTodoBtn, shareTodoBtn, todoBody, todoDialog, todoDialogTitle, todoEstimationField, todoEstimationPoints, todoStatus, todoTags, todoTitle, } from '../dom/elements.js';
+import { addTagBtn, closeTodoBtn, deleteTodoBtn, shareTodoBtn, todoBody, todoBodyPreview, todoBodyPreviewTab, todoBodyToggle, todoBodyWriteTab, todoDialog, todoDialogTitle, todoEstimationField, todoEstimationPoints, todoStatus, todoTags, todoTitle, } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
-import { getBoard, getBoardMembers, getSlug, getTagColors, getUser } from '../state/selectors.js';
+import { renderMarkdownPreviewInto } from '../markdown-preview.js';
+import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getSlug, getTagColors, getUser } from '../state/selectors.js';
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
 import { escapeHTML, isAnonymousBoard, showToast } from '../utils.js';
 import { normalizeSprints } from '../sprints.js';
@@ -9,6 +10,8 @@ import { computeTodoDialogPermissions, setTodoFormPermissions, } from './todo-pe
 import { renderTagsChips, resetTodoTagAutocompleteBindings, setupTagAutocomplete, } from './todo-tags.js';
 export { getTodoFormPermissions, } from './todo-permissions.js';
 export { getTagsFromChips, normalizeTagName, removeTag, renderTagAutocomplete, renderTagsChips, setupTagAutocomplete, } from './todo-tags.js';
+let todoNotesMode = "write";
+let todoNotesPreviewBound = false;
 export function resolveColumnKey(raw) {
     const v = (raw || "").trim();
     if (!v)
@@ -64,10 +67,91 @@ function normalizeSeedTitle(raw) {
     return collapsed;
 }
 export { normalizeSeedTitle as __normalizeSeedTitleForTest };
+function markdownNotesPreviewEnabled() {
+    return !!(getMarkdownNotesEnabled() &&
+        todoBody &&
+        todoBodyPreview &&
+        todoBodyToggle &&
+        todoBodyWriteTab &&
+        todoBodyPreviewTab);
+}
+function renderTodoNotesPreview() {
+    if (!todoBodyPreview || !todoBody) {
+        return;
+    }
+    try {
+        renderMarkdownPreviewInto(todoBodyPreview, todoBody.value || "");
+    }
+    catch (err) {
+        showToast(err?.message || "Markdown preview is unavailable");
+        todoNotesMode = "write";
+        syncTodoNotesModeUI();
+    }
+}
+function syncTodoNotesModeUI() {
+    const previewEnabled = markdownNotesPreviewEnabled();
+    if (todoBodyToggle) {
+        todoBodyToggle.hidden = !previewEnabled;
+    }
+    if (!previewEnabled) {
+        todoNotesMode = "write";
+    }
+    const isPreview = previewEnabled && todoNotesMode === "preview";
+    if (todoBody) {
+        todoBody.hidden = isPreview;
+    }
+    if (todoBodyPreview) {
+        todoBodyPreview.hidden = !isPreview;
+    }
+    if (todoBodyWriteTab) {
+        const button = todoBodyWriteTab;
+        button.classList.toggle("is-active", !isPreview);
+        button.setAttribute("aria-pressed", (!isPreview).toString());
+    }
+    if (todoBodyPreviewTab) {
+        const button = todoBodyPreviewTab;
+        button.classList.toggle("is-active", isPreview);
+        button.setAttribute("aria-pressed", isPreview.toString());
+    }
+}
+function setTodoNotesMode(mode) {
+    todoNotesMode = mode;
+    if (todoNotesMode === "preview") {
+        renderTodoNotesPreview();
+    }
+    syncTodoNotesModeUI();
+}
+function bindTodoNotesPreviewControls() {
+    if (todoNotesPreviewBound) {
+        return;
+    }
+    todoNotesPreviewBound = true;
+    if (todoBodyWriteTab) {
+        todoBodyWriteTab.addEventListener("click", () => {
+            setTodoNotesMode("write");
+        });
+    }
+    if (todoBodyPreviewTab) {
+        todoBodyPreviewTab.addEventListener("click", () => {
+            if (!markdownNotesPreviewEnabled()) {
+                return;
+            }
+            setTodoNotesMode("preview");
+        });
+    }
+    if (todoBody) {
+        todoBody.addEventListener("input", () => {
+            if (todoNotesMode === "preview") {
+                renderTodoNotesPreview();
+            }
+        });
+    }
+}
 export async function openTodoDialog(opts) {
     const { mode, todo, status, onNavigateToLinkedTodo } = opts;
     setEditingTodo(mode === "edit" ? todo : null);
     bindTodoDialogLinkLifecycle();
+    bindTodoNotesPreviewControls();
     const board = getBoard();
     const permissions = computeTodoDialogPermissions({
         board,
@@ -294,6 +378,7 @@ export async function openTodoDialog(opts) {
             shareTodoBtn.style.display = "";
         setDates(todo.createdAt, todo.updatedAt);
     }
+    setTodoNotesMode("write");
     const tagInputEl = document.getElementById("todoTags");
     if (tagInputEl) {
         tagInputEl.replaceWith(tagInputEl.cloneNode(true));

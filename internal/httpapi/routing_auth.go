@@ -79,9 +79,10 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 		// Anonymous mode: return noop response (no console errors, clear contract)
 		if s.mode == "anonymous" {
 			writeJSON(w, http.StatusOK, map[string]any{
-				"user":               nil,
-				"bootstrapAvailable": false,
-				"mode":               "anonymous",
+				"user":                 nil,
+				"bootstrapAvailable":   false,
+				"mode":                 "anonymous",
+				"markdownNotesEnabled": s.markdownNotesEnabled,
 			})
 			return
 		}
@@ -111,9 +112,10 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 		}
 
 		resp := map[string]any{
-			"user":               user,
-			"bootstrapAvailable": bootstrapAvailable,
-			"mode":               "full",
+			"user":                 user,
+			"bootstrapAvailable":   bootstrapAvailable,
+			"mode":                 "full",
+			"markdownNotesEnabled": s.markdownNotesEnabled,
 		}
 		resp["oidcEnabled"] = s.oidcService != nil
 		resp["localAuthEnabled"] = localAuthEnabled

@@ -4,6 +4,10 @@ import {
   deleteTodoBtn,
   shareTodoBtn,
   todoBody,
+  todoBodyPreview,
+  todoBodyPreviewTab,
+  todoBodyToggle,
+  todoBodyWriteTab,
   todoDialog,
   todoDialogTitle,
   todoEstimationField,
@@ -13,7 +17,8 @@ import {
   todoTitle,
 } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
-import { getBoard, getBoardMembers, getSlug, getTagColors, getUser } from '../state/selectors.js';
+import { renderMarkdownPreviewInto } from '../markdown-preview.js';
+import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getSlug, getTagColors, getUser } from '../state/selectors.js';
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
 import { escapeHTML, isAnonymousBoard, showToast } from '../utils.js';
 import { normalizeSprints } from '../sprints.js';
@@ -45,6 +50,11 @@ export {
   renderTagsChips,
   setupTagAutocomplete,
 } from './todo-tags.js';
+
+type TodoNotesMode = "write" | "preview";
+
+let todoNotesMode: TodoNotesMode = "write";
+let todoNotesPreviewBound = false;
 
 export function resolveColumnKey(raw: string | undefined | null): string {
   const v = (raw || "").trim();
@@ -106,6 +116,97 @@ function normalizeSeedTitle(raw: string | undefined): string {
 
 export { normalizeSeedTitle as __normalizeSeedTitleForTest };
 
+function markdownNotesPreviewEnabled(): boolean {
+  return !!(
+    getMarkdownNotesEnabled() &&
+    todoBody &&
+    todoBodyPreview &&
+    todoBodyToggle &&
+    todoBodyWriteTab &&
+    todoBodyPreviewTab
+  );
+}
+
+function renderTodoNotesPreview(): void {
+  if (!todoBodyPreview || !todoBody) {
+    return;
+  }
+  try {
+    renderMarkdownPreviewInto(
+      todoBodyPreview as HTMLElement,
+      (todoBody as HTMLTextAreaElement).value || "",
+    );
+  } catch (err: any) {
+    showToast(err?.message || "Markdown preview is unavailable");
+    todoNotesMode = "write";
+    syncTodoNotesModeUI();
+  }
+}
+
+function syncTodoNotesModeUI(): void {
+  const previewEnabled = markdownNotesPreviewEnabled();
+  if (todoBodyToggle) {
+    (todoBodyToggle as HTMLElement).hidden = !previewEnabled;
+  }
+  if (!previewEnabled) {
+    todoNotesMode = "write";
+  }
+
+  const isPreview = previewEnabled && todoNotesMode === "preview";
+  if (todoBody) {
+    (todoBody as HTMLTextAreaElement).hidden = isPreview;
+  }
+  if (todoBodyPreview) {
+    (todoBodyPreview as HTMLElement).hidden = !isPreview;
+  }
+  if (todoBodyWriteTab) {
+    const button = todoBodyWriteTab as HTMLButtonElement;
+    button.classList.toggle("is-active", !isPreview);
+    button.setAttribute("aria-pressed", (!isPreview).toString());
+  }
+  if (todoBodyPreviewTab) {
+    const button = todoBodyPreviewTab as HTMLButtonElement;
+    button.classList.toggle("is-active", isPreview);
+    button.setAttribute("aria-pressed", isPreview.toString());
+  }
+}
+
+function setTodoNotesMode(mode: TodoNotesMode): void {
+  todoNotesMode = mode;
+  if (todoNotesMode === "preview") {
+    renderTodoNotesPreview();
+  }
+  syncTodoNotesModeUI();
+}
+
+function bindTodoNotesPreviewControls(): void {
+  if (todoNotesPreviewBound) {
+    return;
+  }
+  todoNotesPreviewBound = true;
+
+  if (todoBodyWriteTab) {
+    (todoBodyWriteTab as HTMLButtonElement).addEventListener("click", () => {
+      setTodoNotesMode("write");
+    });
+  }
+  if (todoBodyPreviewTab) {
+    (todoBodyPreviewTab as HTMLButtonElement).addEventListener("click", () => {
+      if (!markdownNotesPreviewEnabled()) {
+        return;
+      }
+      setTodoNotesMode("preview");
+    });
+  }
+  if (todoBody) {
+    (todoBody as HTMLTextAreaElement).addEventListener("input", () => {
+      if (todoNotesMode === "preview") {
+        renderTodoNotesPreview();
+      }
+    });
+  }
+}
+
 export async function openTodoDialog(opts: {
   mode: string;
   todo?: any;
@@ -117,6 +218,7 @@ export async function openTodoDialog(opts: {
   const { mode, todo, status, onNavigateToLinkedTodo } = opts;
   setEditingTodo(mode === "edit" ? todo : null);
   bindTodoDialogLinkLifecycle();
+  bindTodoNotesPreviewControls();
 
   const board = getBoard();
   const permissions = computeTodoDialogPermissions({
@@ -339,6 +441,7 @@ export async function openTodoDialog(opts: {
     if (shareTodoBtn) (shareTodoBtn as HTMLElement).style.display = "";
     setDates(todo.createdAt, todo.updatedAt);
   }
+  setTodoNotesMode("write");
 
   const tagInputEl = document.getElementById("todoTags") as HTMLInputElement | null;
   if (tagInputEl) {
