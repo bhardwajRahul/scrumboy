@@ -2,6 +2,35 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** unless noted below.
 
+## [3.16.2] - 2026-05-26
+
+### Improvements
+
+- **Shared confirm and prompt dialogs** - `showConfirmDialog` and new `showPromptDialog` use the app `dialog` styling (header, footer, danger confirm) with intent-based close handling so outside-click dismissal and programmatic `dialog.close()` resolve to the correct choice instead of false negatives.
+
+- **Todo dialog unsaved changes** - Closing the todo editor (X, Escape, outside click, or app-level close) prompts to discard when title, notes, tags, status, estimation, assignee, or sprint differ from the snapshot taken when the dialog opened.
+
+- **Settings workflow tab** - Switching away from Workflow with a dirty lane draft prompts to discard unsaved changes before re-rendering.
+
+- **Project rename** - Board and Projects rename flows use `showPromptDialog` instead of the browser `prompt()`.
+
+- **Member management** - Demote and remove-member actions on the board use `showConfirmDialog` instead of `window.confirm()`.
+
+### Frontend
+
+- **Modal outside click** - Backdrop/outside closes dispatch a cancellable `scrumboy:dialog-request-close` event so dialogs with dirty-state guards can intercept close attempts.
+
+### Tests
+
+- **Todo close guard** - Dirty detection, discard/cancel paths, and interaction with the close-request event.
+- **Utils dialogs** - Confirm/prompt intent resolution and `confirmDelete` wrapper.
+- **Projects** - Rename prompt and delete confirmation wiring.
+- **Modal outside click** - Close-request event behavior.
+
+### Tooling
+
+- **`check-delete-confirms`** - CI guard now rejects raw `alert()`, `confirm()`, and `prompt()` in maintained frontend sources (not only delete confirms).
+
 ## [3.16.1] - 2026-05-26
 
 ### Fixed
