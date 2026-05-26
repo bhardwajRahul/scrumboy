@@ -121,9 +121,11 @@ function getLocalRealtimeGuardRemaining() {
 function getBoardInteractionGuardRemaining() {
     return Math.max(0, boardInteractionGuardMs - (Date.now() - getLastBoardInteractionTimestamp()));
 }
-function isRealtimeRefreshBlocked() {
-    return dragInProgress
-        || boardPointerInteractionActive
+function isRealtimeRefreshBlockedByDrag() {
+    return dragInProgress;
+}
+function isRealtimeRefreshBlockedByNonDragGuard() {
+    return boardPointerInteractionActive
         || todoDialogOpeningInProgress
         || getLocalRealtimeGuardRemaining() > 0
         || getBoardInteractionGuardRemaining() > 0;
@@ -148,9 +150,10 @@ function ensureRealtimeForceRefreshTimer() {
     }, maxRefreshDelayMs);
 }
 // Pending realtime refreshes are slug-scoped. They are dropped after
-// navigation, deferred while local interaction guards are active, retried after
-// max(realtimeRefetchDebounceMs, guardRemaining), and force-flushed after
-// maxRefreshDelayMs so the board eventually reloads.
+// navigation, deferred while drag/local interaction guards are active, retried
+// after max(realtimeRefetchDebounceMs, guardRemaining), and force-flushed after
+// maxRefreshDelayMs only for non-drag guards so active drags can never be
+// interrupted by a board rerender.
 function flushPendingRealtimeRefresh(force = false) {
     const slug = pendingRealtimeRefreshSlug;
     if (!slug) {
@@ -163,7 +166,13 @@ function flushPendingRealtimeRefresh(force = false) {
         clearPendingRealtimeRefresh();
         return;
     }
-    if (!force && isRealtimeRefreshBlocked()) {
+    if (isRealtimeRefreshBlockedByDrag()) {
+        debugLog("flushPendingRealtimeRefresh deferred because drag is active", slug);
+        clearRealtimeForceRefreshTimer();
+        scheduleRealtimeRefreshAttempt(getRealtimeRefreshDelay());
+        return;
+    }
+    if (!force && isRealtimeRefreshBlockedByNonDragGuard()) {
         debugLog("flushPendingRealtimeRefresh deferred because interaction guard active", slug);
         scheduleRealtimeRefreshAttempt(getRealtimeRefreshDelay());
         ensureRealtimeForceRefreshTimer();
@@ -200,7 +209,9 @@ function refetchBoardFromRealtime(slug) {
     pendingRealtimeRefreshSlug = slug;
     debugLog("refetchBoardFromRealtime queued invalidateBoard", slug);
     scheduleRealtimeRefreshAttempt(getRealtimeRefreshDelay());
-    ensureRealtimeForceRefreshTimer();
+    if (!isRealtimeRefreshBlockedByDrag()) {
+        ensureRealtimeForceRefreshTimer();
+    }
 }
 export function connectBoardEvents(slug) {
     if (boardEventsSlug === slug && (boardAnonSseManager !== null || boardRealtimeBound)) {
@@ -389,4 +400,30 @@ export function setInitialBoardLoadInFlight(slug) {
 export function markBoardLoadSucceeded(slug) {
     lastBoardLoadTimestamp = Date.now();
     lastSuccessfulBoardLoadSlug = slug;
+}
+export function __queuePendingRealtimeRefreshForTest(slug) {
+    refetchBoardFromRealtime(slug);
+}
+export function __flushPendingRealtimeRefreshForTest(force = false) {
+    flushPendingRealtimeRefresh(force);
+}
+export function __setTodoDialogOpeningInProgressForTest(active) {
+    todoDialogOpeningInProgress = active;
+}
+export function __getPendingRealtimeRefreshSlugForTest() {
+    return pendingRealtimeRefreshSlug;
+}
+export function __getRealtimeRefreshDebounceMsForTest() {
+    return realtimeRefetchDebounceMs;
+}
+export function __getMaxRefreshDelayMsForTest() {
+    return maxRefreshDelayMs;
+}
+export function __resetRealtimeRefreshStateForTest() {
+    clearPendingRealtimeRefresh();
+    clearBoardPointerReleaseTimer();
+    boardPointerInteractionActive = false;
+    todoDialogOpeningInProgress = false;
+    boardEventsSlug = null;
+    boardRealtimeBound = false;
 }

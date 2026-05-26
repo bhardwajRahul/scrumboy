@@ -2,6 +2,22 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** unless noted below.
 
+## [3.16.1] - 2026-05-26
+
+### Fixed
+
+- **Real burndown chart (sprint domain)** - Sprint charts use UTC day boundaries for the time axis and subtitle range, filter sprint points with half-open day intervals, and show clear fallback copy when data is empty, sprint-scoped but unusable, or only a single sample (instead of mounting a misleading one-point chart).
+
+- **Settings → Charts burndown** - Sprint list cache invalidates when the active board slug changes, so burndown navigation and sprint-scoped fetches stay aligned after switching projects.
+
+- **Board realtime refresh during drag** - SSE-driven board reloads no longer schedule a forced refresh while a card drag is active, and drag-in-progress always defers (never force-flushes) pending refreshes, fixing intermittent freezes when moving notes between lanes.
+
+### Tests
+
+- **Burndown** - UTC sprint bounds, single-sample fallback, and mount guard behavior.
+- **Settings charts** - Sprint cache keyed by slug and default sprint index selection.
+- **Board realtime** - Drag vs non-drag guard deferral and force-timer behavior.
+
 ## [3.16.0] - 2026-05-15
 
 ### Features
