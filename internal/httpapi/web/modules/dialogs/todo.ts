@@ -17,10 +17,11 @@ import {
   todoTitle,
 } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
+import { DIALOG_CLOSE_REQUEST_EVENT, type DialogCloseRequestDetail } from '../core/modal-outside-click.js';
 import { renderMarkdownPreviewInto } from '../markdown-preview.js';
 import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getSlug, getTagColors, getUser } from '../state/selectors.js';
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
-import { escapeHTML, isAnonymousBoard, showToast } from '../utils.js';
+import { escapeHTML, isAnonymousBoard, showConfirmDialog, showToast } from '../utils.js';
 import { normalizeSprints } from '../sprints.js';
 import {
   bindShareTodoButton,
@@ -33,6 +34,7 @@ import {
   setTodoFormPermissions,
 } from './todo-permissions.js';
 import {
+  getTagsFromChips,
   renderTagsChips,
   resetTodoTagAutocompleteBindings,
   setupTagAutocomplete,
@@ -52,9 +54,22 @@ export {
 } from './todo-tags.js';
 
 type TodoNotesMode = "markdown" | "preview";
+type TodoDialogCloseReason = "button" | "cancel" | "outside" | "save" | "delete";
+type TodoDialogSnapshot = {
+  title: string;
+  body: string;
+  tags: string[];
+  status: string;
+  estimation: string;
+  assignee: string;
+  sprint: string;
+};
 
 let todoNotesMode: TodoNotesMode = "markdown";
 let todoNotesPreviewBound = false;
+let todoDialogCloseGuardsBound = false;
+let todoDialogBaseline: TodoDialogSnapshot | null = null;
+let todoDialogClosePromptOpen = false;
 
 export function resolveColumnKey(raw: string | undefined | null): string {
   const v = (raw || "").trim();
@@ -207,6 +222,125 @@ function bindTodoNotesPreviewControls(): void {
   }
 }
 
+function readTodoDialogSnapshot(): TodoDialogSnapshot {
+  const assignee = document.getElementById("todoAssignee") as HTMLSelectElement | null;
+  const sprint = document.getElementById("todoSprint") as HTMLSelectElement | null;
+  return {
+    title: (todoTitle as HTMLInputElement | null)?.value ?? "",
+    body: (todoBody as HTMLTextAreaElement | null)?.value ?? "",
+    tags: getTagsFromChips(),
+    status: (todoStatus as HTMLSelectElement | null)?.value ?? "",
+    estimation: (todoEstimationPoints as HTMLSelectElement | null)?.value ?? "",
+    assignee: assignee?.value ?? "",
+    sprint: sprint?.value ?? "",
+  };
+}
+
+function captureTodoDialogBaseline(): void {
+  todoDialogBaseline = readTodoDialogSnapshot();
+}
+
+function isTodoDialogDirty(): boolean {
+  if (!todoDialogBaseline) {
+    return false;
+  }
+  const current = readTodoDialogSnapshot();
+  return (
+    current.title !== todoDialogBaseline.title ||
+    current.body !== todoDialogBaseline.body ||
+    current.status !== todoDialogBaseline.status ||
+    current.estimation !== todoDialogBaseline.estimation ||
+    current.assignee !== todoDialogBaseline.assignee ||
+    current.sprint !== todoDialogBaseline.sprint ||
+    current.tags.length !== todoDialogBaseline.tags.length ||
+    current.tags.some((tag, idx) => tag !== todoDialogBaseline?.tags[idx])
+  );
+}
+
+function resetTodoDialogCloseState(): void {
+  todoDialogBaseline = null;
+  todoDialogClosePromptOpen = false;
+}
+
+async function closeTodoDialogInternal(
+  options: { force?: boolean; reason?: TodoDialogCloseReason } = {},
+): Promise<boolean> {
+  const dialog = todoDialog as HTMLDialogElement | null;
+  if (!dialog || !dialog.open) {
+    return true;
+  }
+  if (options.force || !isTodoDialogDirty()) {
+    dialog.close();
+    return true;
+  }
+  if (todoDialogClosePromptOpen) {
+    return false;
+  }
+
+  todoDialogClosePromptOpen = true;
+  try {
+    const discard = await showConfirmDialog(
+      "You have unsaved changes. Discard them?",
+      "Unsaved changes",
+      "Discard",
+    );
+    if (!discard) {
+      return false;
+    }
+    dialog.close();
+    return true;
+  } finally {
+    todoDialogClosePromptOpen = false;
+  }
+}
+
+function bindTodoDialogCloseGuards(): void {
+  if (todoDialogCloseGuardsBound || !todoDialog) {
+    return;
+  }
+  todoDialogCloseGuardsBound = true;
+
+  (todoDialog as HTMLDialogElement).addEventListener("cancel", (event) => {
+    if (todoDialogClosePromptOpen) {
+      event.preventDefault();
+      return;
+    }
+    if (!isTodoDialogDirty()) {
+      return;
+    }
+    event.preventDefault();
+    void closeTodoDialogInternal({ reason: "cancel" });
+  });
+
+  (todoDialog as HTMLDialogElement).addEventListener(DIALOG_CLOSE_REQUEST_EVENT, (event) => {
+    if (todoDialogClosePromptOpen) {
+      event.preventDefault();
+      return;
+    }
+    if (!isTodoDialogDirty()) {
+      return;
+    }
+    event.preventDefault();
+    const detail = (event as CustomEvent<DialogCloseRequestDetail>).detail;
+    void closeTodoDialogInternal({ reason: detail?.reason === "outside" ? "outside" : "button" });
+  });
+
+  (todoDialog as HTMLDialogElement).addEventListener("close", () => {
+    resetTodoDialogCloseState();
+  });
+}
+
+export function requestTodoDialogClose(
+  options: { force?: boolean; reason?: TodoDialogCloseReason } = {},
+): Promise<boolean> {
+  bindTodoDialogCloseGuards();
+  return closeTodoDialogInternal(options);
+}
+
+export function __isTodoDialogDirtyForTest(): boolean {
+  return isTodoDialogDirty();
+}
+
 export async function openTodoDialog(opts: {
   mode: string;
   todo?: any;
@@ -217,6 +351,7 @@ export async function openTodoDialog(opts: {
 }): Promise<void> {
   const { mode, todo, status, onNavigateToLinkedTodo } = opts;
   setEditingTodo(mode === "edit" ? todo : null);
+  bindTodoDialogCloseGuards();
   bindTodoDialogLinkLifecycle();
   bindTodoNotesPreviewControls();
 
@@ -474,6 +609,7 @@ export async function openTodoDialog(opts: {
   }
 
   bindShareTodoButton();
+  captureTodoDialogBaseline();
 
   (todoDialog as HTMLDialogElement).showModal();
   let userChoseFocus = false;

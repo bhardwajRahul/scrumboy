@@ -1384,7 +1384,8 @@ export async function renderSettingsModal(options) {
                 const userId = e.currentTarget.getAttribute("data-user-id");
                 if (!userId)
                     return;
-                if (!confirm("Demote this user from admin to regular user?")) {
+                const confirmed = await showConfirmDialog("Demote this user from admin to regular user?", "Demote user?", "Demote");
+                if (!confirmed) {
                     return;
                 }
                 try {

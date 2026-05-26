@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
-import { confirmDelete, showConfirmDialog } from "./utils.js";
+import { confirmDelete, showConfirmDialog, showPromptDialog } from "./utils.js";
 
 function installDialogPolyfill(): void {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
@@ -111,5 +111,87 @@ describe("showConfirmDialog lifecycle", () => {
     dialog.dispatchEvent(new Event("cancel"));
     dialog.close();
     await expect(resultPromise).resolves.toBe(false);
+  });
+
+  it("rejects when showModal throws", async () => {
+    HTMLDialogElement.prototype.showModal = function brokenShowModal(): void {
+      throw new Error("showModal failed");
+    };
+
+    await expect(showConfirmDialog("Proceed?")).rejects.toThrow("showModal failed");
+    expect(document.querySelector("dialog")).toBeNull();
+  });
+});
+
+describe("showPromptDialog lifecycle", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    installDialogPolyfill();
+  });
+
+  it("resolves the entered value on submit", async () => {
+    const resultPromise = showPromptDialog({
+      title: "Rename Project",
+      label: "Project Name",
+      initialValue: "Alpha",
+      confirmLabel: "Rename",
+      placeholder: "Project name",
+      maxLength: 200,
+    });
+    const title = document.querySelector(".dialog__title");
+    const input = document.getElementById("promptDialogInput");
+    const confirmBtn = document.getElementById("promptDialogConfirm");
+    if (!(title instanceof HTMLElement)) throw new Error("missing prompt title");
+    if (!(input instanceof HTMLInputElement)) throw new Error("missing prompt input");
+    if (!(confirmBtn instanceof HTMLButtonElement)) throw new Error("missing prompt confirm button");
+
+    expect(title.textContent).toBe("Rename Project");
+    expect(input.value).toBe("Alpha");
+    input.value = "Beta";
+    confirmBtn.click();
+
+    await expect(resultPromise).resolves.toBe("Beta");
+  });
+
+  it("resolves null when the cancel button is pressed", async () => {
+    const resultPromise = showPromptDialog();
+    const cancelBtn = document.getElementById("promptDialogCancel");
+    if (!(cancelBtn instanceof HTMLButtonElement)) throw new Error("missing prompt cancel button");
+
+    cancelBtn.click();
+    await expect(resultPromise).resolves.toBeNull();
+  });
+
+  it("resolves null when the close (x) button is pressed", async () => {
+    const resultPromise = showPromptDialog();
+    const closeBtn = document.getElementById("promptDialogClose");
+    if (!(closeBtn instanceof HTMLButtonElement)) throw new Error("missing prompt close button");
+
+    closeBtn.click();
+    await expect(resultPromise).resolves.toBeNull();
+  });
+
+  it("resolves null when the native cancel (ESC) event fires", async () => {
+    const resultPromise = showPromptDialog();
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+    dialog.dispatchEvent(new Event("cancel"));
+    dialog.close();
+    await expect(resultPromise).resolves.toBeNull();
+  });
+
+  it("resolves null when the dialog is closed externally", async () => {
+    const resultPromise = showPromptDialog();
+    const dialog = document.querySelector("dialog") as HTMLDialogElement;
+    dialog.close();
+    await expect(resultPromise).resolves.toBeNull();
+  });
+
+  it("rejects when showModal throws", async () => {
+    HTMLDialogElement.prototype.showModal = function brokenShowModal(): void {
+      throw new Error("showModal failed");
+    };
+
+    await expect(showPromptDialog()).rejects.toThrow("showModal failed");
+    expect(document.querySelector("dialog")).toBeNull();
   });
 });

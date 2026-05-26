@@ -3,7 +3,7 @@ import { apiFetch } from '../api.js';
 import { ingestProjectsFromApp } from '../core/notifications.js';
 import { navigate } from '../router.js';
 import type { Board } from '../types.js';
-import { escapeHTML, showToast, renderUserAvatar, confirmDelete } from '../utils.js';
+import { escapeHTML, showToast, renderUserAvatar, confirmDelete, showPromptDialog } from '../utils.js';
 import {
   getProjectsTab,
   getProjectView,
@@ -571,14 +571,22 @@ export async function renderProjects(): Promise<void> {
         const id = parseInt(el.getAttribute("data-rename") || "");
         const project = projects.find((p) => p.id === id);
         if (!project) return;
-        
-        const newName = prompt("Enter new project name:", project.name);
-        if (!newName || newName.trim() === "" || newName === project.name) return;
-        
+
+        const nextName = await showPromptDialog({
+          title: "Rename Project",
+          label: "Project Name",
+          initialValue: project.name,
+          confirmLabel: "Rename",
+          placeholder: "Project name",
+          maxLength: 200,
+        });
+        const newName = nextName?.trim() ?? "";
+        if (!newName || newName === project.name) return;
+
         try {
           await apiFetch(`/api/projects/${id}`, {
             method: "PATCH",
-            body: JSON.stringify({ name: newName.trim() }),
+            body: JSON.stringify({ name: newName }),
           });
           await renderProjects();
           showToast("Project renamed");

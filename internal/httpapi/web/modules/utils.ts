@@ -226,6 +226,15 @@ export function getAppVersion(): string {
   return meta ? (meta.getAttribute("content") || "") : "";
 }
 
+export interface PromptDialogOptions {
+  title?: string;
+  label?: string;
+  initialValue?: string;
+  confirmLabel?: string;
+  placeholder?: string;
+  maxLength?: number;
+}
+
 /**
  * Shows a custom confirmation dialog matching the site's design.
  * Returns a Promise that resolves to true if confirmed, false if cancelled.
@@ -248,7 +257,7 @@ export function showConfirmDialog(message: string, title: string = "Confirm", co
     dialog.className = 'dialog';
 
     dialog.innerHTML = `
-      <div class="dialog__form">
+      <div class="dialog__form" data-dialog-content-root>
         <div class="dialog__header">
           <div class="dialog__title">${escapeHTML(title)}</div>
           <button class="btn btn--ghost" type="button" id="confirmDialogClose" aria-label="Close">✕</button>
@@ -307,7 +316,108 @@ export function showConfirmDialog(message: string, title: string = "Confirm", co
     } catch (err) {
       // Extremely rare (detached from DOM / not an HTMLDialogElement); surface
       // the error instead of silently hanging the promise.
-      settle(false);
+      settled = true;
+      if (dialog.parentNode) dialog.remove();
+      reject(err);
+    }
+  });
+}
+
+/**
+ * Shows a prompt dialog with a single text input and resolves to the entered
+ * value on submit, or null on any cancel/close path.
+ */
+export function showPromptDialog(options: PromptDialogOptions = {}): Promise<string | null> {
+  const {
+    title = "Prompt",
+    label = "Value",
+    initialValue = "",
+    confirmLabel = "Save",
+    placeholder = "",
+    maxLength,
+  } = options;
+
+  return new Promise((resolve, reject) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "dialog";
+    const maxLengthAttr =
+      typeof maxLength === "number" && Number.isFinite(maxLength) && maxLength > 0
+        ? ` maxlength="${Math.trunc(maxLength)}"`
+        : "";
+
+    dialog.innerHTML = `
+      <form method="dialog" class="dialog__form" data-dialog-content-root id="promptDialogForm">
+        <div class="dialog__header">
+          <div class="dialog__title">${escapeHTML(title)}</div>
+          <button class="btn btn--ghost" type="button" id="promptDialogClose" aria-label="Close">✕</button>
+        </div>
+        <div class="dialog__content">
+          <label class="field">
+            <div class="field__label">${escapeHTML(label)}</div>
+            <input
+              class="input"
+              type="text"
+              id="promptDialogInput"
+              value="${escapeHTML(initialValue)}"
+              placeholder="${escapeHTML(placeholder)}"${maxLengthAttr}
+              autocomplete="off"
+            />
+          </label>
+        </div>
+        <div class="dialog__footer">
+          <div class="spacer"></div>
+          <button class="btn btn--ghost" type="button" id="promptDialogCancel">Cancel</button>
+          <button class="btn" type="submit" id="promptDialogConfirm">${escapeHTML(confirmLabel)}</button>
+        </div>
+      </form>
+    `;
+
+    document.body.appendChild(dialog);
+
+    let intent: string | null = null;
+    let settled = false;
+    const settle = (value: string | null): void => {
+      if (settled) return;
+      settled = true;
+      if (dialog.parentNode) dialog.remove();
+      resolve(value);
+    };
+
+    dialog.addEventListener("close", () => settle(intent), { once: true });
+
+    const input = dialog.querySelector("#promptDialogInput") as HTMLInputElement;
+    const form = dialog.querySelector("#promptDialogForm") as HTMLFormElement;
+    const onCancelClose = (): void => {
+      intent = null;
+      dialog.close();
+    };
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      intent = input.value;
+      dialog.close();
+    });
+
+    const closeBtn = dialog.querySelector("#promptDialogClose") as HTMLButtonElement;
+    closeBtn.addEventListener("click", onCancelClose);
+    const cancelBtn = dialog.querySelector("#promptDialogCancel") as HTMLButtonElement;
+    cancelBtn.addEventListener("click", onCancelClose);
+
+    dialog.addEventListener("cancel", () => {
+      intent = null;
+    });
+
+    try {
+      dialog.showModal();
+      input.focus();
+      try {
+        input.setSelectionRange(0, input.value.length);
+      } catch {
+        // Ignore selection issues in non-text input implementations.
+      }
+    } catch (err) {
+      settled = true;
+      if (dialog.parentNode) dialog.remove();
       reject(err);
     }
   });

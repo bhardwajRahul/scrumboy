@@ -13,7 +13,7 @@ import { apiFetch } from './dist/api.js';
 import { navigate, router } from './dist/router.js';
 import { getRoute, getProjectId, getBoard, getAuthStatusAvailable, getMobileTab, getSlug, getTag, getSearch, getSprintIdFromUrl, getProjectView, getProjectsTab, getProjects, getSettingsProjectId, getEditingTodo, getAvailableTags, getAutocompleteSuggestion, getAvailableTagsMap, getTagColors, getUser, getSettingsActiveTab, getBackupImportBtn, getBackupData, getBackupPreview, getAuthStatusChecked } from './dist/state/selectors.js';
 import { setProjectId, setBoard, setSlug, setTag, setMobileTab, setProjects, setProjectsTab, setProjectView, setEditingTodo, setAvailableTags, setAvailableTagsMap, setAutocompleteSuggestion, setTagColors, setSettingsProjectId, setSettingsActiveTab, setBackupImportBtn, setBackupData, setBackupPreview } from './dist/state/mutations.js';
-import { openTodoDialog, renderTagsChips, setupTagAutocomplete, removeTag, renderTagAutocomplete, getTagsFromChips, resetAssigneeSelect, getTodoFormPermissions } from './dist/dialogs/todo.js';
+import { openTodoDialog, renderTagsChips, setupTagAutocomplete, removeTag, renderTagAutocomplete, getTagsFromChips, resetAssigneeSelect, getTodoFormPermissions, requestTodoDialogClose } from './dist/dialogs/todo.js';
 import { buildTodoCreatePayload, buildTodoPatchPayload } from './dist/dialogs/todo-submit.js';
 import { renderSettingsModal, invalidateTagsCache } from './dist/dialogs/settings.js';
 import { initDnD, columnsSpec, dragInProgress, dragJustEnded } from './dist/features/drag-drop.js';
@@ -77,10 +77,10 @@ app.addEventListener("click", async (e) => {
 // renderSettingsModal, updateTagColor, and deleteTag moved to modules/dialogs/settings.ts
 // getTagColor and handleProjectImageUpload moved to modules/views/board.ts
 
-closeTodoBtn.addEventListener("click", () => {
+closeTodoBtn.addEventListener("click", async () => {
   setAutocompleteSuggestion(null);
   renderTagAutocomplete();
-  todoDialog.close();
+  await requestTodoDialogClose({ reason: "button" });
 });
 closeSettingsBtn.addEventListener("click", () => settingsDialog.close());
 
@@ -113,7 +113,7 @@ deleteTodoBtn.addEventListener("click", async () => {
     await apiFetch(`/api/board/${getSlug()}/todos/${todo.localId}`, { method: "DELETE" });
     setEditingTodo(null);
     onTodoDialogClosed();
-    todoDialog.close();
+    await requestTodoDialogClose({ force: true, reason: "delete" });
     await loadBoardBySlug(getSlug(), getTag(), getSearch(), getSprintIdFromUrl());
   } catch (err) {
     showToast(err.message);
@@ -196,7 +196,7 @@ todoForm.addEventListener("submit", async (e) => {
       showToast("Todo created");
     }
 
-    todoDialog.close();
+    await requestTodoDialogClose({ force: true, reason: "save" });
     // Invalidate tags cache so Settings modal shows newly created tags
     invalidateTagsCache();
     await loadBoardBySlug(getSlug(), getTag(), getSearch(), getSprintIdFromUrl());

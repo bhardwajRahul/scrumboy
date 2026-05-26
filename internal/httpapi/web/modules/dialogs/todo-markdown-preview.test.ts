@@ -113,6 +113,7 @@ function mockTodoModule(markdownNotesEnabled: boolean): void {
     setTodoFormPermissions: vi.fn(),
   }));
   vi.doMock("./todo-tags.js", () => ({
+    getTagsFromChips: () => [],
     renderTagsChips: vi.fn(),
     resetTodoTagAutocompleteBindings: vi.fn(),
     setupTagAutocomplete: vi.fn(),
