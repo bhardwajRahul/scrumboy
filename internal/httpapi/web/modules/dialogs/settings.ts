@@ -124,6 +124,7 @@ let burndownSprintIndex = 0;
 let cachedRealBurndownData: any[] | null = null;
 let cachedRealBurndownURL: string | null = null;
 let cachedSprintsForCharts: { id: number; name: string; plannedStartAt: number; plannedEndAt: number; state?: string }[] | null = null;
+let cachedSprintsForChartsSlug: string | null = null;
 
 /** Update all user-avatar elements outside the settings dialog (e.g. topbar) after avatar change. */
 function refreshAvatarsOutsideSettings(): void {
@@ -201,6 +202,7 @@ function computeDefaultBurndownSprintIndex(
 
 function invalidateSprintsForChartsCache(): void {
   cachedSprintsForCharts = null;
+  cachedSprintsForChartsSlug = null;
   cachedRealBurndownData = null;
   cachedRealBurndownURL = null;
 }
@@ -948,8 +950,6 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
   let tagsHTML = "";
   let realBurndownData: any[] = [];
   
-  const realBurndownURLChanged = cachedRealBurndownURL !== realBurndownURL;
-  
   if (hasProjectAccess) {
     try {
       tagsHTML = await loadTagSettingsContent(tagsURL!);
@@ -959,19 +959,26 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       if (activeTab === "charts") {
         // Fetch sprints for burndown navigation
         const slug = getSlug();
-        if (slug && (cachedSprintsForCharts === null || realBurndownURLChanged)) {
+        if (!slug) {
+          cachedSprintsForCharts = null;
+          cachedSprintsForChartsSlug = null;
+        }
+        if (slug && (cachedSprintsForCharts === null || cachedSprintsForChartsSlug !== slug)) {
           try {
             const sprintsRes = await apiFetch<{ sprints?: { id: number; name: string; plannedStartAt: number; plannedEndAt: number; state?: string }[] } | null>(`/api/board/${slug}/sprints`);
             const rawSprints = normalizeSprints(sprintsRes);
             cachedSprintsForCharts = [...rawSprints].sort((a, b) => a.plannedStartAt - b.plannedStartAt);
+            cachedSprintsForChartsSlug = slug;
             // Auto-select sprint: active > last closed > first planned
             burndownSprintIndex = computeDefaultBurndownSprintIndex(cachedSprintsForCharts);
           } catch {
             cachedSprintsForCharts = [];
+            cachedSprintsForChartsSlug = slug;
+            burndownSprintIndex = 0;
           }
         }
         // When a sprint is selected in board view, use sprint-scoped burndown endpoint
-        const sprints = cachedSprintsForCharts ?? [];
+        const sprints = slug ? (cachedSprintsForCharts ?? []) : [];
         const burndownSprintIndexClamped = sprints.length > 0 ? Math.min(burndownSprintIndex, sprints.length - 1) : 0;
         const currentSprintForFetch = sprints.length > 0 ? sprints[burndownSprintIndexClamped] : null;
         const effectiveBurndownURL =
@@ -1008,6 +1015,8 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
   } else {
     // No project access - clear cache
     invalidateTagSettingsCache();
+    cachedSprintsForCharts = null;
+    cachedSprintsForChartsSlug = null;
     cachedRealBurndownData = null;
     cachedRealBurndownURL = null;
   }
