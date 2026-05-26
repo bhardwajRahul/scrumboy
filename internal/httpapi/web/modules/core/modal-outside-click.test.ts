@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { initModalOutsideClickClose } from "./modal-outside-click.js";
+import { DIALOG_CLOSE_REQUEST_EVENT, initModalOutsideClickClose } from "./modal-outside-click.js";
 
 function installDialogPolyfill(): void {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
@@ -110,6 +110,17 @@ describe("modal-outside-click", () => {
 
     const { dialog } = makeDialog({ id: "d-mid-gesture", contentSelector: "legacy" });
     note.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(dialog.hasAttribute("open")).toBe(true);
+  });
+
+  it("does not close when the dialog intercepts the cancelable close request", () => {
+    const { dialog } = makeDialog({ id: "d-intercept", contentSelector: "explicit" });
+    dialog.addEventListener(DIALOG_CLOSE_REQUEST_EVENT, (event) => {
+      event.preventDefault();
+    });
+
+    dispatchPointerAndClick(dialog);
 
     expect(dialog.hasAttribute("open")).toBe(true);
   });

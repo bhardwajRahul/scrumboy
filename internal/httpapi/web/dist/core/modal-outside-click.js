@@ -25,6 +25,7 @@
 let pointerStartedInsideContent = false;
 let topAtPointerDown = null;
 let initialized = false;
+export const DIALOG_CLOSE_REQUEST_EVENT = "scrumboy:dialog-request-close";
 function getTopOpenDialog() {
     const openDialogs = Array.from(document.querySelectorAll("dialog[open]"));
     if (openDialogs.length === 0)
@@ -37,6 +38,13 @@ function shouldIgnoreDialog(dialog) {
 function getDialogContentBox(dialog) {
     return (dialog.querySelector("[data-dialog-content-root]") ||
         dialog.querySelector(".dialog__form, .dialog__content"));
+}
+function requestDialogClose(dialog, reason) {
+    const closeRequest = new CustomEvent(DIALOG_CLOSE_REQUEST_EVENT, {
+        cancelable: true,
+        detail: { reason },
+    });
+    return dialog.dispatchEvent(closeRequest);
 }
 function onPointerDown(ev) {
     const t = ev.target;
@@ -76,13 +84,17 @@ function onDocumentClick(ev) {
     if (!content)
         return;
     if (t === top) {
-        top.close();
+        if (requestDialogClose(top, "outside")) {
+            top.close();
+        }
         return;
     }
     if (content.contains(t)) {
         return;
     }
-    top.close();
+    if (requestDialogClose(top, "outside")) {
+        top.close();
+    }
 }
 export function initModalOutsideClickClose() {
     if (initialized)

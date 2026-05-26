@@ -27,6 +27,12 @@ let pointerStartedInsideContent = false;
 let topAtPointerDown: HTMLDialogElement | null = null;
 let initialized = false;
 
+export const DIALOG_CLOSE_REQUEST_EVENT = "scrumboy:dialog-request-close";
+
+export interface DialogCloseRequestDetail {
+  reason: "outside";
+}
+
 function getTopOpenDialog(): HTMLDialogElement | null {
   const openDialogs = Array.from(document.querySelectorAll("dialog[open]")) as HTMLDialogElement[];
   if (openDialogs.length === 0) return null;
@@ -42,6 +48,14 @@ function getDialogContentBox(dialog: HTMLDialogElement): Element | null {
     dialog.querySelector("[data-dialog-content-root]") ||
     dialog.querySelector(".dialog__form, .dialog__content")
   );
+}
+
+function requestDialogClose(dialog: HTMLDialogElement, reason: DialogCloseRequestDetail["reason"]): boolean {
+  const closeRequest = new CustomEvent<DialogCloseRequestDetail>(DIALOG_CLOSE_REQUEST_EVENT, {
+    cancelable: true,
+    detail: { reason },
+  });
+  return dialog.dispatchEvent(closeRequest);
 }
 
 function onPointerDown(ev: PointerEvent): void {
@@ -81,13 +95,17 @@ function onDocumentClick(ev: MouseEvent): void {
   if (!content) return;
 
   if (t === top) {
-    top.close();
+    if (requestDialogClose(top, "outside")) {
+      top.close();
+    }
     return;
   }
   if (content.contains(t)) {
     return;
   }
-  top.close();
+  if (requestDialogClose(top, "outside")) {
+    top.close();
+  }
 }
 
 export function initModalOutsideClickClose(): void {

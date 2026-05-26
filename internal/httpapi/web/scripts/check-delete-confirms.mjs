@@ -12,7 +12,7 @@ const violations = [];
 function scanFile(filePath) {
   const content = readFileSync(filePath, "utf8");
   const lines = content.split(/\r?\n/);
-  const pattern = /\b(?:window\.)?confirm\s*\(\s*([`'"])([^`'"]*delete[^`'"]*)\1/i;
+  const pattern = /\b(?:window\.)?(?:alert|confirm|prompt)\s*\(/;
   lines.forEach((line, idx) => {
     if (pattern.test(line)) {
       violations.push(`${filePath}:${idx + 1}`);
@@ -35,6 +35,7 @@ function scanPath(pathValue) {
       continue;
     }
     if (!/\.(ts|js)$/.test(entry.name)) continue;
+    if (/\.(?:test|spec)\.(?:ts|js)$/.test(entry.name)) continue;
     scanFile(fullPath);
   }
 }
@@ -44,11 +45,11 @@ for (const target of targets) {
 }
 
 if (violations.length > 0) {
-  console.error("Raw browser confirm() with delete wording is disallowed. Use confirmDelete/showConfirmDialog.");
+  console.error("Raw browser alert()/confirm()/prompt() calls are disallowed in maintained frontend sources. Use the shared dialog helpers.");
   for (const violation of violations) {
     console.error(` - ${violation}`);
   }
   process.exit(1);
 }
 
-console.log("Delete confirmation guard passed.");
+console.log("Browser-dialog guard passed.");

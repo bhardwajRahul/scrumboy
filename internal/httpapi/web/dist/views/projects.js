@@ -2,7 +2,7 @@ import { app, settingsDialog } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
 import { ingestProjectsFromApp } from '../core/notifications.js';
 import { navigate } from '../router.js';
-import { escapeHTML, showToast, renderUserAvatar, confirmDelete } from '../utils.js';
+import { escapeHTML, showToast, renderUserAvatar, confirmDelete, showPromptDialog } from '../utils.js';
 import { getProjectsTab, getProjectView, getUser, } from '../state/selectors.js';
 import { setProjects, setProjectsTab, setProjectView, setSettingsActiveTab, } from '../state/mutations.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
@@ -540,13 +540,21 @@ export async function renderProjects() {
                 const project = projects.find((p) => p.id === id);
                 if (!project)
                     return;
-                const newName = prompt("Enter new project name:", project.name);
-                if (!newName || newName.trim() === "" || newName === project.name)
+                const nextName = await showPromptDialog({
+                    title: "Rename Project",
+                    label: "Project Name",
+                    initialValue: project.name,
+                    confirmLabel: "Rename",
+                    placeholder: "Project name",
+                    maxLength: 200,
+                });
+                const newName = nextName?.trim() ?? "";
+                if (!newName || newName === project.name)
                     return;
                 try {
                     await apiFetch(`/api/projects/${id}`, {
                         method: "PATCH",
-                        body: JSON.stringify({ name: newName.trim() }),
+                        body: JSON.stringify({ name: newName }),
                     });
                     await renderProjects();
                     showToast("Project renamed");

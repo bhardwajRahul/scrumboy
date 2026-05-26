@@ -3,7 +3,7 @@ import { apiFetch } from '../api.js';
 import { ingestProjectsFromApp } from '../core/notifications.js';
 import { fetchProjectMembers, invalidateMembersCache } from '../members-cache.js';
 import { navigate } from '../router.js';
-import { escapeHTML, showToast, renderAvatarContent, processImageFile, confirmDelete } from '../utils.js';
+import { escapeHTML, showToast, renderAvatarContent, processImageFile, confirmDelete, showConfirmDialog, showPromptDialog } from '../utils.js';
 import { getBoard, getMobileTab, getSlug, getTag, getSearch, getSprintIdFromUrl, getEditingTodo, getProjectId, getTagColors, getUser, getBoardLaneMeta, getLaneDisplayCount, getBoardMembers, getWallEnabled, } from '../state/selectors.js';
 import { setProjectId, setBoard, setOpenTodoSegment, setMobileTab, setTagColors, setSettingsActiveTab, setBoardMembers, setLaneLoading, appendLaneTodos, } from '../state/mutations.js';
 import { isAnonymousBoard, isTemporaryBoard } from '../utils.js';
@@ -921,102 +921,48 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     const renameProjectBtn = document.getElementById("renameProjectBtn");
     if (renameProjectBtn && !renameProjectBtn[BOUND_FLAG]) {
         renameProjectBtn.addEventListener("click", async () => {
-            // Create a dialog for renaming (consistent with app style)
-            const dialog = document.createElement("dialog");
-            dialog.className = "dialog";
-            dialog.innerHTML = `
-        <form method="dialog" class="dialog__form" id="renameProjectForm">
-          <div class="dialog__header">
-            <div class="dialog__title">Rename Project</div>
-            <button class="btn btn--ghost" type="button" id="renameProjectDialogClose" aria-label="Close">✕</button>
-          </div>
-
-          <label class="field">
-            <div class="field__label">Project Name</div>
-            <input 
-              type="text" 
-              id="renameProjectName" 
-              class="input" 
-              placeholder="Project name" 
-              maxlength="200" 
-              value="${escapeHTML(board.project.name)}"
-              required 
-              autofocus
-            />
-          </label>
-
-          <div class="dialog__footer">
-            <div class="spacer"></div>
-            <button type="button" class="btn btn--ghost" id="renameProjectCancel">Cancel</button>
-            <button type="submit" class="btn" id="renameProjectSubmit">Rename</button>
-          </div>
-        </form>
-      `;
-            document.body.appendChild(dialog);
-            dialog.showModal();
-            const closeBtn = document.getElementById("renameProjectDialogClose");
-            const cancelBtn = document.getElementById("renameProjectCancel");
-            const form = document.getElementById("renameProjectForm");
-            const nameInput = document.getElementById("renameProjectName");
-            const close = () => {
-                document.body.removeChild(dialog);
-            };
-            if (closeBtn) {
-                closeBtn.addEventListener("click", close);
-            }
-            if (cancelBtn) {
-                cancelBtn.addEventListener("click", close);
-            }
-            dialog.addEventListener("click", (e) => {
-                if (e.target === dialog) {
-                    close();
-                }
+            const nextName = await showPromptDialog({
+                title: "Rename Project",
+                label: "Project Name",
+                initialValue: board.project.name,
+                confirmLabel: "Rename",
+                placeholder: "Project name",
+                maxLength: 200,
             });
-            form.addEventListener("submit", async (e) => {
-                e.preventDefault();
-                const newName = nameInput.value.trim();
-                if (!newName || newName === board.project.name) {
-                    close();
-                    return;
-                }
-                try {
-                    recordLocalMutation();
-                    await apiFetch(`/api/projects/${projectId}`, {
-                        method: "PATCH",
-                        body: JSON.stringify({ name: newName }),
-                    });
-                    // Update the project name in the DOM immediately
-                    const topbar = document.querySelector(".topbar");
-                    if (topbar) {
-                        // Find the .brand element that contains the project name
-                        // In minimal topbar: first .brand has logo button, second has project name
-                        // In regular topbar: only one .brand with project name
-                        const brandElements = Array.from(topbar.querySelectorAll(".brand"));
-                        // Find the .brand that doesn't contain a button (the one with project name)
-                        for (const brand of brandElements) {
-                            if (!brand.querySelector("button")) {
-                                brand.textContent = newName;
-                                break;
-                            }
-                        }
-                        // Fallback: if all have buttons, update the last one (shouldn't happen, but safe)
-                        if (brandElements.length > 0 && brandElements[brandElements.length - 1].querySelector("button")) {
-                            brandElements[brandElements.length - 1].textContent = newName;
+            const newName = nextName?.trim() ?? "";
+            if (!newName || newName === board.project.name) {
+                return;
+            }
+            try {
+                recordLocalMutation();
+                await apiFetch(`/api/projects/${projectId}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ name: newName }),
+                });
+                // Update the project name in the DOM immediately.
+                const topbar = document.querySelector(".topbar");
+                if (topbar) {
+                    const brandElements = Array.from(topbar.querySelectorAll(".brand"));
+                    for (const brand of brandElements) {
+                        if (!brand.querySelector("button")) {
+                            brand.textContent = newName;
+                            break;
                         }
                     }
-                    // Update the board state to reflect the new name
-                    const currentBoard = getBoard();
-                    if (currentBoard) {
-                        currentBoard.project.name = newName;
-                        setBoard(currentBoard);
+                    if (brandElements.length > 0 && brandElements[brandElements.length - 1].querySelector("button")) {
+                        brandElements[brandElements.length - 1].textContent = newName;
                     }
-                    close();
-                    showToast("Project renamed");
                 }
-                catch (err) {
-                    showToast(err.message);
+                const currentBoard = getBoard();
+                if (currentBoard) {
+                    currentBoard.project.name = newName;
+                    setBoard(currentBoard);
                 }
-            });
+                showToast("Project renamed");
+            }
+            catch (err) {
+                showToast(err.message);
+            }
         });
         renameProjectBtn[BOUND_FLAG] = true;
     }
@@ -1214,7 +1160,8 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                             if (newRole === previousRole)
                                 return; // No-op
                             if (previousRole === "maintainer" && (newRole === "contributor" || newRole === "viewer")) {
-                                if (!confirm(`Demote ${escapeHTML(member.name || "this member")} to ${newRole}?`)) {
+                                const confirmed = await showConfirmDialog(`Demote ${member.name || "this member"} to ${newRole}?`, "Demote member?", "Demote");
+                                if (!confirmed) {
                                     select.value = previousRole;
                                     return;
                                 }
@@ -1250,7 +1197,8 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                                 return;
                             const targetUserId = parseInt(removeBtn.getAttribute("data-member-id"), 10);
                             const name = removeBtn.getAttribute("data-member-name") || "this member";
-                            if (!confirm(`Remove ${name} from this project?`))
+                            const confirmed = await showConfirmDialog(`Remove ${name} from this project?`, "Remove member?", "Remove");
+                            if (!confirmed)
                                 return;
                             try {
                                 recordLocalMutation();
