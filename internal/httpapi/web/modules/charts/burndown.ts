@@ -41,13 +41,46 @@ function toTimestampMs(value: string | number): number | null {
 }
 
 function formatShortDate(tsMs: number): string {
-  return new Date(tsMs).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(tsMs).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+function startOfUtcDay(tsMs: number): number {
+  const d = new Date(tsMs);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function resolveSprintChartBoundsMs(
+  currentSprint?: BurndownSprintFilter | null
+): { startMs: number; endMs: number; displayEndMs: number } | null {
+  if (!currentSprint) {
+    return null;
+  }
+
+  const sprintStartMs = toTimestampMs(currentSprint.plannedStartAt);
+  const sprintEndMs = toTimestampMs(currentSprint.plannedEndAt);
+  if (sprintStartMs == null || sprintEndMs == null || sprintEndMs < sprintStartMs) {
+    return null;
+  }
+
+  const startMs = startOfUtcDay(sprintStartMs);
+  const endMs = startOfUtcDay(sprintEndMs) + MS_PER_DAY;
+  const safeEndMs = endMs > startMs ? endMs : startMs + MS_PER_DAY;
+
+  return {
+    startMs,
+    endMs: safeEndMs,
+    displayEndMs: safeEndMs - 1,
+  };
 }
 
 function resolveTimeDomainMs(
   chartData: RealBurndownPoint[],
   currentSprint?: BurndownSprintFilter | null
-): { startMs: number; endMs: number; durationMs: number } | null {
+): { startMs: number; endMs: number; durationMs: number; displayEndMs: number } | null {
   const firstDataMs = toTimestampMs(chartData[0]?.date ?? '');
   const lastDataMs = toTimestampMs(chartData[chartData.length - 1]?.date ?? '');
   if (firstDataMs == null || lastDataMs == null) {
@@ -56,24 +89,25 @@ function resolveTimeDomainMs(
 
   let startMs = firstDataMs;
   let endMs = lastDataMs;
+  let displayEndMs = endMs;
 
-  if (currentSprint) {
-    const sprintStartMs = toTimestampMs(currentSprint.plannedStartAt);
-    const sprintEndMs = toTimestampMs(currentSprint.plannedEndAt);
-    if (sprintStartMs != null && sprintEndMs != null && sprintEndMs >= sprintStartMs) {
-      startMs = sprintStartMs;
-      endMs = sprintEndMs;
-    }
+  const sprintBounds = resolveSprintChartBoundsMs(currentSprint);
+  if (sprintBounds) {
+    startMs = sprintBounds.startMs;
+    endMs = sprintBounds.endMs;
+    displayEndMs = sprintBounds.displayEndMs;
   }
 
   if (endMs <= startMs) {
     endMs = startMs + MS_PER_DAY;
+    displayEndMs = endMs - 1;
   }
 
   return {
     startMs,
     endMs,
     durationMs: Math.max(endMs - startMs, 1),
+    displayEndMs,
   };
 }
 
@@ -89,17 +123,65 @@ function prepareChartData(
 
   // Skip date filter when data is already sprint-scoped (from backend sprint endpoint)
   if (currentSprint && !dataIsSprintScoped) {
-    const startMs = toTimestampMs(currentSprint.plannedStartAt);
-    const endMs = toTimestampMs(currentSprint.plannedEndAt);
-    if (startMs != null && endMs != null) {
+    const sprintBounds = resolveSprintChartBoundsMs(currentSprint);
+    if (sprintBounds) {
       chartData = chartData.filter((p) => {
         const t = toTimestampMs(p.date)!;
-        return t >= startMs && t <= endMs;
+        return t >= sprintBounds.startMs && t < sprintBounds.endMs;
       });
     }
   }
 
   return chartData;
+}
+
+function resolveUsePoints(
+  chartData: RealBurndownPoint[],
+  initialScopePoints: number | null
+): boolean {
+  const hasAnyPoints = chartData.some((p) => toNumeric(p.remainingPoints) != null);
+  return hasAnyPoints && initialScopePoints != null;
+}
+
+function countVisibleRealSamples(
+  chartData: RealBurndownPoint[],
+  usePoints: boolean
+): number {
+  let count = 0;
+  for (const point of chartData) {
+    const value = usePoints ? toNumeric(point.remainingPoints) : toNumeric(point.remainingWork);
+    if (value != null) {
+      count++;
+    }
+  }
+  return count;
+}
+
+function resolveFallbackMessage(
+  data: RealBurndownPoint[],
+  chartData: RealBurndownPoint[]
+): string | null {
+  if (!Array.isArray(data) || data.length === 0) {
+    return 'No data available. Create some todos to see the burndown chart.';
+  }
+  if (chartData.length === 0) {
+    return 'No data for this sprint. Create some todos during the sprint to see the burndown chart.';
+  }
+
+  const initialScopePoints =
+    toNumeric(chartData[0]?.initialScopePoints) != null
+      ? (toNumeric(chartData[0]?.initialScopePoints) as number)
+      : null;
+  const usePoints = resolveUsePoints(chartData, initialScopePoints);
+  const visibleRealSamples = countVisibleRealSamples(chartData, usePoints);
+
+  if (visibleRealSamples === 0) {
+    return 'No usable burndown data available.';
+  }
+  if (visibleRealSamples === 1) {
+    return 'Not enough burndown history yet. Check back after more sprint progress is recorded.';
+  }
+  return null;
 }
 
 /** Renders the chart wrapper HTML (header, nav, mount div). Does not draw the chart. */
@@ -110,29 +192,18 @@ export function renderRealBurndownChart(
   dataIsSprintScoped?: boolean
 ): string {
   const chartData = Array.isArray(data) && data.length > 0 ? prepareChartData(data, currentSprint, dataIsSprintScoped) : [];
-  const validPoints = chartData.filter((p) => toNumeric(p.remainingPoints) != null);
-  const validWork = chartData.filter((p) => toNumeric(p.remainingWork) != null);
-  const hasDataToPlot = validPoints.length > 0 || validWork.length > 0;
   const domain = chartData.length > 0 ? resolveTimeDomainMs(chartData, currentSprint) : null;
+  const noDataMessage = resolveFallbackMessage(data, chartData);
 
   let dateRangeSubtitle: string;
   if (domain) {
     dateRangeSubtitle = currentSprint
-      ? `${currentSprint.name} | ${formatShortDate(domain.startMs)} - ${formatShortDate(domain.endMs)}`
+      ? `${currentSprint.name} | ${formatShortDate(domain.startMs)} - ${formatShortDate(domain.displayEndMs)}`
       : `${formatShortDate(domain.startMs)} - ${formatShortDate(domain.endMs)}`;
   } else if (currentSprint) {
     dateRangeSubtitle = `${currentSprint.name} | No data`;
   } else {
     dateRangeSubtitle = 'No data available';
-  }
-
-  let noDataMessage: string | null = null;
-  if (!Array.isArray(data) || data.length === 0) {
-    noDataMessage = 'No data available. Create some todos to see the burndown chart.';
-  } else if (chartData.length === 0) {
-    noDataMessage = 'No data for this sprint. Create some todos during the sprint to see the burndown chart.';
-  } else if (!hasDataToPlot) {
-    noDataMessage = 'No usable burndown data available.';
   }
 
   const subtitleWithNav =
@@ -211,10 +282,9 @@ function buildUplotData(
 
   const { startMs, endMs, durationMs } = domain;
   const startSec = Math.floor(startMs / 1000);
-  const endSec = Math.ceil(endMs / 1000);
+  const endSec = Math.floor(endMs / 1000);
 
-  const hasAnyPoints = chartData.some((p) => toNumeric(p.remainingPoints) != null);
-  const usePoints = hasAnyPoints && initialScopePoints != null;
+  const usePoints = resolveUsePoints(chartData, initialScopePoints);
   const totalScope =
     usePoints && initialScopePoints != null ? initialScopePoints : initialScope;
 
@@ -319,6 +389,14 @@ export function mountBurndownChart(
   const chartData = prepareChartData(data, currentSprint, dataIsSprintScoped);
   if (chartData.length === 0) {
     return; // renderRealBurndownChart already put a message in the container
+  }
+
+  const fallbackMessage = resolveFallbackMessage(data, chartData);
+  if (fallbackMessage) {
+    if (!container.querySelector('.burndown-chart__no-data')) {
+      container.innerHTML = `<div class="burndown-chart__no-data muted">${fallbackMessage}</div>`;
+    }
+    return;
   }
 
   const border = getThemeColor('--border');
@@ -453,7 +531,11 @@ export function mountBurndownChart(
         values: (_u: any, vals: number[]) =>
           vals.map((v) => {
             const d = new Date(v * 1000); // scale values are in seconds
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return d.toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              timeZone: 'UTC',
+            });
           }),
       },
       {
