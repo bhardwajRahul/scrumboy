@@ -1,7 +1,12 @@
 // @vitest-environment happy-dom
 import createDOMPurify from "dompurify";
 import MarkdownIt from "markdown-it";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  DEFAULT_MERMAID_SEMANTIC_EDGE_CONFIG,
+  MERMAID_SEMANTIC_EDGES_URL,
+  resetMermaidSemanticEdgeConfigCacheForTests,
+} from "./mermaid-semantic-edges.js";
 
 function installMarkdownVendors(): void {
   (window as any).markdownit = (preset?: string, options?: Record<string, unknown>) =>
@@ -29,8 +34,24 @@ describe("markdown preview rendering", () => {
   beforeEach(() => {
     vi.resetModules();
     document.body.innerHTML = "";
+    document.documentElement.removeAttribute("data-theme");
+    resetMermaidSemanticEdgeConfigCacheForTests();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === MERMAID_SEMANTIC_EDGES_URL || url.endsWith(MERMAID_SEMANTIC_EDGES_URL)) {
+          return { ok: true, json: async () => DEFAULT_MERMAID_SEMANTIC_EDGE_CONFIG };
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
     installMarkdownVendors();
     delete (window as any).mermaid;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("renders the supported markdown set for todo notes", async () => {
@@ -187,9 +208,14 @@ describe("markdown preview rendering", () => {
     expect(mermaid.initialize).toHaveBeenCalledWith(
       expect.objectContaining({
         startOnLoad: false,
-        securityLevel: "sandbox",
+        securityLevel: "strict",
         maxTextSize: 50_000,
         maxEdges: 500,
+        theme: "base",
+        themeVariables: expect.objectContaining({
+          darkMode: true,
+          background: "#0f172a",
+        }),
       }),
     );
     expect(seenSources).toEqual(["graph TD\nA-->B"]);
@@ -381,6 +407,101 @@ describe("markdown preview rendering", () => {
     expect(container.innerHTML).toContain('data-order="1"');
     expect(container.innerHTML).toContain('data-order="2"');
     expect(container.textContent).toContain("This note exceeds the 8000-character Mermaid preview budget. Showing source instead.");
+  });
+
+  it("configures mermaid with light preview colors when data-theme is light", async () => {
+    document.documentElement.setAttribute("data-theme", "light");
+    const mermaid = installMermaidStub((node) => {
+      node.innerHTML = '<svg data-rendered="yes"></svg>';
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await renderMarkdownPreviewInto(
+      container,
+      ["```mermaid", "graph TD", "A-->B", "```"].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(mermaid.initialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        theme: "base",
+        themeVariables: expect.objectContaining({
+          darkMode: false,
+          background: "#e5dfd5",
+          mainBkg: "#e5dfd5",
+          primaryTextColor: "#111827",
+        }),
+      }),
+    );
+  });
+
+  it("reconfigures mermaid when preview theme changes between renders", async () => {
+    const initConfigs: MermaidConfig[] = [];
+    const mermaid = installMermaidStub((node) => {
+      node.innerHTML = '<svg data-rendered="yes"></svg>';
+    });
+    mermaid.initialize.mockImplementation((config: MermaidConfig) => {
+      initConfigs.push(config);
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const diagram = ["```mermaid", "graph TD", "A-->B", "```"].join("\n");
+
+    await renderMarkdownPreviewInto(container, diagram, { mermaidEnabled: true });
+    document.documentElement.setAttribute("data-theme", "light");
+    await renderMarkdownPreviewInto(container, diagram, { mermaidEnabled: true });
+
+    expect(initConfigs).toHaveLength(2);
+    expect(initConfigs[0].themeVariables).toEqual(
+      expect.objectContaining({
+        darkMode: true,
+        background: "#0f172a",
+      }),
+    );
+    expect(initConfigs[1].themeVariables).toEqual(
+      expect.objectContaining({
+        darkMode: false,
+        background: "#e5dfd5",
+      }),
+    );
+  });
+
+  it("initializes mermaid only for the active render when previews overlap", async () => {
+    const pending: Array<() => void> = [];
+    const mermaid = installMermaidStub(() => {
+      return new Promise<void>((resolve) => {
+        pending.push(() => resolve());
+      });
+    });
+    document.documentElement.setAttribute("data-theme", "light");
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const diagram = ["```mermaid", "graph TD", "A-->B", "```"].join("\n");
+
+    void renderMarkdownPreviewInto(container, diagram, { mermaidEnabled: true });
+    void renderMarkdownPreviewInto(container, diagram, { mermaidEnabled: true });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mermaid.initialize).toHaveBeenCalledTimes(1);
+    expect(mermaid.initialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        themeVariables: expect.objectContaining({
+          background: "#e5dfd5",
+        }),
+      }),
+    );
+    expect(pending).toHaveLength(1);
+
+    pending[0]();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mermaid.run).toHaveBeenCalledTimes(1);
   });
 
   it("keeps only the latest async mermaid render result when preview rerenders while typing", async () => {

@@ -53,7 +53,7 @@ renderMarkdownPreviewInto()
                 │
                 ├─► (optional) detect Mermaid placeholders
                 ├─► lazy-load /vendor/mermaid.min.js on first Mermaid preview use
-                └─► mermaid.run() in preview-only hosts (sandbox mode)
+                └─► mermaid.run() in preview-only hosts (strict mode)
                 │
                 ▼
         #todoBodyPreview innerHTML (ephemeral, not saved)
@@ -139,15 +139,12 @@ When `mermaidEnabled` is true and the Markdown contains fenced Mermaid blocks:
 1. `renderer.rules.fence` emits opaque placeholders for ` ```mermaid ` blocks while keeping non-Mermaid fences as normal code blocks.
 2. After sanitized HTML is placed into the preview container, placeholders are replaced with local Mermaid hosts.
 3. `/vendor/mermaid.min.js` is lazy-loaded on demand.
-4. Mermaid initializes once with:
-   - `startOnLoad: false`
-   - `securityLevel: "sandbox"`
-   - `maxTextSize: 50000`
-   - `maxEdges: 500`
-   - `suppressErrorRendering: true`
+4. Mermaid initializes with preview theme tokens (`theme: "base"` + `themeVariables` from `--panel2`, `--text`, `--accent`, `--border`) so diagram backgrounds match the preview pane in light and dark mode. Re-initializes when the effective theme changes.
 5. All user-authored Mermaid directive blocks in the `%%{...}%%` form are stripped before render so site security settings remain authoritative.
 6. Preview-side limits cap Mermaid work per note: only the first 4 Mermaid fences render, each fence is capped at 4000 characters, and the total Mermaid preview budget is capped at 8000 characters.
 7. Limit overages and diagram syntax failures do **not** tear down preview mode; the preview shows a local warning/error block with the original source.
+8. Changing app theme while the todo preview is open re-renders diagrams via the same preview pipeline (render epochs prevent stale async work from committing).
+9. Optional yes/no-style branch **label backgrounds** only: `/mermaid-semantic-edges.json` (override via `$DATA_DIR/mermaid-semantic-edges.json`; see `data/mermaid-semantic-edges.json.example`). Applied after render via DOM; does not modify diagram source or connector lines.
 
 ---
 
@@ -179,7 +176,7 @@ Verified in `modules/markdown-preview.test.ts`:
 - **CSP / trust:** preview depends on vendored `markdown-it` and DOMPurify; `npm test` in `internal/httpapi/web` runs `verify-vendor.mjs` before Vitest.
 - **Link exfiltration:** only `http`/`https` external navigation; `noopener noreferrer` on external tabs.
 - **No Markdown on titles** avoids XSS or layout surprises on shared boards and SSE-driven card updates.
-- **Mermaid isolation:** in Mermaid `11.15.0`, `securityLevel: "sandbox"` renders diagrams through sandboxed iframes in this preview path, and diagram output is never passed through the general Markdown allow-list as arbitrary SVG/HTML.
+- **Mermaid isolation:** in Mermaid `11.15.0`, the preview uses `securityLevel: "strict"` (Mermaid's secure default), which encodes HTML in diagram text and renders inline SVG. Diagram output is never passed through the general Markdown allow-list as arbitrary SVG/HTML. Inline (rather than sandboxed-iframe) rendering is what lets the semantic label coloring recolor matched label backgrounds via the DOM after render.
 - **Mermaid scope:** diagrams only render in the todo dialog preview, never on the board or server.
 
 ---

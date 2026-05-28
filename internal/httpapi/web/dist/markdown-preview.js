@@ -1,3 +1,4 @@
+import { buildMermaidSemanticLabelColors, loadMermaidSemanticEdgeConfig, paintMermaidSemanticLabelBackgrounds, } from "./mermaid-semantic-edges.js";
 import { escapeHTML } from "./utils.js";
 const SAFE_TAGS = [
     "a",
@@ -29,7 +30,7 @@ const MERMAID_MAX_CHARS_PER_BLOCK = 4000;
 const MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW = 8000;
 const MERMAID_DIRECTIVE_BLOCK_RE = /%%\{[\s\S]*?\}%%/g;
 let markdownRenderer = null;
-let mermaidInitialized = false;
+let mermaidConfiguredThemeKey = null;
 let mermaidLoadPromise = null;
 const renderEpochByContainer = new WeakMap();
 function getMarkdownFactory() {
@@ -260,6 +261,57 @@ function setMermaidSuccessState(host) {
     const status = host.querySelector(".todo-mermaid-status");
     status?.remove();
 }
+function getMermaidPreviewThemeKey() {
+    if (typeof document === "undefined") {
+        return "dark";
+    }
+    return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+function readPreviewCssColor(variableName, fallback) {
+    if (typeof document === "undefined") {
+        return fallback;
+    }
+    const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+    return value || fallback;
+}
+function buildMermaidPreviewThemeConfig(themeKey) {
+    const isLight = themeKey === "light";
+    const panel2 = readPreviewCssColor("--panel2", isLight ? "#e5dfd5" : "#0f172a");
+    const text = readPreviewCssColor("--text", isLight ? "#111827" : "#e5e7eb");
+    const accent = readPreviewCssColor("--accent", isLight ? "#3b82f6" : "#60a5fa");
+    const border = readPreviewCssColor("--border", isLight ? "rgba(0, 0, 0, 0.12)" : "rgba(255, 255, 255, 0.08)");
+    return {
+        theme: "base",
+        themeVariables: {
+            darkMode: !isLight,
+            background: panel2,
+            mainBkg: panel2,
+            secondBkg: panel2,
+            tertiaryBkg: panel2,
+            primaryTextColor: text,
+            textColor: text,
+            lineColor: text,
+            primaryColor: accent,
+            primaryBorderColor: border,
+            edgeLabelBackground: "transparent",
+        },
+    };
+}
+function configureMermaidPreview(mermaid, themeKey) {
+    if (mermaidConfiguredThemeKey === themeKey) {
+        return;
+    }
+    const themeConfig = buildMermaidPreviewThemeConfig(themeKey);
+    mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: "strict",
+        maxTextSize: MERMAID_MAX_TEXT_SIZE,
+        maxEdges: MERMAID_MAX_EDGES,
+        suppressErrorRendering: true,
+        ...themeConfig,
+    });
+    mermaidConfiguredThemeKey = themeKey;
+}
 function loadMermaid() {
     if (typeof window === "undefined") {
         return Promise.reject(new Error("Markdown preview is unavailable outside the browser"));
@@ -299,19 +351,6 @@ function loadMermaid() {
     });
     return mermaidLoadPromise;
 }
-function ensureMermaidInitialized(mermaid) {
-    if (mermaidInitialized) {
-        return;
-    }
-    mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "sandbox",
-        maxTextSize: MERMAID_MAX_TEXT_SIZE,
-        maxEdges: MERMAID_MAX_EDGES,
-        suppressErrorRendering: true,
-    });
-    mermaidInitialized = true;
-}
 export function renderMarkdownToSafeHtml(markdown) {
     const { html } = renderMarkdownHtml(markdown, false);
     return sanitizeMarkdownHtml(html);
@@ -347,21 +386,25 @@ export async function renderMarkdownPreviewInto(container, markdown, options = {
     if (renderableHosts.length === 0) {
         return;
     }
+    const themeKey = getMermaidPreviewThemeKey();
+    const semanticEdgeConfig = await loadMermaidSemanticEdgeConfig();
     const mermaid = await loadMermaid();
     if (!isActiveRender(container, renderEpoch)) {
         return;
     }
-    ensureMermaidInitialized(mermaid);
+    configureMermaidPreview(mermaid, themeKey);
     for (const { block, canvas, host } of renderableHosts) {
         if (!isActiveRender(container, renderEpoch) || !host.isConnected) {
             return;
         }
         try {
+            const labelColors = buildMermaidSemanticLabelColors(block.renderSource, semanticEdgeConfig);
             canvas.textContent = block.renderSource;
             await mermaid.run({ nodes: [canvas] });
             if (!isActiveRender(container, renderEpoch) || !host.isConnected) {
                 return;
             }
+            paintMermaidSemanticLabelBackgrounds(canvas, labelColors);
             setMermaidSuccessState(host);
         }
         catch {

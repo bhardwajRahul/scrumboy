@@ -1,0 +1,9 @@
+{
+  "positiveColor": "#16a34a",
+  "negativeColor": "#dc2626",
+  "pairs": [
+    { "positive": "yes", "negative": "no" },
+    { "positive": "true", "negative": "false" },
+    { "positive": "pass", "negative": "fail" }
+  ]
+}

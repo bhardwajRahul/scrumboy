@@ -24,6 +24,8 @@ declare global {
     maxTextSize?: number;
     maxEdges?: number;
     suppressErrorRendering?: boolean;
+    theme?: string;
+    themeVariables?: Record<string, string | boolean>;
   };
 
   type MermaidRunOptions = {

@@ -3,6 +3,7 @@
 ## Contents
 
 - [How do I enable Markdown in my notes?](#how-do-i-enable-markdown-in-my-notes)
+- [How do I enable Mermaid diagrams in my notes?](#how-do-i-enable-mermaid-diagrams-in-my-notes)
 - [How do I edit several todos at once?](#how-do-i-edit-several-todos-at-once)
 - [What does the done lane mean for dashboard stats?](#what-does-the-done-lane-mean-for-dashboard-stats)
 - [Are tag colors personal, or shared with the team?](#are-tag-colors-personal-or-shared-with-the-team)
@@ -17,17 +18,42 @@
 
 Set `SCRUMBOY_MARKDOWN_NOTES_ENABLED=1` on the server (also accepts `true`, `on`, or `yes`; case-insensitive). The feature defaults to off.
 
-If you also want Mermaid diagrams inside fenced ` ```mermaid ` blocks, set `SCRUMBOY_MERMAID_NOTES_ENABLED=1` too. Mermaid is a sub-feature of Markdown preview: turning on Mermaid does nothing unless Markdown preview is already enabled.
-
 After a restart, the todo dialog **Notes** field shows **markdown** and **preview** tabs. **markdown** is the source editor; **preview** is a sanitized rendered view. Supported syntax includes headings, emphasis, lists, blockquotes, inline and fenced code, horizontal rules (`---` on its own line with blank lines around it), and safe `http`/`https` links.
 
-When Mermaid is also enabled, fenced Mermaid blocks render only in that preview tab. Mermaid does **not** render on board cards, notifications, exports, or server responses.
+Notes are still stored as raw markdown in `todos.body`. Todo titles and board card titles stay plain text. The server exposes `markdownNotesEnabled` on `/api/auth/status` so the UI only enables preview when the server has opted in.
 
-Notes are still stored as raw markdown in `todos.body`. Todo titles and board card titles stay plain text. The server exposes `markdownNotesEnabled` and `mermaidNotesEnabled` on `/api/auth/status` so the UI only enables the relevant preview capabilities when the server has opted in.
+Preview hardening: HTML in notes is not rendered; images stay as escaped text; dangerous link schemes and embedded content are stripped or neutralized.
 
-Preview hardening: HTML in notes is not rendered; images stay as escaped text; dangerous link schemes and embedded content are stripped or neutralized. Mermaid uses a sandboxed rendering mode, and user `%%{init: ...}%%` directives are ignored.
+For architecture, security, and source references, see [`docs/markdown&mermaid.md`](docs/markdown&mermaid.md).
 
-For architecture, security, and source references, see [`docs/markdown.md`](docs/markdown.md).
+## How do I enable Mermaid diagrams in my notes?
+
+Mermaid is a **sub-feature of Markdown preview**. You need Markdown preview enabled first (`SCRUMBOY_MARKDOWN_NOTES_ENABLED=1`), then set **`SCRUMBOY_MERMAID_NOTES_ENABLED=1`** on the server (same truthy values: `1`, `true`, `on`, or `yes`; case-insensitive). Turning on Mermaid alone does nothing if Markdown preview is off.
+
+After a restart, fenced **` ```mermaid `** blocks in a todo note render as diagrams when you open the **preview** tab. Regular Markdown in the same note still works; non-Mermaid fenced code blocks stay as code.
+
+Example:
+
+````markdown
+```mermaid
+graph TD
+  A[Start] --> B{Decision}
+  B -- Yes --> C[Result One]
+  B -- No --> D[Result Two]
+```
+````
+
+Mermaid does **not** render on board cards, notifications, exports, or server responses. Notes are still saved as raw text in `todos.body`.
+
+Preview limits (per note): up to **4** Mermaid blocks, **4000** characters per block, and **8000** characters total Mermaid source. Over-limit or syntax errors show a local warning with the original source instead of breaking the whole preview.
+
+Diagrams follow the app’s light/dark theme in preview. Optional yes/no-style branch **label backgrounds** (green/red for pairs like yes/no) can be customized via `/mermaid-semantic-edges.json`; override with `$DATA_DIR/mermaid-semantic-edges.json` (see `data/mermaid-semantic-edges.json.example`).
+
+User-authored Mermaid `%%{init: ...}%%` directive blocks are stripped before render so site security settings stay authoritative. Mermaid runs in **strict** mode (inline SVG in the preview pane only).
+
+The server exposes `mermaidNotesEnabled` on `/api/auth/status` alongside `markdownNotesEnabled`.
+
+For full architecture and security details, see [`docs/markdown&mermaid.md`](docs/markdown&mermaid.md).
 
 # Board
 

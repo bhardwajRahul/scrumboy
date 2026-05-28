@@ -2,6 +2,7 @@ import { addTagBtn, closeTodoBtn, deleteTodoBtn, shareTodoBtn, todoBody, todoBod
 import { apiFetch } from '../api.js';
 import { DIALOG_CLOSE_REQUEST_EVENT } from '../core/modal-outside-click.js';
 import { renderMarkdownPreviewInto } from '../markdown-preview.js';
+import { THEME_CHANGE_EVENT } from '../theme.js';
 import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getMermaidNotesEnabled, getSlug, getTagColors, getUser } from '../state/selectors.js';
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
 import { escapeHTML, isAnonymousBoard, showConfirmDialog, showToast } from '../utils.js';
@@ -150,6 +151,11 @@ function bindTodoNotesPreviewControls() {
             }
         });
     }
+    document.addEventListener(THEME_CHANGE_EVENT, () => {
+        if (todoNotesMode === "preview" && markdownNotesPreviewEnabled()) {
+            void renderTodoNotesPreview();
+        }
+    });
 }
 function readTodoDialogSnapshot() {
     const assignee = document.getElementById("todoAssignee");
