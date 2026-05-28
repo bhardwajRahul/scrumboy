@@ -65,12 +65,13 @@ function installDialogStubs(): void {
   };
 }
 
-function mockTodoModule(markdownNotesEnabled: boolean): void {
+function mockTodoModule(markdownNotesEnabled: boolean, mermaidNotesEnabled = false): void {
   vi.doMock("../api.js", () => ({ apiFetch: vi.fn().mockResolvedValue([]) }));
   vi.doMock("../state/selectors.js", () => ({
     getBoard: () => ({ columnOrder: [{ key: "backlog", name: "Backlog" }], project: { creatorUserId: 1 } }),
     getBoardMembers: () => [],
     getMarkdownNotesEnabled: () => markdownNotesEnabled,
+    getMermaidNotesEnabled: () => mermaidNotesEnabled,
     getSlug: () => "",
     getTagColors: () => ({}),
     getUser: () => null,

@@ -12,6 +12,7 @@ const requiredVendorFiles = [
   "vendor/uplot.min.css",
   "vendor/markdown-it.min.js",
   "vendor/purify.min.js",
+  "vendor/mermaid.min.js",
 ];
 
 async function main() {

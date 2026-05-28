@@ -76,6 +76,9 @@ export function getWallEnabled() {
 export function getMarkdownNotesEnabled() {
     return !!current._markdownNotesEnabled;
 }
+export function getMermaidNotesEnabled() {
+    return !!current._mermaidNotesEnabled;
+}
 export function getProjectsTab() {
     return current.projectsTab;
 }

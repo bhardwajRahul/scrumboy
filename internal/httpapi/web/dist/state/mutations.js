@@ -84,6 +84,9 @@ export function setWallEnabled(enabled) {
 export function setMarkdownNotesEnabled(enabled) {
     current._markdownNotesEnabled = enabled;
 }
+export function setMermaidNotesEnabled(enabled) {
+    current._mermaidNotesEnabled = enabled;
+}
 export function setProjectsTab(tab) {
     current.projectsTab = tab;
 }

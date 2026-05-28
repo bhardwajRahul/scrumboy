@@ -19,7 +19,7 @@ import {
 import { apiFetch } from '../api.js';
 import { DIALOG_CLOSE_REQUEST_EVENT, type DialogCloseRequestDetail } from '../core/modal-outside-click.js';
 import { renderMarkdownPreviewInto } from '../markdown-preview.js';
-import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getSlug, getTagColors, getUser } from '../state/selectors.js';
+import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getMermaidNotesEnabled, getSlug, getTagColors, getUser } from '../state/selectors.js';
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
 import { escapeHTML, isAnonymousBoard, showConfirmDialog, showToast } from '../utils.js';
 import { normalizeSprints } from '../sprints.js';
@@ -142,14 +142,15 @@ function markdownNotesPreviewEnabled(): boolean {
   );
 }
 
-function renderTodoNotesPreview(): void {
+async function renderTodoNotesPreview(): Promise<void> {
   if (!todoBodyPreview || !todoBody) {
     return;
   }
   try {
-    renderMarkdownPreviewInto(
+    await renderMarkdownPreviewInto(
       todoBodyPreview as HTMLElement,
       (todoBody as HTMLTextAreaElement).value || "",
+      { mermaidEnabled: getMermaidNotesEnabled() },
     );
   } catch (err: any) {
     showToast(err?.message || "Markdown preview is unavailable");
@@ -188,10 +189,10 @@ function syncTodoNotesModeUI(): void {
 
 function setTodoNotesMode(mode: TodoNotesMode): void {
   todoNotesMode = mode;
-  if (todoNotesMode === "preview") {
-    renderTodoNotesPreview();
-  }
   syncTodoNotesModeUI();
+  if (todoNotesMode === "preview") {
+    void renderTodoNotesPreview();
+  }
 }
 
 function bindTodoNotesPreviewControls(): void {
@@ -216,7 +217,7 @@ function bindTodoNotesPreviewControls(): void {
   if (todoBody) {
     (todoBody as HTMLTextAreaElement).addEventListener("input", () => {
       if (todoNotesMode === "preview") {
-        renderTodoNotesPreview();
+        void renderTodoNotesPreview();
       }
     });
   }

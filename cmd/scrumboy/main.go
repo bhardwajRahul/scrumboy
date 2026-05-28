@@ -110,6 +110,7 @@ func main() {
 		PushDebug:            cfg.PushDebug,
 		WallEnabled:          cfg.WallEnabled,
 		MarkdownNotesEnabled: cfg.MarkdownNotesEnabled,
+		MermaidNotesEnabled:  cfg.MermaidNotesEnabled,
 	})
 	st.SetTodoAssignedPublisher(srv.PublishTodoAssigned)
 

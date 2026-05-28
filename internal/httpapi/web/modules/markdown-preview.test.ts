@@ -9,10 +9,28 @@ function installMarkdownVendors(): void {
   (window as any).DOMPurify = createDOMPurify(window);
 }
 
+function installMermaidStub(
+  onRun?: (node: HTMLElement, runIndex: number) => Promise<void> | void,
+): { initialize: ReturnType<typeof vi.fn>; run: ReturnType<typeof vi.fn> } {
+  const initialize = vi.fn();
+  let runIndex = 0;
+  const run = vi.fn(async (options?: MermaidRunOptions) => {
+    const nodes = Array.from(options?.nodes ?? []) as HTMLElement[];
+    for (const node of nodes) {
+      runIndex += 1;
+      await onRun?.(node, runIndex);
+    }
+  });
+  (window as any).mermaid = { initialize, run };
+  return { initialize, run };
+}
+
 describe("markdown preview rendering", () => {
   beforeEach(() => {
     vi.resetModules();
+    document.body.innerHTML = "";
     installMarkdownVendors();
+    delete (window as any).mermaid;
   });
 
   it("renders the supported markdown set for todo notes", async () => {
@@ -124,5 +142,151 @@ describe("markdown preview rendering", () => {
 
     const anchorCount = (html.match(/<a /g) || []).length;
     expect(anchorCount).toBe(0);
+  });
+
+  it("renders mermaid fences as ordinary code when mermaid support is off", async () => {
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await renderMarkdownPreviewInto(
+      container,
+      ["```mermaid", "graph TD", "A-->B", "```"].join("\n"),
+      { mermaidEnabled: false },
+    );
+
+    expect(container.querySelector(".todo-mermaid-host")).toBeNull();
+    expect(container.innerHTML).toContain("<pre><code>graph TD");
+    expect(container.innerHTML).toContain("A--&gt;B");
+  });
+
+  it("renders mermaid fences with the lazy mermaid runtime and strips init directives", async () => {
+    const seenSources: string[] = [];
+    const mermaid = installMermaidStub((node) => {
+      seenSources.push(node.textContent || "");
+      node.innerHTML = '<svg data-rendered="yes"></svg>';
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await renderMarkdownPreviewInto(
+      container,
+      [
+        "```mermaid",
+        '%%{init: { "theme": "dark" }}%%',
+        "graph TD",
+        "A-->B",
+        "```",
+      ].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(mermaid.initialize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startOnLoad: false,
+        securityLevel: "sandbox",
+        maxTextSize: 50_000,
+        maxEdges: 500,
+      }),
+    );
+    expect(seenSources).toEqual(["graph TD\nA-->B"]);
+    expect(container.innerHTML).toContain('data-rendered="yes"');
+    expect(container.textContent).not.toContain("%%{init:");
+  });
+
+  it("renders multiple mermaid blocks while leaving other fenced code untouched", async () => {
+    const rendered: string[] = [];
+    installMermaidStub((node, index) => {
+      rendered.push(node.textContent || "");
+      node.innerHTML = `<svg data-order="${index}"></svg>`;
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await renderMarkdownPreviewInto(
+      container,
+      [
+        "```mermaid",
+        "graph TD",
+        "A-->B",
+        "```",
+        "",
+        "```ts",
+        "const value = 1;",
+        "```",
+        "",
+        "```mermaid",
+        "graph TD",
+        "B-->C",
+        "```",
+      ].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(rendered).toEqual(["graph TD\nA-->B", "graph TD\nB-->C"]);
+    expect(container.innerHTML).toContain('data-order="1"');
+    expect(container.innerHTML).toContain('data-order="2"');
+    expect(container.innerHTML).toContain("<pre><code>const value = 1;");
+  });
+
+  it("keeps preview open and shows source fallback when mermaid rendering fails", async () => {
+    installMermaidStub(() => {
+      throw new Error("bad diagram");
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await renderMarkdownPreviewInto(
+      container,
+      ["```mermaid", "graph TD", "broken", "```"].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(container.textContent).toContain("Could not render Mermaid diagram. Showing source instead.");
+    expect(container.textContent).toContain("graph TD");
+    expect(container.textContent).toContain("broken");
+  });
+
+  it("keeps only the latest async mermaid render result when preview rerenders while typing", async () => {
+    const pending: Array<() => void> = [];
+    const queuedSources: string[] = [];
+    installMermaidStub((node, index) => {
+      return new Promise<void>((resolve) => {
+        queuedSources.push(node.textContent || "");
+        pending.push(() => {
+          node.innerHTML = `<svg data-order="${index}"></svg>`;
+          resolve();
+        });
+      });
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    const firstRender = renderMarkdownPreviewInto(
+      container,
+      ["```mermaid", "graph TD", "A-->B", "```"].join("\n"),
+      { mermaidEnabled: true },
+    );
+    const secondRender = renderMarkdownPreviewInto(
+      container,
+      ["```mermaid", "graph TD", "B-->C", "```"].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(pending).toHaveLength(1);
+    expect(queuedSources).toEqual(["graph TD\nB-->C"]);
+
+    pending[0]();
+    await Promise.all([firstRender, secondRender]);
+
+    expect(container.innerHTML).toContain('data-order="1"');
+    expect(container.textContent).not.toContain("A-->B");
   });
 });
