@@ -114,6 +114,10 @@ export function setMarkdownNotesEnabled(enabled: boolean): void {
   current._markdownNotesEnabled = enabled;
 }
 
+export function setMermaidNotesEnabled(enabled: boolean): void {
+  current._mermaidNotesEnabled = enabled;
+}
+
 export function setProjectsTab(tab: string | undefined): void {
   current.projectsTab = tab;
 }

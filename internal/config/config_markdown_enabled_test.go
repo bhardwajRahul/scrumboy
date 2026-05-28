@@ -29,3 +29,33 @@ func TestMarkdownNotesEnabledFromEnv(t *testing.T) {
 		})
 	}
 }
+
+func TestMermaidNotesEnabledFromEnv(t *testing.T) {
+	cases := []struct {
+		name                 string
+		markdownNotesEnabled bool
+		env                  string
+		want                 bool
+	}{
+		{"markdown disabled blocks mermaid", false, "1", false},
+		{"empty", true, "", false},
+		{"whitespace", true, "   ", false},
+		{"one", true, "1", true},
+		{"one spaced", true, " 1 ", true},
+		{"true", true, "true", true},
+		{"TRUE", true, "TRUE", true},
+		{"on", true, "on", true},
+		{"yes", true, "yes", true},
+		{"false", true, "false", false},
+		{"off", true, "off", false},
+		{"garbage", true, "maybe", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("SCRUMBOY_MERMAID_NOTES_ENABLED", tc.env)
+			if got := mermaidNotesEnabledFromEnv(tc.markdownNotesEnabled); got != tc.want {
+				t.Fatalf("mermaidNotesEnabledFromEnv(%v) = %v, want %v (SCRUMBOY_MERMAID_NOTES_ENABLED=%q)", tc.markdownNotesEnabled, got, tc.want, tc.env)
+			}
+		})
+	}
+}

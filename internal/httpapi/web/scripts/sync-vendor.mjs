@@ -25,6 +25,10 @@ const assets = [
     source: path.join(webDir, "node_modules", "dompurify", "dist", "purify.min.js"),
     destination: path.join(vendorDir, "purify.min.js"),
   },
+  {
+    source: path.join(webDir, "node_modules", "mermaid", "dist", "mermaid.min.js"),
+    destination: path.join(vendorDir, "mermaid.min.js"),
+  },
 ];
 
 async function main() {

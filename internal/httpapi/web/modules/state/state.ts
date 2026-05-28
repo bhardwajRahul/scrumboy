@@ -34,6 +34,7 @@ export interface State {
   _localAuthEnabled?: boolean;
   _wallEnabled?: boolean;
   _markdownNotesEnabled?: boolean;
+  _mermaidNotesEnabled?: boolean;
   projectsTab?: string;
   settingsActiveTab?: string;
   // DOM objects require "lib": ["DOM"] in tsconfig.json

@@ -83,6 +83,7 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 				"bootstrapAvailable":   false,
 				"mode":                 "anonymous",
 				"markdownNotesEnabled": s.markdownNotesEnabled,
+				"mermaidNotesEnabled":  s.mermaidNotesEnabled,
 			})
 			return
 		}
@@ -116,6 +117,7 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 			"bootstrapAvailable":   bootstrapAvailable,
 			"mode":                 "full",
 			"markdownNotesEnabled": s.markdownNotesEnabled,
+			"mermaidNotesEnabled":  s.mermaidNotesEnabled,
 		}
 		resp["oidcEnabled"] = s.oidcService != nil
 		resp["localAuthEnabled"] = localAuthEnabled

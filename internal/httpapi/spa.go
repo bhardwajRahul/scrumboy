@@ -13,6 +13,15 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/")
 
 	// FIRST: Service worker (version-injected, must not be served as raw static file)
+	if path == "mermaid-semantic-edges.json" {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
+			return
+		}
+		s.serveMermaidSemanticEdges(w)
+		return
+	}
+
 	if path == "sw.js" {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")

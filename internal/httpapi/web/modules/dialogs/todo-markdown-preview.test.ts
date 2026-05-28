@@ -65,12 +65,13 @@ function installDialogStubs(): void {
   };
 }
 
-function mockTodoModule(markdownNotesEnabled: boolean): void {
+function mockTodoModule(markdownNotesEnabled: boolean, mermaidNotesEnabled = false): void {
   vi.doMock("../api.js", () => ({ apiFetch: vi.fn().mockResolvedValue([]) }));
   vi.doMock("../state/selectors.js", () => ({
     getBoard: () => ({ columnOrder: [{ key: "backlog", name: "Backlog" }], project: { creatorUserId: 1 } }),
     getBoardMembers: () => [],
     getMarkdownNotesEnabled: () => markdownNotesEnabled,
+    getMermaidNotesEnabled: () => mermaidNotesEnabled,
     getSlug: () => "",
     getTagColors: () => ({}),
     getUser: () => null,
@@ -163,6 +164,31 @@ describe("todo markdown preview", () => {
     expect(body.hidden).toBe(true);
     expect(preview.hidden).toBe(false);
     expect(preview.classList.contains("todo-markdown-preview--empty")).toBe(true);
+  });
+
+  describe("theme change rerender", () => {
+    afterEach(() => {
+      vi.doUnmock("../markdown-preview.js");
+      vi.resetModules();
+    });
+
+    it("re-renders mermaid preview when the app theme changes while preview is active", async () => {
+      const renderSpy = vi.fn().mockResolvedValue(undefined);
+      vi.doMock("../markdown-preview.js", () => ({
+        renderMarkdownPreviewInto: renderSpy,
+      }));
+      mockTodoModule(true, true);
+      const { openTodoDialog } = await import("./todo.js");
+      const { applyTheme } = await import("../theme.js");
+
+      await openTodoDialog({ mode: "create", role: "maintainer" });
+      (document.getElementById("todoBodyPreviewTab") as HTMLButtonElement).click();
+      expect(renderSpy).toHaveBeenCalledTimes(1);
+
+      applyTheme("light");
+
+      expect(renderSpy).toHaveBeenCalledTimes(2);
+    });
   });
 
   it("renders preview without mutating the textarea value and preserves raw markdown in edit mode", async () => {
