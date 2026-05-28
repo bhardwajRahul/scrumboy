@@ -137,11 +137,13 @@ Do not confuse them: turning on desktop notifications does **not** replace VAPID
 - `SCRUMBOY_VAPID_PUBLIC_KEY`
 - `SCRUMBOY_VAPID_PRIVATE_KEY`
 
-(URL-safe base64 from a VAPID generator; see [`docs/pwa.md`](docs/pwa.md).) When both are set, signed-in clients may try to subscribe automatically; each user must still **allow notifications** in the browser. **Settings → Customization → Web Push** can turn push off or back on per device.
+(URL-safe base64 from a VAPID generator.) When both are set in **full mode**, signed-in clients may try to subscribe automatically; each user must still **allow notifications** in the browser. **Settings → Customization → Web Push** can turn push off or back on per device.
 
 Optional: `SCRUMBOY_VAPID_SUBSCRIBER` is a **contact hint for push providers** (plain email or `mailto:` / `https:` URL). It does **not** control who can sign in and does not need to match OIDC or user emails.
 
 **Not telemetry:** VAPID identifies **your** Scrumboy server to the push network so assignment events can be delivered. It is not product analytics and does not send board data to Scrumboy’s project maintainers.
+
+For what VAPID is, how it fits this project, key generation, and verification, see [`docs/vapid.md`](docs/vapid.md). For PWA install, Docker wiring, and auto-subscribe behavior, see [`docs/pwa.md`](docs/pwa.md).
 
 # Auditing
 

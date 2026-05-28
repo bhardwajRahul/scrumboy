@@ -162,6 +162,7 @@ export interface AuthStatusResponse {
   user?: User | null;
   bootstrapAvailable?: boolean;
   mode?: 'anonymous' | 'full';
+  pushConfigured?: boolean;
   oidcEnabled?: boolean;
   localAuthEnabled?: boolean;
   wallEnabled?: boolean;

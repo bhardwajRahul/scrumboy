@@ -18,6 +18,7 @@ import {
   getTagColors, 
   getUser, 
   getAuthStatusAvailable,
+  getPushConfigured,
   getBackupImportBtn,
   getBackupData,
   getBackupPreview,
@@ -1099,18 +1100,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
   const desktopNotifyGranted =
     typeof Notification !== "undefined" && Notification.permission === "granted";
 
-  let pushVapidServerReady = false;
-  if (showProfileTab) {
-    try {
-      const r = await fetch("/api/push/vapid-public-key", { credentials: "same-origin" });
-      if (r.ok) {
-        const j = (await r.json()) as { publicKey?: string };
-        pushVapidServerReady = !!(j.publicKey && j.publicKey.trim() !== "");
-      }
-    } catch {
-      pushVapidServerReady = false;
-    }
-  }
+  const pushVapidServerReady = showProfileTab && getPushConfigured();
 
   const showWallpaperSettings = getAuthStatusAvailable();
   const wallpaperState = showWallpaperSettings ? getStoredWallpaperState() : { v: 1 as const, mode: "off" as const };

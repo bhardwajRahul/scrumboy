@@ -64,6 +64,9 @@ export function getAuthStatusChecked() {
 export function getBootstrapAvailable() {
     return current._bootstrapAvailable;
 }
+export function getPushConfigured() {
+    return !!current._pushConfigured;
+}
 export function getOidcEnabled() {
     return !!current._oidcEnabled;
 }
