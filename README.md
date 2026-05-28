@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.17.0-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.17.1-blue" alt="version" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   </a>
@@ -133,7 +133,7 @@ See [`docs/oidc.md`](docs/oidc.md) for full setup details, constraints, and trou
 
 ### PWA / Web Push (optional)
 
-Install the app from the browser for a standalone window and better mobile UX. **Background assignment alerts** use the **Web Push API** with **VAPID** keys on the server. When both keys are set, signed-in clients attempt to subscribe automatically (browser permission may be prompted). Details and subscriber contact semantics: **[`docs/pwa.md`](docs/pwa.md)**.
+Install the app from the browser for a standalone window and better mobile UX. **Background assignment alerts** use the **Web Push API** with **VAPID** keys on the server. When both keys are set, signed-in clients attempt to subscribe automatically (browser permission may be prompted). Docker users must pass the VAPID variables into the container environment and recreate the container after changes. Details, Docker verification steps, and subscriber contact semantics: **[`docs/pwa.md`](docs/pwa.md)**.
 
 ### Frontend build note
 

@@ -88,6 +88,10 @@ export function getBootstrapAvailable(): boolean | undefined {
   return current._bootstrapAvailable;
 }
 
+export function getPushConfigured(): boolean {
+  return !!current._pushConfigured;
+}
+
 export function getOidcEnabled(): boolean {
   return !!current._oidcEnabled;
 }

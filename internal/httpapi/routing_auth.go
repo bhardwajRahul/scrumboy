@@ -82,6 +82,7 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 				"user":                 nil,
 				"bootstrapAvailable":   false,
 				"mode":                 "anonymous",
+				"pushConfigured":       false,
 				"markdownNotesEnabled": s.markdownNotesEnabled,
 				"mermaidNotesEnabled":  s.mermaidNotesEnabled,
 			})
@@ -116,6 +117,7 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 			"user":                 user,
 			"bootstrapAvailable":   bootstrapAvailable,
 			"mode":                 "full",
+			"pushConfigured":       s.pushVapidConfigured,
 			"markdownNotesEnabled": s.markdownNotesEnabled,
 			"mermaidNotesEnabled":  s.mermaidNotesEnabled,
 		}

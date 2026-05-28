@@ -2,6 +2,27 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
 
+## [3.17.1] - 2026-05-28
+
+### Fixed
+
+- **Web Push / VAPID discovery** - Exposes **`pushConfigured`** on **`GET /api/auth/status`** so the SPA can gate auto-subscribe and Settings without probing **`/api/push/vapid-public-key`**. Push is enabled only in full mode with both VAPID keys set; partial or anonymous-mode key pairs are ignored.
+
+- **Docker deployments** - **`docker-compose.yml`** forwards **`SCRUMBOY_VAPID_*`** and **`SCRUMBOY_DEBUG_PUSH`** into the container environment.
+
+### Improvements
+
+- **Startup logging** - Server logs whether Web Push is enabled, disabled, partially configured, or blocked by anonymous mode.
+
+### Tests
+
+- **Auth status / push config** - Coverage for **`pushConfigured`** across full, partial, and anonymous VAPID setups.
+- **Router / Settings** - Auto-subscribe gating and Settings push UI use auth status instead of live VAPID endpoint probes.
+
+### Documentation
+
+- **`docs/pwa.md`**, **`README.md`**, **`API.md`**, and **`scrumboy.env.example`** - Docker verification steps and VAPID env wiring.
+
 ## [3.17.0] - 2026-05-28
 
 ### Features
