@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -88,6 +89,7 @@ func main() {
 		})
 		logger.Printf("OIDC enabled (issuer: %s)", cfg.OIDCIssuerCanonical)
 	}
+	logWebPushConfiguration(logger, cfg.ScrumboyMode, cfg.VAPIDPublicKey, cfg.VAPIDPrivateKey)
 
 	maxB := cfg.MaxRequestBodyBytes
 	if maxB <= 0 {
@@ -222,4 +224,19 @@ func main() {
 		logger.Printf("shutdown: %v", err)
 	}
 	srv.Close()
+}
+
+func logWebPushConfiguration(logger *log.Logger, mode, publicKey, privateKey string) {
+	pub := strings.TrimSpace(publicKey)
+	priv := strings.TrimSpace(privateKey)
+	switch {
+	case httpapi.PushConfigured(mode, publicKey, privateKey):
+		logger.Printf("web push: enabled")
+	case strings.TrimSpace(mode) == "anonymous" && pub != "" && priv != "":
+		logger.Printf("web push: disabled (anonymous mode)")
+	case pub != "" || priv != "":
+		logger.Printf("web push: partial config ignored")
+	default:
+		logger.Printf("web push: disabled (set SCRUMBOY_VAPID_PUBLIC_KEY and SCRUMBOY_VAPID_PRIVATE_KEY)")
+	}
 }

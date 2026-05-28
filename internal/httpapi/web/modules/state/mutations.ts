@@ -98,6 +98,10 @@ export function setBootstrapAvailable(available: boolean | undefined): void {
   current._bootstrapAvailable = available;
 }
 
+export function setPushConfigured(enabled: boolean): void {
+  current._pushConfigured = enabled;
+}
+
 export function setOidcEnabled(enabled: boolean): void {
   current._oidcEnabled = enabled;
 }

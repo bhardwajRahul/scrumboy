@@ -72,6 +72,9 @@ export function setAuthStatusChecked(checked) {
 export function setBootstrapAvailable(available) {
     current._bootstrapAvailable = available;
 }
+export function setPushConfigured(enabled) {
+    current._pushConfigured = enabled;
+}
 export function setOidcEnabled(enabled) {
     current._oidcEnabled = enabled;
 }

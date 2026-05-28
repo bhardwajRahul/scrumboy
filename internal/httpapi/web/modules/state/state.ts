@@ -30,6 +30,7 @@ export interface State {
   // Internal properties
   _authStatusChecked?: boolean;
   _bootstrapAvailable?: boolean;
+  _pushConfigured?: boolean;
   _oidcEnabled?: boolean;
   _localAuthEnabled?: boolean;
   _wallEnabled?: boolean;

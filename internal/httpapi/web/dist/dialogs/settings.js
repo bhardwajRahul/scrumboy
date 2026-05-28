@@ -5,7 +5,7 @@ import { escapeHTML, showToast, getAppVersion, showConfirmDialog, confirmDelete,
 import { getStoredTheme, handleThemeChange, THEME_SYSTEM, THEME_DARK, THEME_LIGHT } from '../theme.js';
 import { getStoredWallpaperState, setWallpaperOff, setWallpaperColor, uploadWallpaperImage } from '../wallpaper.js';
 import { processWallpaperFileForUpload } from '../utils.js';
-import { getSlug, getBoard, getProjectId, getProjects, getSettingsProjectId, getSettingsActiveTab, getTagColors, getUser, getAuthStatusAvailable, getBackupImportBtn, getBackupData, getTrelloImportBtn, getTrelloImportData, getTrelloImportPreview, getTrelloImportResult, getBoardMembers } from '../state/selectors.js';
+import { getSlug, getBoard, getProjectId, getProjects, getSettingsProjectId, getSettingsActiveTab, getTagColors, getUser, getAuthStatusAvailable, getPushConfigured, getBackupImportBtn, getBackupData, getTrelloImportBtn, getTrelloImportData, getTrelloImportPreview, getTrelloImportResult, getBoardMembers } from '../state/selectors.js';
 import { setSettingsProjectId, setSettingsActiveTab, setBackupImportBtn, setBackupData, setBackupPreview, setTrelloImportBtn, setTrelloImportData, setTrelloImportPreview, setTrelloImportResult, setUser, setBoardMembers, } from '../state/mutations.js';
 import { renderRealBurndownChart, destroyBurndownChart, mountBurndownChart } from '../charts/burndown.js';
 import { emit } from '../events.js';
@@ -980,19 +980,7 @@ export async function renderSettingsModal(options) {
       </div>`;
     }).join("");
     const desktopNotifyGranted = typeof Notification !== "undefined" && Notification.permission === "granted";
-    let pushVapidServerReady = false;
-    if (showProfileTab) {
-        try {
-            const r = await fetch("/api/push/vapid-public-key", { credentials: "same-origin" });
-            if (r.ok) {
-                const j = (await r.json());
-                pushVapidServerReady = !!(j.publicKey && j.publicKey.trim() !== "");
-            }
-        }
-        catch {
-            pushVapidServerReady = false;
-        }
-    }
+    const pushVapidServerReady = showProfileTab && getPushConfigured();
     const showWallpaperSettings = getAuthStatusAvailable();
     const wallpaperState = showWallpaperSettings ? getStoredWallpaperState() : { v: 1, mode: "off" };
     const wallpaperPickerHex = showWallpaperSettings && wallpaperState.mode === "color" && wallpaperState.hex ? wallpaperState.hex : "#8b919a";
