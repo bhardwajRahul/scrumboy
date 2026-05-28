@@ -45,21 +45,25 @@ func newAuthStatusTestServer(t *testing.T, opts Options) (*httptest.Server, *htt
 
 func TestAuthStatusMarkdownNotesEnabled(t *testing.T) {
 	cases := []struct {
-		name    string
-		mode    string
-		enabled bool
+		name            string
+		mode            string
+		markdownEnabled bool
+		mermaidEnabled  bool
 	}{
-		{name: "full disabled", mode: "full", enabled: false},
-		{name: "full enabled", mode: "full", enabled: true},
-		{name: "anonymous disabled", mode: "anonymous", enabled: false},
-		{name: "anonymous enabled", mode: "anonymous", enabled: true},
+		{name: "full disabled", mode: "full", markdownEnabled: false, mermaidEnabled: false},
+		{name: "full markdown enabled", mode: "full", markdownEnabled: true, mermaidEnabled: false},
+		{name: "full markdown and mermaid enabled", mode: "full", markdownEnabled: true, mermaidEnabled: true},
+		{name: "anonymous disabled", mode: "anonymous", markdownEnabled: false, mermaidEnabled: false},
+		{name: "anonymous markdown enabled", mode: "anonymous", markdownEnabled: true, mermaidEnabled: false},
+		{name: "anonymous markdown and mermaid enabled", mode: "anonymous", markdownEnabled: true, mermaidEnabled: true},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ts, client := newAuthStatusTestServer(t, Options{
 				ScrumboyMode:         tc.mode,
-				MarkdownNotesEnabled: tc.enabled,
+				MarkdownNotesEnabled: tc.markdownEnabled,
+				MermaidNotesEnabled:  tc.mermaidEnabled,
 			})
 
 			resp, err := client.Get(ts.URL + "/api/auth/status")
@@ -75,8 +79,11 @@ func TestAuthStatusMarkdownNotesEnabled(t *testing.T) {
 			if err := json.NewDecoder(resp.Body).Decode(&statusResp); err != nil {
 				t.Fatalf("decode status response: %v", err)
 			}
-			if got, ok := statusResp["markdownNotesEnabled"].(bool); !ok || got != tc.enabled {
-				t.Fatalf("expected markdownNotesEnabled=%v, got %#v", tc.enabled, statusResp["markdownNotesEnabled"])
+			if got, ok := statusResp["markdownNotesEnabled"].(bool); !ok || got != tc.markdownEnabled {
+				t.Fatalf("expected markdownNotesEnabled=%v, got %#v", tc.markdownEnabled, statusResp["markdownNotesEnabled"])
+			}
+			if got, ok := statusResp["mermaidNotesEnabled"].(bool); !ok || got != tc.mermaidEnabled {
+				t.Fatalf("expected mermaidNotesEnabled=%v, got %#v", tc.mermaidEnabled, statusResp["mermaidNotesEnabled"])
 			}
 		})
 	}

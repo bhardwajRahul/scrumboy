@@ -104,6 +104,10 @@ export function getMarkdownNotesEnabled(): boolean {
   return !!current._markdownNotesEnabled;
 }
 
+export function getMermaidNotesEnabled(): boolean {
+  return !!current._mermaidNotesEnabled;
+}
+
 export function getProjectsTab(): string | undefined {
   return current.projectsTab;
 }

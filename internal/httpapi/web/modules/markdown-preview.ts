@@ -22,8 +22,32 @@ const SAFE_TAGS = [
 ];
 
 const SAFE_ATTRS = ["href", "rel", "target"];
+const MERMAID_PLACEHOLDER_PREFIX = "__SCRUMBOY_MERMAID_BLOCK_";
+const MERMAID_SCRIPT_SRC = "/vendor/mermaid.min.js";
+const MERMAID_MAX_TEXT_SIZE = 50_000;
+const MERMAID_MAX_EDGES = 500;
+const MERMAID_INIT_DIRECTIVE_RE = /%%\{\s*(?:init|initialize)\s*:[\s\S]*?\}%%/gi;
+
+type MarkdownPreviewOptions = {
+  mermaidEnabled?: boolean;
+};
+
+type MermaidBlock = {
+  placeholder: string;
+  displaySource: string;
+  renderSource: string;
+};
+
+type MermaidHost = {
+  block: MermaidBlock;
+  canvas: HTMLElement;
+  host: HTMLElement;
+};
 
 let markdownRenderer: MarkdownItInstance | null = null;
+let mermaidInitialized = false;
+let mermaidLoadPromise: Promise<MermaidInstance> | null = null;
+const renderEpochByContainer = new WeakMap<HTMLElement, number>();
 
 function getMarkdownFactory(): MarkdownItFactory {
   if (typeof window === "undefined" || typeof window.markdownit !== "function") {
@@ -37,6 +61,13 @@ function getDOMPurify(): DOMPurifyLike {
     throw new Error("Markdown preview is unavailable: missing /vendor/purify.min.js");
   }
   return window.DOMPurify;
+}
+
+function getMermaidGlobal(): MermaidInstance {
+  if (typeof window === "undefined" || !window.mermaid) {
+    throw new Error("Markdown preview is unavailable: missing /vendor/mermaid.min.js");
+  }
+  return window.mermaid;
 }
 
 function renderImageTokenAsText(token: any): string {
@@ -62,6 +93,56 @@ function getMarkdownRenderer(): MarkdownItInstance {
   renderer.renderer.rules.image = (tokens, idx) => renderImageTokenAsText(tokens[idx]);
   markdownRenderer = renderer;
   return renderer;
+}
+
+function getFenceLanguage(info: string | undefined): string {
+  return (info || "").trim().split(/\s+/, 1)[0]?.toLowerCase() || "";
+}
+
+function renderFenceToken(token: any): string {
+  const language = getFenceLanguage(token?.info ?? "");
+  const classAttr = language ? ` class="language-${escapeHTML(language)}"` : "";
+  return `<pre><code${classAttr}>${escapeHTML(token?.content ?? "")}</code></pre>\n`;
+}
+
+function buildMermaidPlaceholder(index: number): string {
+  return `${MERMAID_PLACEHOLDER_PREFIX}${index}__`;
+}
+
+function stripUnsupportedMermaidDirectives(source: string): string {
+  return source.replace(MERMAID_INIT_DIRECTIVE_RE, "").trim();
+}
+
+function renderMarkdownHtml(markdown: string, mermaidEnabled: boolean): { html: string; mermaidBlocks: MermaidBlock[] } {
+  const renderer = getMarkdownRenderer();
+  if (!mermaidEnabled) {
+    return { html: renderer.render(markdown || ""), mermaidBlocks: [] };
+  }
+
+  const mermaidBlocks: MermaidBlock[] = [];
+  const originalFence = renderer.renderer.rules.fence;
+
+  renderer.renderer.rules.fence = (tokens, idx) => {
+    const token = tokens[idx];
+    if (getFenceLanguage(token?.info ?? "") !== "mermaid") {
+      return renderFenceToken(token);
+    }
+
+    const displaySource = token?.content ?? "";
+    const renderSource = stripUnsupportedMermaidDirectives(displaySource);
+    const placeholder = buildMermaidPlaceholder(mermaidBlocks.length);
+    mermaidBlocks.push({ placeholder, displaySource, renderSource });
+    return `<pre><code>${escapeHTML(placeholder)}</code></pre>\n`;
+  };
+
+  try {
+    return {
+      html: renderer.render(markdown || ""),
+      mermaidBlocks,
+    };
+  } finally {
+    renderer.renderer.rules.fence = originalFence;
+  }
 }
 
 function isSafeLinkHref(href: string): boolean {
@@ -131,17 +212,191 @@ function sanitizeMarkdownHtml(markdownHtml: string): string {
   return template.innerHTML;
 }
 
+function beginRenderEpoch(container: HTMLElement): number {
+  const nextEpoch = (renderEpochByContainer.get(container) || 0) + 1;
+  renderEpochByContainer.set(container, nextEpoch);
+  return nextEpoch;
+}
+
+function isActiveRender(container: HTMLElement, epoch: number): boolean {
+  return renderEpochByContainer.get(container) === epoch;
+}
+
+function replaceMermaidPlaceholders(container: HTMLElement, mermaidBlocks: MermaidBlock[]): MermaidHost[] {
+  const blockByPlaceholder = new Map<string, MermaidBlock>();
+  for (const block of mermaidBlocks) {
+    blockByPlaceholder.set(block.placeholder, block);
+  }
+
+  const hosts: MermaidHost[] = [];
+  for (const code of Array.from(container.querySelectorAll("pre > code"))) {
+    const placeholder = code.textContent || "";
+    const block = blockByPlaceholder.get(placeholder);
+    if (!block) {
+      continue;
+    }
+
+    const pre = code.parentElement;
+    if (!pre) {
+      continue;
+    }
+
+    const host = document.createElement("div");
+    host.className = "todo-mermaid-host todo-mermaid-host--loading";
+
+    const status = document.createElement("div");
+    status.className = "todo-mermaid-status";
+    status.textContent = "Rendering diagram...";
+
+    const canvas = document.createElement("div");
+    canvas.className = "mermaid todo-mermaid-canvas";
+    canvas.textContent = block.displaySource;
+
+    host.append(status, canvas);
+    pre.replaceWith(host);
+    hosts.push({ block, canvas, host });
+  }
+
+  return hosts;
+}
+
+function setMermaidErrorState(host: HTMLElement, displaySource: string): void {
+  host.className = "todo-mermaid-host todo-mermaid-host--error";
+
+  const status = document.createElement("div");
+  status.className = "todo-mermaid-status todo-mermaid-status--error";
+  status.textContent = "Could not render Mermaid diagram. Showing source instead.";
+
+  const pre = document.createElement("pre");
+  const code = document.createElement("code");
+  code.textContent = displaySource;
+  pre.append(code);
+
+  host.replaceChildren(status, pre);
+}
+
+function setMermaidSuccessState(host: HTMLElement): void {
+  host.classList.remove("todo-mermaid-host--loading", "todo-mermaid-host--error");
+  host.classList.add("todo-mermaid-host--ready");
+  const status = host.querySelector(".todo-mermaid-status");
+  status?.remove();
+}
+
+function loadMermaid(): Promise<MermaidInstance> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Markdown preview is unavailable outside the browser"));
+  }
+  if (window.mermaid) {
+    return Promise.resolve(getMermaidGlobal());
+  }
+  if (mermaidLoadPromise) {
+    return mermaidLoadPromise;
+  }
+
+  mermaidLoadPromise = new Promise<MermaidInstance>((resolve, reject) => {
+    const existingScript = document.querySelector(`script[src="${MERMAID_SCRIPT_SRC}"]`) as HTMLScriptElement | null;
+    const handleLoad = () => {
+      try {
+        resolve(getMermaidGlobal());
+      } catch (err) {
+        mermaidLoadPromise = null;
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    };
+    const handleError = () => {
+      mermaidLoadPromise = null;
+      reject(new Error("Markdown preview is unavailable: missing /vendor/mermaid.min.js"));
+    };
+
+    if (existingScript) {
+      existingScript.addEventListener("load", handleLoad, { once: true });
+      existingScript.addEventListener("error", handleError, { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = MERMAID_SCRIPT_SRC;
+    script.async = true;
+    script.addEventListener("load", handleLoad, { once: true });
+    script.addEventListener("error", handleError, { once: true });
+    document.head.appendChild(script);
+  });
+
+  return mermaidLoadPromise;
+}
+
+function ensureMermaidInitialized(mermaid: MermaidInstance): void {
+  if (mermaidInitialized) {
+    return;
+  }
+
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "sandbox",
+    maxTextSize: MERMAID_MAX_TEXT_SIZE,
+    maxEdges: MERMAID_MAX_EDGES,
+    suppressErrorRendering: true,
+  });
+  mermaidInitialized = true;
+}
+
 export function renderMarkdownToSafeHtml(markdown: string): string {
-  const html = getMarkdownRenderer().render(markdown || "");
+  const { html } = renderMarkdownHtml(markdown, false);
   return sanitizeMarkdownHtml(html);
 }
 
-export function renderMarkdownPreviewInto(container: HTMLElement, markdown: string): void {
+export async function renderMarkdownPreviewInto(
+  container: HTMLElement,
+  markdown: string,
+  options: MarkdownPreviewOptions = {},
+): Promise<void> {
+  const renderEpoch = beginRenderEpoch(container);
   const isEmpty = markdown.trim() === "";
   container.classList.toggle("todo-markdown-preview--empty", isEmpty);
   if (isEmpty) {
     container.textContent = "";
     return;
   }
-  container.innerHTML = renderMarkdownToSafeHtml(markdown);
+
+  const mermaidEnabled = !!options.mermaidEnabled;
+  const { html, mermaidBlocks } = renderMarkdownHtml(markdown, mermaidEnabled);
+  if (!isActiveRender(container, renderEpoch)) {
+    return;
+  }
+
+  container.innerHTML = sanitizeMarkdownHtml(html);
+  if (!mermaidEnabled || mermaidBlocks.length === 0) {
+    return;
+  }
+
+  const hosts = replaceMermaidPlaceholders(container, mermaidBlocks);
+  if (hosts.length === 0) {
+    return;
+  }
+
+  const mermaid = await loadMermaid();
+  if (!isActiveRender(container, renderEpoch)) {
+    return;
+  }
+
+  ensureMermaidInitialized(mermaid);
+  for (const { block, canvas, host } of hosts) {
+    if (!isActiveRender(container, renderEpoch) || !host.isConnected) {
+      return;
+    }
+
+    try {
+      canvas.textContent = block.renderSource || block.displaySource;
+      await mermaid.run({ nodes: [canvas] });
+      if (!isActiveRender(container, renderEpoch) || !host.isConnected) {
+        return;
+      }
+      setMermaidSuccessState(host);
+    } catch {
+      if (!isActiveRender(container, renderEpoch) || !host.isConnected) {
+        return;
+      }
+      setMermaidErrorState(host, block.displaySource);
+    }
+  }
 }
