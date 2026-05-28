@@ -3,8 +3,8 @@ import { renderAuth, renderResetPassword, renderProjects, renderDashboard, rende
 import { startGlobalRealtime, stopGlobalRealtime, initForegroundLifecycle } from './core/realtime.js';
 import { hydrateNotificationsForUser, initNotificationBadge } from './core/notifications.js';
 import { unsubscribeFromPush, maybeAutoSubscribePushAfterLogin } from './core/push.js';
-import { getAuthStatusChecked, getUser, getBootstrapAvailable, getAuthStatusAvailable, getBoard, getOidcEnabled, getLocalAuthEnabled } from './state/selectors.js';
-import { setAuthStatusChecked, setAuthStatusAvailable, setUser, setBootstrapAvailable, setOidcEnabled, setLocalAuthEnabled, setWallEnabled, setMarkdownNotesEnabled, setMermaidNotesEnabled, setRoute, setTag, setSearch, setSlug, setProjectId, setBoard, resetUserScopedState, setTagColors, setOpenTodoSegment, hydrateDashboardTodoSortFromServer } from './state/mutations.js';
+import { getAuthStatusChecked, getUser, getBootstrapAvailable, getAuthStatusAvailable, getBoard, getOidcEnabled, getLocalAuthEnabled, getPushConfigured } from './state/selectors.js';
+import { setAuthStatusChecked, setAuthStatusAvailable, setUser, setBootstrapAvailable, setPushConfigured, setOidcEnabled, setLocalAuthEnabled, setWallEnabled, setMarkdownNotesEnabled, setMermaidNotesEnabled, setRoute, setTag, setSearch, setSlug, setProjectId, setBoard, resetUserScopedState, setTagColors, setOpenTodoSegment, hydrateDashboardTodoSortFromServer } from './state/mutations.js';
 import { loadUserTheme } from './theme.js';
 import { applyWallpaperForAuthContext, loadUserWallpaper } from './wallpaper.js';
 import { hydrateVoiceFlowEnabledFromServer, hydrateVoiceFlowHandsFreeConfirmationFromServer, hydrateVoiceFlowModeFromServer, VOICE_FLOW_ENABLED_PREFERENCE_KEY, VOICE_FLOW_HANDS_FREE_CONFIRMATION_PREFERENCE_KEY, VOICE_FLOW_MODE_PREFERENCE_KEY, } from './core/voiceflow-preferences.js';
@@ -83,6 +83,7 @@ async function routeOnce() {
         }
         setUser(newUser);
         setBootstrapAvailable(!!(st && st.bootstrapAvailable));
+        setPushConfigured(!!(st && st.pushConfigured));
         setOidcEnabled(!!(st && st.oidcEnabled));
         setLocalAuthEnabled(st && st.localAuthEnabled !== false);
         setWallEnabled(!!(st && st.wallEnabled));
@@ -176,7 +177,9 @@ async function routeOnce() {
             if (sessionUser) {
                 hydrateNotificationsForUser(sessionUser.id);
                 startGlobalRealtime();
-                void maybeAutoSubscribePushAfterLogin(sessionUser.id);
+                if (getPushConfigured()) {
+                    void maybeAutoSubscribePushAfterLogin(sessionUser.id);
+                }
             }
             else {
                 stopGlobalRealtime();

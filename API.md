@@ -252,7 +252,7 @@ When the server is configured with OIDC environment variables (`SCRUMBOY_OIDC_IS
 
 These are browser-redirect endpoints, not JSON APIs. After successful OIDC login, the user receives a standard `scrumboy_session` cookie. MCP and REST access work identically to password-based sessions.
 
-`GET /api/auth/status` includes `oidcEnabled` (bool) and `localAuthEnabled` (bool) when OIDC is configured.
+`GET /api/auth/status` includes `oidcEnabled` (bool) and `localAuthEnabled` (bool) when OIDC is configured, plus `pushConfigured` (bool) to indicate whether Web Push VAPID is fully configured on the server.
 
 ### API access tokens (REST)
 

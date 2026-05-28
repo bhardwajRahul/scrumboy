@@ -23,7 +23,7 @@ import (
 	"scrumboy/internal/store"
 )
 
-func newTestHTTPServer(t *testing.T, mode string) (*httptest.Server, *sql.DB, func()) {
+func newTestHTTPServerWithOptions(t *testing.T, opts Options) (*httptest.Server, *sql.DB, func()) {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -42,15 +42,23 @@ func newTestHTTPServer(t *testing.T, mode string) (*httptest.Server, *sql.DB, fu
 	}
 
 	st := store.New(sqlDB, nil)
-	if mode == "" {
-		mode = "full"
+	if opts.MaxRequestBody == 0 {
+		opts.MaxRequestBody = 1 << 20
 	}
-	srv := NewServer(st, Options{MaxRequestBody: 1 << 20, ScrumboyMode: mode})
+	if opts.ScrumboyMode == "" {
+		opts.ScrumboyMode = "full"
+	}
+	srv := NewServer(st, opts)
 	ts := httptest.NewServer(srv)
 	return ts, sqlDB, func() {
 		ts.Close()
 		_ = sqlDB.Close()
 	}
+}
+
+func newTestHTTPServer(t *testing.T, mode string) (*httptest.Server, *sql.DB, func()) {
+	t.Helper()
+	return newTestHTTPServerWithOptions(t, Options{MaxRequestBody: 1 << 20, ScrumboyMode: mode})
 }
 
 type boardEventsWireEvent struct {
@@ -1169,6 +1177,9 @@ func TestAuth_BootstrapLoginMeLogout_FullMode(t *testing.T) {
 	if st["bootstrapAvailable"] != true {
 		t.Fatalf("expected bootstrapAvailable true, got %#v", st["bootstrapAvailable"])
 	}
+	if st["pushConfigured"] != false {
+		t.Fatalf("expected pushConfigured false, got %#v", st["pushConfigured"])
+	}
 	if st["user"] != nil {
 		t.Fatalf("expected user null, got %#v", st["user"])
 	}
@@ -1213,6 +1224,9 @@ func TestAuth_BootstrapLoginMeLogout_FullMode(t *testing.T) {
 	}
 	if st["bootstrapAvailable"] != false {
 		t.Fatalf("expected bootstrapAvailable false, got %#v", st["bootstrapAvailable"])
+	}
+	if st["pushConfigured"] != false {
+		t.Fatalf("expected pushConfigured false after bootstrap, got %#v", st["pushConfigured"])
 	}
 	userObj, ok := st["user"].(map[string]any)
 	if !ok {
@@ -1275,6 +1289,9 @@ func TestAuth_BootstrapLoginMeLogout_FullMode(t *testing.T) {
 	if st["bootstrapAvailable"] != false {
 		t.Fatalf("expected bootstrapAvailable false after logout, got %#v", st["bootstrapAvailable"])
 	}
+	if st["pushConfigured"] != false {
+		t.Fatalf("expected pushConfigured false after logout, got %#v", st["pushConfigured"])
+	}
 	if st["user"] != nil {
 		t.Fatalf("expected user null after logout, got %#v", st["user"])
 	}
@@ -1329,6 +1346,61 @@ func TestAuth_EndpointsNotFound_AnonymousMode(t *testing.T) {
 	}
 	if statusResp["bootstrapAvailable"] != false {
 		t.Fatalf("expected bootstrapAvailable to be false in anonymous mode, got %v", statusResp["bootstrapAvailable"])
+	}
+	if statusResp["pushConfigured"] != false {
+		t.Fatalf("expected pushConfigured to be false in anonymous mode, got %v", statusResp["pushConfigured"])
+	}
+}
+
+func TestAuthStatus_PushConfiguredCapability(t *testing.T) {
+	cases := []struct {
+		name string
+		opts Options
+		want bool
+	}{
+		{
+			name: "full mode with key pair",
+			opts: Options{MaxRequestBody: 1 << 20, ScrumboyMode: "full", VAPIDPublicKey: testVapidPub, VAPIDPrivateKey: testVapidPriv},
+			want: true,
+		},
+		{
+			name: "full mode with public key only",
+			opts: Options{MaxRequestBody: 1 << 20, ScrumboyMode: "full", VAPIDPublicKey: testVapidPub},
+			want: false,
+		},
+		{
+			name: "full mode with private key only",
+			opts: Options{MaxRequestBody: 1 << 20, ScrumboyMode: "full", VAPIDPrivateKey: testVapidPriv},
+			want: false,
+		},
+		{
+			name: "anonymous mode with key pair",
+			opts: Options{MaxRequestBody: 1 << 20, ScrumboyMode: "anonymous", VAPIDPublicKey: testVapidPub, VAPIDPrivateKey: testVapidPriv},
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, _, cleanup := newTestHTTPServerWithOptions(t, tc.opts)
+			defer cleanup()
+
+			resp, err := ts.Client().Get(ts.URL + "/api/auth/status")
+			if err != nil {
+				t.Fatalf("GET /api/auth/status: %v", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("expected 200 for /api/auth/status, got %d", resp.StatusCode)
+			}
+			var st map[string]any
+			if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+				t.Fatalf("decode status response: %v", err)
+			}
+			if st["pushConfigured"] != tc.want {
+				t.Fatalf("expected pushConfigured %v, got %#v", tc.want, st["pushConfigured"])
+			}
+		})
 	}
 }
 

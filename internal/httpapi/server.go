@@ -35,7 +35,7 @@ type Options struct {
 
 	OIDCService *oidc.Service // nil when OIDC is not configured
 
-	// Web Push (optional). When public/private VAPID keys are empty, push APIs and notify consumer are disabled.
+	// Web Push (optional). Push is enabled only in full mode with both public/private VAPID keys set.
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
 	VAPIDSubscriber string // VAPID JWT "sub" (e.g. mailto:ops@example.com); default in notifier if empty
@@ -84,7 +84,7 @@ type Server struct {
 	agoraHandler http.Handler
 
 	vapidPublicKey      string
-	pushVapidConfigured bool // both public and private keys non-empty; subscribe and push notify use this
+	pushVapidConfigured bool // full mode + both VAPID keys present; subscribe and push notify use this
 	pushDebug           bool
 
 	dataDir string // user-wallpapers storage; empty = disabled
@@ -309,8 +309,7 @@ func NewServer(st storeAPI, opts Options) *Server {
 	whDispatcher := newWebhookDispatcher(st, whQueue, logger)
 	pushDebug := opts.PushDebug
 	vapidPub := strings.TrimSpace(opts.VAPIDPublicKey)
-	vapidPriv := strings.TrimSpace(opts.VAPIDPrivateKey)
-	pushVapidConfigured := vapidPub != "" && vapidPriv != ""
+	pushVapidConfigured := PushConfigured(mode, opts.VAPIDPublicKey, opts.VAPIDPrivateKey)
 	pushNotifier := newPushNotifier(st, logger, opts.VAPIDPublicKey, opts.VAPIDPrivateKey, opts.VAPIDSubscriber, pushDebug)
 	fanout := eventbus.NewFanout(sseBridgeConsumer, whDispatcher, pushNotifier)
 	whWorker := newWebhookWorker(whQueue, logger)
