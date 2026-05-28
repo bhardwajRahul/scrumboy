@@ -53,6 +53,11 @@ type Config struct {
 	// Markdown notes preview. Defaults off until explicitly enabled via
 	// SCRUMBOY_MARKDOWN_NOTES_ENABLED=1 (also accepts true/on/yes).
 	MarkdownNotesEnabled bool
+
+	// Mermaid notes preview. Defaults off until explicitly enabled via
+	// SCRUMBOY_MERMAID_NOTES_ENABLED=1 (also accepts true/on/yes). Effective
+	// only when MarkdownNotesEnabled is also true.
+	MermaidNotesEnabled bool
 }
 
 func FromEnv() Config {
@@ -65,6 +70,8 @@ func FromEnv() Config {
 	if mode != "full" && mode != "anonymous" {
 		mode = "full" // Default to full if invalid
 	}
+
+	markdownNotesEnabled := markdownNotesEnabledFromEnv()
 
 	return Config{
 		BindAddr:             getenv("BIND_ADDR", ":8080"),
@@ -98,7 +105,8 @@ func FromEnv() Config {
 		PushDebug:       strings.TrimSpace(os.Getenv("SCRUMBOY_DEBUG_PUSH")) == "1",
 
 		WallEnabled:          wallEnabledFromEnv(),
-		MarkdownNotesEnabled: markdownNotesEnabledFromEnv(),
+		MarkdownNotesEnabled: markdownNotesEnabled,
+		MermaidNotesEnabled:  mermaidNotesEnabledFromEnv(markdownNotesEnabled),
 	}
 }
 
@@ -121,6 +129,22 @@ func wallEnabledFromEnv() bool {
 // 1/true/on/yes (trimmed, case-insensitive).
 func markdownNotesEnabledFromEnv() bool {
 	v := strings.TrimSpace(strings.ToLower(os.Getenv("SCRUMBOY_MARKDOWN_NOTES_ENABLED")))
+	switch v {
+	case "1", "true", "on", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+// mermaidNotesEnabledFromEnv returns whether Mermaid preview is enabled for todo
+// notes. Mermaid is layered on top of markdown preview, so it is only effective
+// when markdown notes are already enabled.
+func mermaidNotesEnabledFromEnv(markdownNotesEnabled bool) bool {
+	if !markdownNotesEnabled {
+		return false
+	}
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("SCRUMBOY_MERMAID_NOTES_ENABLED")))
 	switch v {
 	case "1", "true", "on", "yes":
 		return true

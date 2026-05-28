@@ -69,6 +69,7 @@ vi.mock('../state/selectors.js', () => ({
   getBoard: () => selectorState.board,
   getBoardMembers: () => selectorState.boardMembers,
   getMarkdownNotesEnabled: () => false,
+  getMermaidNotesEnabled: () => false,
   getSlug: () => selectorState.slug,
   getTagColors: () => selectorState.tagColors,
   getUser: () => selectorState.user,

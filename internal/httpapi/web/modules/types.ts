@@ -166,6 +166,7 @@ export interface AuthStatusResponse {
   localAuthEnabled?: boolean;
   wallEnabled?: boolean;
   markdownNotesEnabled?: boolean;
+  mermaidNotesEnabled?: boolean;
 }
 
 export interface BoardResponse extends Board {

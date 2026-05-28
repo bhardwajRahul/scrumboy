@@ -1,6 +1,34 @@
 # Changelog
 
-> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** unless noted below.
+> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
+
+## [3.17.0] - 2026-05-28
+
+### Features
+
+- **Todo notes Mermaid preview (Phase 1B)** - Optional Mermaid rendering for fenced ` ```mermaid ` blocks inside the existing todo Notes **preview** tab. Mermaid stays preview-only: notes still persist as raw `todos.body`, and board cards, notifications, exports, and server payloads do not render Markdown or diagrams.
+
+### Improvements
+
+- **Layered feature gates** - Added **`SCRUMBOY_MERMAID_NOTES_ENABLED`** as a Markdown sub-flag. Mermaid is active only when both **`SCRUMBOY_MARKDOWN_NOTES_ENABLED=1`** and **`SCRUMBOY_MERMAID_NOTES_ENABLED=1`** are set.
+
+- **Preview safety** - Mermaid lazy-loads from a vendored runtime, initializes once with **`securityLevel: "sandbox"`**, strips user `%%{init: ...}%%` / `%%{initialize: ...}%%` directives before render, and falls back to escaped source for diagram-specific failures instead of dropping the user out of preview mode.
+
+### Frontend
+
+- **Markdown preview pipeline** - Mermaid fence placeholders are resolved after the existing Markdown sanitization step, keeping the normal allow-list unchanged for non-Mermaid Markdown.
+
+- **Runtime loading** - Ships **`/vendor/mermaid.min.js`** through the vendor sync/verify pipeline, but does not eagerly load or service-worker precache Mermaid.
+
+### Tests
+
+- **Server/config** - Added coverage for **`SCRUMBOY_MERMAID_NOTES_ENABLED`** parsing and **`mermaidNotesEnabled`** on auth status responses.
+
+- **Preview rendering** - Added Mermaid fence rendering, directive stripping, fallback behavior, and stale async rerender cancellation coverage.
+
+### Documentation
+
+- **Operator docs** - Updated **`docs/markdown&mermaid.md`**, **`FAQ.md`**, and **`scrumboy.env.example`** for Markdown + Mermaid preview enablement.
 
 ## [3.16.2] - 2026-05-26
 

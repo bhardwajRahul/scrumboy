@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.16.2-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.17.0-blue" alt="version" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   </a>
@@ -193,7 +193,7 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 
 - Sticky-Note Wall - per-project scratchpad of draggable sticky notes on the board (see `docs/WALL.md`).
 
-- Todo notes Markdown preview - markdown/preview tabs in the todo Notes field (see `FAQ.md`, `docs/markdown.md`).
+- Todo notes Markdown preview (optional) - **markdown** / **preview** tabs in the todo Notes field; optional Mermaid diagrams in fenced ` ```mermaid ` blocks in preview only (see `FAQ.md`, `docs/markdown&mermaid.md`).
 
 ---
 

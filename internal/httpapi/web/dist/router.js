@@ -4,7 +4,7 @@ import { startGlobalRealtime, stopGlobalRealtime, initForegroundLifecycle } from
 import { hydrateNotificationsForUser, initNotificationBadge } from './core/notifications.js';
 import { unsubscribeFromPush, maybeAutoSubscribePushAfterLogin } from './core/push.js';
 import { getAuthStatusChecked, getUser, getBootstrapAvailable, getAuthStatusAvailable, getBoard, getOidcEnabled, getLocalAuthEnabled } from './state/selectors.js';
-import { setAuthStatusChecked, setAuthStatusAvailable, setUser, setBootstrapAvailable, setOidcEnabled, setLocalAuthEnabled, setWallEnabled, setMarkdownNotesEnabled, setRoute, setTag, setSearch, setSlug, setProjectId, setBoard, resetUserScopedState, setTagColors, setOpenTodoSegment, hydrateDashboardTodoSortFromServer } from './state/mutations.js';
+import { setAuthStatusChecked, setAuthStatusAvailable, setUser, setBootstrapAvailable, setOidcEnabled, setLocalAuthEnabled, setWallEnabled, setMarkdownNotesEnabled, setMermaidNotesEnabled, setRoute, setTag, setSearch, setSlug, setProjectId, setBoard, resetUserScopedState, setTagColors, setOpenTodoSegment, hydrateDashboardTodoSortFromServer } from './state/mutations.js';
 import { loadUserTheme } from './theme.js';
 import { applyWallpaperForAuthContext, loadUserWallpaper } from './wallpaper.js';
 import { hydrateVoiceFlowEnabledFromServer, hydrateVoiceFlowHandsFreeConfirmationFromServer, hydrateVoiceFlowModeFromServer, VOICE_FLOW_ENABLED_PREFERENCE_KEY, VOICE_FLOW_HANDS_FREE_CONFIRMATION_PREFERENCE_KEY, VOICE_FLOW_MODE_PREFERENCE_KEY, } from './core/voiceflow-preferences.js';
@@ -87,6 +87,7 @@ async function routeOnce() {
         setLocalAuthEnabled(st && st.localAuthEnabled !== false);
         setWallEnabled(!!(st && st.wallEnabled));
         setMarkdownNotesEnabled(!!(st && st.markdownNotesEnabled));
+        setMermaidNotesEnabled(!!(st && st.mermaidNotesEnabled));
         // Load full profile (including avatar) when logged in; /api/auth/status omits image to keep it lean
         if (newUser) {
             try {

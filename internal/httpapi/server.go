@@ -49,6 +49,10 @@ type Options struct {
 	// MarkdownNotesEnabled gates the todo notes markdown/preview experience in the
 	// SPA. When false, the frontend behaves exactly as before.
 	MarkdownNotesEnabled bool
+
+	// MermaidNotesEnabled gates Mermaid rendering within the markdown preview.
+	// Effective only when MarkdownNotesEnabled is also true.
+	MermaidNotesEnabled bool
 }
 
 type Server struct {
@@ -87,6 +91,7 @@ type Server struct {
 
 	wallEnabled          bool // Scrumbaby wall; default on (SCRUMBOY_WALL_ENABLED=0 to disable)
 	markdownNotesEnabled bool // Todo notes markdown preview; default off unless explicitly enabled
+	mermaidNotesEnabled  bool // Mermaid in todo notes preview; default off unless explicitly enabled
 }
 
 type storeAPI interface {
@@ -346,6 +351,7 @@ func NewServer(st storeAPI, opts Options) *Server {
 		pushDebug:                 pushDebug,
 		wallEnabled:               opts.WallEnabled,
 		markdownNotesEnabled:      opts.MarkdownNotesEnabled,
+		mermaidNotesEnabled:       opts.MermaidNotesEnabled && opts.MarkdownNotesEnabled,
 	}
 }
 

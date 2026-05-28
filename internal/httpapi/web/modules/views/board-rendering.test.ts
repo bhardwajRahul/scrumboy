@@ -74,7 +74,7 @@ describe('board topbar rendering', () => {
       id: 7,
       localId: 12,
       title: '**Plain** <Title>',
-      body: '# Hidden body heading',
+      body: ['# Hidden body heading', '', '```mermaid', 'graph TD', 'A-->B', '```'].join('\n'),
       status: 'BACKLOG',
       tags: [],
     });
@@ -83,5 +83,8 @@ describe('board topbar rendering', () => {
     expect(html).not.toContain('<strong>Plain</strong>');
     expect(html).not.toContain('Hidden body heading');
     expect(html).not.toContain('<h1>');
+    expect(html).not.toContain('graph TD');
+    expect(html).not.toContain('A--&gt;B');
+    expect(html).not.toContain('todo-mermaid');
   });
 });
