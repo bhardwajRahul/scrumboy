@@ -20,11 +20,14 @@ const SAFE_TAGS = [
     "ul",
 ];
 const SAFE_ATTRS = ["href", "rel", "target"];
-const MERMAID_PLACEHOLDER_PREFIX = "__SCRUMBOY_MERMAID_BLOCK_";
+const MERMAID_PLACEHOLDER_PREFIX = "__SCRUMBOY_MERMAID_BLOCK__";
 const MERMAID_SCRIPT_SRC = "/vendor/mermaid.min.js";
 const MERMAID_MAX_TEXT_SIZE = 50000;
 const MERMAID_MAX_EDGES = 500;
-const MERMAID_INIT_DIRECTIVE_RE = /%%\{\s*(?:init|initialize)\s*:[\s\S]*?\}%%/gi;
+const MERMAID_MAX_BLOCKS_PER_PREVIEW = 4;
+const MERMAID_MAX_CHARS_PER_BLOCK = 4000;
+const MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW = 8000;
+const MERMAID_DIRECTIVE_BLOCK_RE = /%%\{[\s\S]*?\}%%/g;
 let markdownRenderer = null;
 let mermaidInitialized = false;
 let mermaidLoadPromise = null;
@@ -76,11 +79,38 @@ function renderFenceToken(token) {
     const classAttr = language ? ` class="language-${escapeHTML(language)}"` : "";
     return `<pre><code${classAttr}>${escapeHTML(token?.content ?? "")}</code></pre>\n`;
 }
-function buildMermaidPlaceholder(index) {
-    return `${MERMAID_PLACEHOLDER_PREFIX}${index}__`;
+function createMermaidPlaceholderNonce() {
+    if (typeof crypto !== "undefined") {
+        if (typeof crypto.randomUUID === "function") {
+            return crypto.randomUUID().replace(/-/g, "");
+        }
+        if (typeof crypto.getRandomValues === "function") {
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+        }
+    }
+    return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+}
+function buildMermaidPlaceholder(nonce, index) {
+    return `${MERMAID_PLACEHOLDER_PREFIX}${nonce}_${index}__`;
 }
 function stripUnsupportedMermaidDirectives(source) {
-    return source.replace(MERMAID_INIT_DIRECTIVE_RE, "").trim();
+    return source.replace(MERMAID_DIRECTIVE_BLOCK_RE, "").trim();
+}
+function getMermaidWarningMessage(blockIndex, displaySource, renderSource, totalCharsBeforeBlock) {
+    if (renderSource.trim() === "") {
+        return "This Mermaid block contains only ignored Mermaid directives. Showing source instead.";
+    }
+    if (blockIndex >= MERMAID_MAX_BLOCKS_PER_PREVIEW) {
+        return `Only the first ${MERMAID_MAX_BLOCKS_PER_PREVIEW} Mermaid diagrams are rendered in note preview. Showing source instead.`;
+    }
+    if (displaySource.length > MERMAID_MAX_CHARS_PER_BLOCK) {
+        return `This Mermaid diagram exceeds the ${MERMAID_MAX_CHARS_PER_BLOCK}-character preview limit. Showing source instead.`;
+    }
+    if (totalCharsBeforeBlock + displaySource.length > MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW) {
+        return `This note exceeds the ${MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW}-character Mermaid preview budget. Showing source instead.`;
+    }
+    return undefined;
 }
 function renderMarkdownHtml(markdown, mermaidEnabled) {
     const renderer = getMarkdownRenderer();
@@ -88,6 +118,8 @@ function renderMarkdownHtml(markdown, mermaidEnabled) {
         return { html: renderer.render(markdown || ""), mermaidBlocks: [] };
     }
     const mermaidBlocks = [];
+    const placeholderNonce = createMermaidPlaceholderNonce();
+    let totalMermaidChars = 0;
     const originalFence = renderer.renderer.rules.fence;
     renderer.renderer.rules.fence = (tokens, idx) => {
         const token = tokens[idx];
@@ -96,8 +128,12 @@ function renderMarkdownHtml(markdown, mermaidEnabled) {
         }
         const displaySource = token?.content ?? "";
         const renderSource = stripUnsupportedMermaidDirectives(displaySource);
-        const placeholder = buildMermaidPlaceholder(mermaidBlocks.length);
-        mermaidBlocks.push({ placeholder, displaySource, renderSource });
+        const placeholder = buildMermaidPlaceholder(placeholderNonce, mermaidBlocks.length);
+        const warningMessage = getMermaidWarningMessage(mermaidBlocks.length, displaySource, renderSource, totalMermaidChars);
+        if (!warningMessage) {
+            totalMermaidChars += displaySource.length;
+        }
+        mermaidBlocks.push({ placeholder, displaySource, renderSource, warningMessage });
         return `<pre><code>${escapeHTML(placeholder)}</code></pre>\n`;
     };
     try {
@@ -204,19 +240,22 @@ function replaceMermaidPlaceholders(container, mermaidBlocks) {
     }
     return hosts;
 }
-function setMermaidErrorState(host, displaySource) {
-    host.className = "todo-mermaid-host todo-mermaid-host--error";
+function setMermaidFallbackState(host, displaySource, statusText, statusTone) {
+    host.className = "todo-mermaid-host todo-mermaid-host--fallback";
     const status = document.createElement("div");
-    status.className = "todo-mermaid-status todo-mermaid-status--error";
-    status.textContent = "Could not render Mermaid diagram. Showing source instead.";
+    status.className = `todo-mermaid-status todo-mermaid-status--${statusTone}`;
+    status.textContent = statusText;
     const pre = document.createElement("pre");
     const code = document.createElement("code");
     code.textContent = displaySource;
     pre.append(code);
     host.replaceChildren(status, pre);
 }
+function setMermaidErrorState(host, displaySource) {
+    setMermaidFallbackState(host, displaySource, "Could not render Mermaid diagram. Showing source instead.", "error");
+}
 function setMermaidSuccessState(host) {
-    host.classList.remove("todo-mermaid-host--loading", "todo-mermaid-host--error");
+    host.classList.remove("todo-mermaid-host--loading", "todo-mermaid-host--fallback");
     host.classList.add("todo-mermaid-host--ready");
     const status = host.querySelector(".todo-mermaid-status");
     status?.remove();
@@ -298,17 +337,27 @@ export async function renderMarkdownPreviewInto(container, markdown, options = {
     if (hosts.length === 0) {
         return;
     }
+    const renderableHosts = hosts.filter(({ block, host }) => {
+        if (!block.warningMessage) {
+            return true;
+        }
+        setMermaidFallbackState(host, block.displaySource, block.warningMessage, "warning");
+        return false;
+    });
+    if (renderableHosts.length === 0) {
+        return;
+    }
     const mermaid = await loadMermaid();
     if (!isActiveRender(container, renderEpoch)) {
         return;
     }
     ensureMermaidInitialized(mermaid);
-    for (const { block, canvas, host } of hosts) {
+    for (const { block, canvas, host } of renderableHosts) {
         if (!isActiveRender(container, renderEpoch) || !host.isConnected) {
             return;
         }
         try {
-            canvas.textContent = block.renderSource || block.displaySource;
+            canvas.textContent = block.renderSource;
             await mermaid.run({ nodes: [canvas] });
             if (!isActiveRender(container, renderEpoch) || !host.isConnected) {
                 return;

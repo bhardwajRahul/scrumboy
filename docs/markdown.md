@@ -145,8 +145,9 @@ When `mermaidEnabled` is true and the Markdown contains fenced Mermaid blocks:
    - `maxTextSize: 50000`
    - `maxEdges: 500`
    - `suppressErrorRendering: true`
-5. User `%%{init: ...}%%` / `%%{initialize: ...}%%` directives are stripped before render so site security settings remain authoritative.
-6. Diagram syntax failures do **not** tear down preview mode; the preview shows a local fallback block with the original source.
+5. All user-authored Mermaid directive blocks in the `%%{...}%%` form are stripped before render so site security settings remain authoritative.
+6. Preview-side limits cap Mermaid work per note: only the first 4 Mermaid fences render, each fence is capped at 4000 characters, and the total Mermaid preview budget is capped at 8000 characters.
+7. Limit overages and diagram syntax failures do **not** tear down preview mode; the preview shows a local warning/error block with the original source.
 
 ---
 
@@ -168,7 +169,7 @@ Verified in `modules/markdown-preview.test.ts`:
 - Raw HTML in source → escaped in output
 - Dangerous or non-web link schemes → plain text
 - Protocol-relative URLs (`//host/...`)
-- Mermaid directives (`%%{init: ...}%%`) are ignored for rendering; site-level Mermaid config wins
+- Mermaid directives (`%%{...}%%`) are ignored for rendering; site-level Mermaid config wins
 
 ---
 
@@ -178,7 +179,7 @@ Verified in `modules/markdown-preview.test.ts`:
 - **CSP / trust:** preview depends on vendored `markdown-it` and DOMPurify; `npm test` in `internal/httpapi/web` runs `verify-vendor.mjs` before Vitest.
 - **Link exfiltration:** only `http`/`https` external navigation; `noopener noreferrer` on external tabs.
 - **No Markdown on titles** avoids XSS or layout surprises on shared boards and SSE-driven card updates.
-- **Mermaid isolation:** diagrams render with Mermaid `securityLevel: "sandbox"` and are never passed through the general Markdown allow-list as arbitrary SVG/HTML.
+- **Mermaid isolation:** in Mermaid `11.15.0`, `securityLevel: "sandbox"` renders diagrams through sandboxed iframes in this preview path, and diagram output is never passed through the general Markdown allow-list as arbitrary SVG/HTML.
 - **Mermaid scope:** diagrams only render in the todo dialog preview, never on the board or server.
 
 ---
@@ -192,7 +193,13 @@ Verified in `modules/markdown-preview.test.ts`:
 | `/vendor/mermaid.min.js` | Mermaid runtime (lazy-loaded only when Mermaid preview is needed) |
 | `/dist/markdown-preview.js` | Compiled module (TypeScript → `dist/`) |
 
-Service worker (`sw.js`) precaches the eager Markdown assets and `dist/markdown-preview.js`. Mermaid is **not** install-time precached; it is fetched lazily and then becomes eligible for the service worker's normal runtime caching after first successful load.
+Service worker (`sw.js`) precaches the eager Markdown assets and `dist/markdown-preview.js`. Mermaid is **not** install-time precached. It is fetched lazily, and because `/vendor/mermaid.min.js` is handled by the service worker's same-origin cache-first asset branch, a successful first fetch while the service worker is active makes it available for later offline reuse from cache.
+
+Manual verification for offline reuse:
+
+- Load a note that contains a Mermaid fence while online and wait for the preview to render once.
+- Disconnect or simulate offline mode, then reopen the same note's preview.
+- Expected result: the preview can still resolve `/vendor/mermaid.min.js` from cache; if the runtime was never fetched successfully before going offline, Mermaid preview is not guaranteed.
 
 Regenerate vendor files after dependency bumps:
 
@@ -210,7 +217,7 @@ npm run verify:vendor
 |----------|--------|
 | `internal/config/config_markdown_enabled_test.go` | Markdown + Mermaid env parsing |
 | `internal/httpapi/routing_auth_markdown_test.go` | `markdownNotesEnabled` and `mermaidNotesEnabled` on auth status |
-| `modules/markdown-preview.test.ts` | Supported subset, links, HTML/images neutralization, Mermaid fences, directive stripping, async rerender cancellation |
+| `modules/markdown-preview.test.ts` | Supported subset, links, HTML/images neutralization, Mermaid fences, placeholder spoofing regression, full directive stripping, preview-size limits, async rerender cancellation |
 | `modules/dialogs/todo-markdown-preview.test.ts` | Dialog gating, preview vs textarea, raw body on save |
 | `modules/dialogs/todo-submit.test.ts` | API payloads keep raw Markdown / raw note bodies |
 | `modules/views/board-rendering.test.ts` | Card titles do not render note Markdown or Mermaid |

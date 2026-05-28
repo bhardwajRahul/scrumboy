@@ -160,7 +160,7 @@ describe("markdown preview rendering", () => {
     expect(container.innerHTML).toContain("A--&gt;B");
   });
 
-  it("renders mermaid fences with the lazy mermaid runtime and strips init directives", async () => {
+  it("renders mermaid fences with the lazy mermaid runtime and strips all mermaid directive blocks", async () => {
     const seenSources: string[] = [];
     const mermaid = installMermaidStub((node) => {
       seenSources.push(node.textContent || "");
@@ -175,6 +175,8 @@ describe("markdown preview rendering", () => {
       [
         "```mermaid",
         '%%{init: { "theme": "dark" }}%%',
+        '%%{initialize: { "securityLevel": "loose" }}%%',
+        '%%{config: { "theme": "forest" }}%%',
         "graph TD",
         "A-->B",
         "```",
@@ -193,6 +195,32 @@ describe("markdown preview rendering", () => {
     expect(seenSources).toEqual(["graph TD\nA-->B"]);
     expect(container.innerHTML).toContain('data-rendered="yes"');
     expect(container.textContent).not.toContain("%%{init:");
+    expect(container.textContent).not.toContain("%%{initialize:");
+    expect(container.textContent).not.toContain("%%{config:");
+  });
+
+  it("shows a local warning for directive-only mermaid blocks without invoking mermaid", async () => {
+    const mermaid = installMermaidStub();
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await renderMarkdownPreviewInto(
+      container,
+      [
+        "```mermaid",
+        '%%{init: { "theme": "dark" }}%%',
+        '%%{config: { "theme": "forest" }}%%',
+        "```",
+      ].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(mermaid.initialize).not.toHaveBeenCalled();
+    expect(mermaid.run).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("This Mermaid block contains only ignored Mermaid directives. Showing source instead.");
+    expect(container.textContent).toContain('%%{init: { "theme": "dark" }}%%');
+    expect(container.textContent).toContain('%%{config: { "theme": "forest" }}%%');
   });
 
   it("renders multiple mermaid blocks while leaving other fenced code untouched", async () => {
@@ -231,6 +259,60 @@ describe("markdown preview rendering", () => {
     expect(container.innerHTML).toContain("<pre><code>const value = 1;");
   });
 
+  it("does not upgrade ordinary fenced code that looks like a mermaid placeholder", async () => {
+    const rendered: string[] = [];
+    installMermaidStub((node) => {
+      rendered.push(node.textContent || "");
+      node.innerHTML = '<svg data-rendered="real-mermaid"></svg>';
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await renderMarkdownPreviewInto(
+      container,
+      [
+        "```text",
+        "__SCRUMBOY_MERMAID_BLOCK_0__",
+        "```",
+        "",
+        "```mermaid",
+        "graph TD",
+        "A-->B",
+        "```",
+      ].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(rendered).toEqual(["graph TD\nA-->B"]);
+    expect(container.innerHTML).toContain('data-rendered="real-mermaid"');
+    expect(container.innerHTML).toContain("<pre><code>__SCRUMBOY_MERMAID_BLOCK_0__");
+  });
+
+  it("preserves the original directive-bearing source in error fallback output", async () => {
+    installMermaidStub(() => {
+      throw new Error("bad diagram");
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
+    await renderMarkdownPreviewInto(
+      container,
+      [
+        "```mermaid",
+        '%%{config: { "theme": "forest" }}%%',
+        "graph TD",
+        "broken",
+        "```",
+      ].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(container.textContent).toContain('%%{config: { "theme": "forest" }}%%');
+    expect(container.textContent).toContain("Could not render Mermaid diagram. Showing source instead.");
+  });
+
   it("keeps preview open and shows source fallback when mermaid rendering fails", async () => {
     installMermaidStub(() => {
       throw new Error("bad diagram");
@@ -248,6 +330,57 @@ describe("markdown preview rendering", () => {
     expect(container.textContent).toContain("Could not render Mermaid diagram. Showing source instead.");
     expect(container.textContent).toContain("graph TD");
     expect(container.textContent).toContain("broken");
+  });
+
+  it("shows a local warning for oversized mermaid diagrams without loading the runtime", async () => {
+    const mermaid = installMermaidStub();
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const oversizedBlock = `graph TD\nA[${"x".repeat(4_200)}]-->B`;
+
+    await renderMarkdownPreviewInto(container, ["```mermaid", oversizedBlock, "```"].join("\n"), {
+      mermaidEnabled: true,
+    });
+
+    expect(mermaid.initialize).not.toHaveBeenCalled();
+    expect(mermaid.run).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Showing source instead.");
+    expect(container.textContent).toContain(oversizedBlock);
+  });
+
+  it("renders only mermaid blocks that fit within the total preview budget", async () => {
+    const mermaid = installMermaidStub((node, index) => {
+      node.innerHTML = `<svg data-order="${index}"></svg>`;
+    });
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const nearLimitBlock = `graph TD\nA[${"x".repeat(2_900)}]-->B`;
+
+    await renderMarkdownPreviewInto(
+      container,
+      [
+        "```mermaid",
+        nearLimitBlock,
+        "```",
+        "",
+        "```mermaid",
+        nearLimitBlock,
+        "```",
+        "",
+        "```mermaid",
+        nearLimitBlock,
+        "```",
+      ].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(mermaid.initialize).toHaveBeenCalledTimes(1);
+    expect(mermaid.run).toHaveBeenCalledTimes(2);
+    expect(container.innerHTML).toContain('data-order="1"');
+    expect(container.innerHTML).toContain('data-order="2"');
+    expect(container.textContent).toContain("This note exceeds the 8000-character Mermaid preview budget. Showing source instead.");
   });
 
   it("keeps only the latest async mermaid render result when preview rerenders while typing", async () => {

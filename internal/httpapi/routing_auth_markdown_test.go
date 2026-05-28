@@ -45,17 +45,20 @@ func newAuthStatusTestServer(t *testing.T, opts Options) (*httptest.Server, *htt
 
 func TestAuthStatusMarkdownNotesEnabled(t *testing.T) {
 	cases := []struct {
-		name            string
-		mode            string
-		markdownEnabled bool
-		mermaidEnabled  bool
+		name                  string
+		mode                  string
+		markdownEnabled       bool
+		mermaidEnabled        bool
+		expectedMermaidStatus bool
 	}{
-		{name: "full disabled", mode: "full", markdownEnabled: false, mermaidEnabled: false},
-		{name: "full markdown enabled", mode: "full", markdownEnabled: true, mermaidEnabled: false},
-		{name: "full markdown and mermaid enabled", mode: "full", markdownEnabled: true, mermaidEnabled: true},
-		{name: "anonymous disabled", mode: "anonymous", markdownEnabled: false, mermaidEnabled: false},
-		{name: "anonymous markdown enabled", mode: "anonymous", markdownEnabled: true, mermaidEnabled: false},
-		{name: "anonymous markdown and mermaid enabled", mode: "anonymous", markdownEnabled: true, mermaidEnabled: true},
+		{name: "full disabled", mode: "full", markdownEnabled: false, mermaidEnabled: false, expectedMermaidStatus: false},
+		{name: "full markdown enabled", mode: "full", markdownEnabled: true, mermaidEnabled: false, expectedMermaidStatus: false},
+		{name: "full mermaid env without markdown gate", mode: "full", markdownEnabled: false, mermaidEnabled: true, expectedMermaidStatus: false},
+		{name: "full markdown and mermaid enabled", mode: "full", markdownEnabled: true, mermaidEnabled: true, expectedMermaidStatus: true},
+		{name: "anonymous disabled", mode: "anonymous", markdownEnabled: false, mermaidEnabled: false, expectedMermaidStatus: false},
+		{name: "anonymous markdown enabled", mode: "anonymous", markdownEnabled: true, mermaidEnabled: false, expectedMermaidStatus: false},
+		{name: "anonymous mermaid env without markdown gate", mode: "anonymous", markdownEnabled: false, mermaidEnabled: true, expectedMermaidStatus: false},
+		{name: "anonymous markdown and mermaid enabled", mode: "anonymous", markdownEnabled: true, mermaidEnabled: true, expectedMermaidStatus: true},
 	}
 
 	for _, tc := range cases {
@@ -82,8 +85,8 @@ func TestAuthStatusMarkdownNotesEnabled(t *testing.T) {
 			if got, ok := statusResp["markdownNotesEnabled"].(bool); !ok || got != tc.markdownEnabled {
 				t.Fatalf("expected markdownNotesEnabled=%v, got %#v", tc.markdownEnabled, statusResp["markdownNotesEnabled"])
 			}
-			if got, ok := statusResp["mermaidNotesEnabled"].(bool); !ok || got != tc.mermaidEnabled {
-				t.Fatalf("expected mermaidNotesEnabled=%v, got %#v", tc.mermaidEnabled, statusResp["mermaidNotesEnabled"])
+			if got, ok := statusResp["mermaidNotesEnabled"].(bool); !ok || got != tc.expectedMermaidStatus {
+				t.Fatalf("expected mermaidNotesEnabled=%v, got %#v", tc.expectedMermaidStatus, statusResp["mermaidNotesEnabled"])
 			}
 		})
 	}
