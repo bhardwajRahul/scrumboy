@@ -228,6 +228,175 @@ func TestDashboardSummary_DefaultWIPKeys_PreserveLegacySplit(t *testing.T) {
 	}
 }
 
+func TestDashboardSummary_UnassignedTodoExcludedEvenInActiveSprint(t *testing.T) {
+	st, cleanup := newTestStore(t)
+	defer cleanup()
+
+	ctx, user := dashboardTestContext(t, st)
+
+	project, err := st.CreateProject(ctx, "Unassigned Active Sprint")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	now := time.Now().UTC()
+	sprint, err := st.CreateSprint(ctx, project.ID, "Sprint 1", now.Add(-time.Hour), now.Add(14*24*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSprint: %v", err)
+	}
+	if err := st.ActivateSprint(ctx, project.ID, sprint.ID); err != nil {
+		t.Fatalf("ActivateSprint: %v", err)
+	}
+
+	points := int64(3)
+	if _, err := st.CreateTodo(ctx, project.ID, CreateTodoInput{
+		Title:            "Unassigned sprint work",
+		ColumnKey:        DefaultColumnDoing,
+		EstimationPoints: &points,
+		SprintID:         &sprint.ID,
+	}, ModeFull); err != nil {
+		t.Fatalf("CreateTodo: %v", err)
+	}
+
+	summary, err := st.GetDashboardSummary(ctx, user.ID, "UTC")
+	if err != nil {
+		t.Fatalf("GetDashboardSummary: %v", err)
+	}
+	if summary.AssignedCount != 0 || summary.TotalAssignedStoryPoints != 0 {
+		t.Fatalf("expected no assigned work, got count=%d points=%d", summary.AssignedCount, summary.TotalAssignedStoryPoints)
+	}
+	if summary.AssignedSplit == nil {
+		t.Fatal("expected assigned split")
+	}
+	if *summary.AssignedSplit != (AssignedSplit{}) {
+		t.Fatalf("expected empty assigned split, got %+v", *summary.AssignedSplit)
+	}
+
+	items, _, err := st.ListDashboardTodos(ctx, user.ID, 10, nil, "activity")
+	if err != nil {
+		t.Fatalf("ListDashboardTodos: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("expected no dashboard todos, got %+v", items)
+	}
+}
+
+func TestDashboardSummary_AssignedTodoInActiveSprintCountsAsSprint(t *testing.T) {
+	st, cleanup := newTestStore(t)
+	defer cleanup()
+
+	ctx, user := dashboardTestContext(t, st)
+
+	project, err := st.CreateProject(ctx, "Assigned Active Sprint")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	now := time.Now().UTC()
+	if _, err := st.CreateSprint(ctx, project.ID, "Sprint 0", now.Add(time.Hour), now.Add(7*24*time.Hour)); err != nil {
+		t.Fatalf("CreateSprint setup: %v", err)
+	}
+	sprint, err := st.CreateSprint(ctx, project.ID, "Sprint 1", now.Add(-time.Hour), now.Add(14*24*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSprint: %v", err)
+	}
+	if sprint.ID == user.ID {
+		t.Fatalf("test setup requires sprint ID to differ from user ID; both were %d", user.ID)
+	}
+	if err := st.ActivateSprint(ctx, project.ID, sprint.ID); err != nil {
+		t.Fatalf("ActivateSprint: %v", err)
+	}
+
+	points := int64(3)
+	todo, err := st.CreateTodo(ctx, project.ID, CreateTodoInput{
+		Title:            "Assigned sprint work",
+		ColumnKey:        DefaultColumnDoing,
+		AssigneeUserID:   &user.ID,
+		EstimationPoints: &points,
+		SprintID:         &sprint.ID,
+	}, ModeFull)
+	if err != nil {
+		t.Fatalf("CreateTodo: %v", err)
+	}
+
+	summary, err := st.GetDashboardSummary(ctx, user.ID, "UTC")
+	if err != nil {
+		t.Fatalf("GetDashboardSummary: %v", err)
+	}
+	if summary.AssignedCount != 1 || summary.TotalAssignedStoryPoints != points {
+		t.Fatalf("expected assigned count=1 points=%d, got count=%d points=%d", points, summary.AssignedCount, summary.TotalAssignedStoryPoints)
+	}
+	if summary.AssignedSplit == nil {
+		t.Fatal("expected assigned split")
+	}
+	if summary.AssignedSplit.SprintCount != 1 || summary.AssignedSplit.SprintPoints != points {
+		t.Fatalf("expected active sprint work in sprint bucket, got %+v", *summary.AssignedSplit)
+	}
+	if summary.AssignedSplit.BacklogCount != 0 || summary.AssignedSplit.BacklogPoints != 0 {
+		t.Fatalf("expected empty backlog bucket, got %+v", *summary.AssignedSplit)
+	}
+
+	items, _, err := st.ListDashboardTodos(ctx, user.ID, 10, nil, "activity")
+	if err != nil {
+		t.Fatalf("ListDashboardTodos: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != todo.ID {
+		t.Fatalf("expected active sprint todo in dashboard list, got %+v", items)
+	}
+}
+
+func TestDashboardSummary_AssignedTodoInPlannedSprintCountsAsBacklog(t *testing.T) {
+	st, cleanup := newTestStore(t)
+	defer cleanup()
+
+	ctx, user := dashboardTestContext(t, st)
+
+	project, err := st.CreateProject(ctx, "Planned Sprint Workload")
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	now := time.Now().UTC()
+	sprint, err := st.CreateSprint(ctx, project.ID, "Sprint 1", now.Add(time.Hour), now.Add(14*24*time.Hour))
+	if err != nil {
+		t.Fatalf("CreateSprint: %v", err)
+	}
+
+	points := int64(3)
+	todo, err := st.CreateTodo(ctx, project.ID, CreateTodoInput{
+		Title:            "Assigned planned sprint work",
+		ColumnKey:        DefaultColumnDoing,
+		AssigneeUserID:   &user.ID,
+		EstimationPoints: &points,
+		SprintID:         &sprint.ID,
+	}, ModeFull)
+	if err != nil {
+		t.Fatalf("CreateTodo: %v", err)
+	}
+
+	summary, err := st.GetDashboardSummary(ctx, user.ID, "UTC")
+	if err != nil {
+		t.Fatalf("GetDashboardSummary: %v", err)
+	}
+	if summary.AssignedCount != 1 || summary.TotalAssignedStoryPoints != points {
+		t.Fatalf("expected assigned count=1 points=%d, got count=%d points=%d", points, summary.AssignedCount, summary.TotalAssignedStoryPoints)
+	}
+	if summary.AssignedSplit == nil {
+		t.Fatal("expected assigned split")
+	}
+	if summary.AssignedSplit.SprintCount != 0 || summary.AssignedSplit.SprintPoints != 0 {
+		t.Fatalf("expected planned sprint work outside current sprint bucket, got %+v", *summary.AssignedSplit)
+	}
+	if summary.AssignedSplit.BacklogCount != 1 || summary.AssignedSplit.BacklogPoints != points {
+		t.Fatalf("expected planned sprint work in backlog bucket, got %+v", *summary.AssignedSplit)
+	}
+
+	items, _, err := st.ListDashboardTodos(ctx, user.ID, 10, nil, "activity")
+	if err != nil {
+		t.Fatalf("ListDashboardTodos: %v", err)
+	}
+	if len(items) != 1 || items[0].ID != todo.ID {
+		t.Fatalf("expected planned sprint todo in dashboard list, got %+v", items)
+	}
+}
+
 func TestListDashboardTodos_CustomDoneKeyExcludesDone(t *testing.T) {
 	st, cleanup := newTestStore(t)
 	defer cleanup()

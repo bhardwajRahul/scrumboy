@@ -87,11 +87,11 @@ type DashboardSummary struct {
 	SprintCompletion         *SprintCompletion
 	SprintCompletionAllUsers *SprintCompletion
 	WipCount                 int
-	WipInProgressCount int
-	WipTestingCount    int
-	WeeklyThroughput   []WeeklyThroughputPoint
-	AvgLeadTimeDays    *float64 // created_at → done_at (lead time; we don't have first IN_PROGRESS)
-	OldestWip          *OldestWip
+	WipInProgressCount       int
+	WipTestingCount          int
+	WeeklyThroughput         []WeeklyThroughputPoint
+	AvgLeadTimeDays          *float64 // created_at → done_at (lead time; we don't have first IN_PROGRESS)
+	OldestWip                *OldestWip
 }
 
 type dashboardWorkflowSemantics struct {
@@ -219,12 +219,13 @@ ORDER BY p.name
 
 	if len(activeSprintIDs) > 0 {
 		ph := makePlaceholders(len(activeSprintIDs))
-		args := []any{userID}
+		args := make([]any, 0, len(activeSprintIDs)*4+1)
 		for i := 0; i < 4; i++ {
 			for _, id := range activeSprintIDs {
 				args = append(args, id)
 			}
 		}
+		args = append(args, userID)
 		var spPts, blPts sql.NullInt64
 		if err := s.db.QueryRowContext(ctx, `
 SELECT
