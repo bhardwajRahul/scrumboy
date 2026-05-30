@@ -2,6 +2,16 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
 
+## [3.17.2] - 2026-05-29
+
+### Fixed
+
+- **Dashboard sprint split** - Corrected SQL placeholder argument order for assigned sprint/backlog counts.
+
+### Tests
+
+- **Dashboard summary** - Coverage for unassigned work, active sprint assignment, and planned sprint backlog bucketing.
+
 ## [3.17.1] - 2026-05-28
 
 ### Fixed
