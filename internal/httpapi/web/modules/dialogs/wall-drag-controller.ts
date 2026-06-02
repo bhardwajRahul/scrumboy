@@ -28,6 +28,13 @@ import {
 import { DRAG_TRANSIENT_COALESCE_MS, TRANSIENT_COALESCE_MS } from "./wall-postbaby-constants.js";
 import { postTransient } from "./wall-api.js";
 import { getMounted, setDragActive, type Mounted } from "./wall-state.js";
+import {
+  MAX_CANVAS_COORD,
+  canvasDelta,
+  clampCanvasCoord,
+  getViewportState,
+  getWallContent,
+} from "./wall-viewport.js";
 
 // Phase 0 debug counters. Lifetime-accumulating across all drags in the
 // current session; reset via __resetDragCounters() in tests. Per-drag deltas
@@ -155,6 +162,7 @@ export function updateTrashHoverAny(participants: Array<{ el: HTMLElement }>): v
 
 export function isOverTrash(noteEl: HTMLElement): boolean {
   if (!wallTrash) return false;
+  // Screen-space OK: trash is a fixed viewport overlay; compare screen rects.
   const a = noteEl.getBoundingClientRect();
   const b = wallTrash.getBoundingClientRect();
   return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
@@ -172,10 +180,8 @@ export function beginDrag(opts: BeginDragOptions): void {
   if (!surface) return;
   const surfaceRect = surface.getBoundingClientRect();
   const noteRect = noteEl.getBoundingClientRect();
-  // shiftX/shiftY: offset from pointer-down position to the primary note's
-  // top-left, measured within the surface. Using the original downX/downY
-  // (rather than current pointer position) preserves the visual feel of
-  // Postbaby's `shiftX = clientX - rect.left` so the note doesn't jump.
+  const { panX, panY, zoom: z } = getViewportState();
+  // shiftX/shiftY: screen-space offset from pointer to note top-left at pointerdown.
   const shiftX = downX - noteRect.left;
   const shiftY = downY - noteRect.top;
 
@@ -258,23 +264,28 @@ export function beginDrag(opts: BeginDragOptions): void {
     if (animationFrameId !== null) return;
     animationFrameId = requestAnimationFrame(() => {
       animationFrameId = null;
-      const rawX = lastClientX - surfaceRect.left - shiftX;
-      const rawY = lastClientY - surfaceRect.top - shiftY;
+      const screenNoteLeft = lastClientX - shiftX;
+      const screenNoteTop = lastClientY - shiftY;
+      const rawX = (screenNoteLeft - surfaceRect.left - panX) / z;
+      const rawY = (screenNoteTop - surfaceRect.top - panY) / z;
       let minDeltaX = rawX - primary.x;
       let minDeltaY = rawY - primary.y;
       for (const p of participants) {
-        if (p.startX + minDeltaX < 0) minDeltaX = -p.startX;
-        if (p.startY + minDeltaY < 0) minDeltaY = -p.startY;
+        if (p.startX + minDeltaX < -MAX_CANVAS_COORD) minDeltaX = -MAX_CANVAS_COORD - p.startX;
+        if (p.startY + minDeltaY < -MAX_CANVAS_COORD) minDeltaY = -MAX_CANVAS_COORD - p.startY;
+        if (p.startX + minDeltaX > MAX_CANVAS_COORD) minDeltaX = MAX_CANVAS_COORD - p.startX;
+        if (p.startY + minDeltaY > MAX_CANVAS_COORD) minDeltaY = MAX_CANVAS_COORD - p.startY;
       }
       let edgeCallsThisTick = 0;
       for (const p of participants) {
-        const nx = p.startX + minDeltaX;
-        const ny = p.startY + minDeltaY;
+        const nx = clampCanvasCoord(p.startX + minDeltaX);
+        const ny = clampCanvasCoord(p.startY + minDeltaY);
         p.el.style.left = `${Math.round(nx)}px`;
         p.el.style.top = `${Math.round(ny)}px`;
         storeTransientPosition(p.id, nx, ny);
-        if (wallSurface) {
-          updateEdgesForNote(wallSurface, p.id, nx + p.el.offsetWidth / 2, ny + p.el.offsetHeight / 2);
+        const edgeRoot = getWallContent() ?? wallSurface;
+        if (edgeRoot) {
+          updateEdgesForNote(edgeRoot, p.id, nx + p.el.offsetWidth / 2, ny + p.el.offsetHeight / 2);
           edgeCallsThisTick += 1;
         }
       }
@@ -336,8 +347,9 @@ export function beginDrag(opts: BeginDragOptions): void {
       for (const p of participants) {
         p.el.style.left = `${Math.round(p.startX)}px`;
         p.el.style.top = `${Math.round(p.startY)}px`;
-        if (wallSurface) {
-          updateEdgesForNote(wallSurface, p.id, p.startX + p.el.offsetWidth / 2, p.startY + p.el.offsetHeight / 2);
+        const edgeRoot = getWallContent() ?? wallSurface;
+        if (edgeRoot) {
+          updateEdgesForNote(edgeRoot, p.id, p.startX + p.el.offsetWidth / 2, p.startY + p.el.offsetHeight / 2);
         }
       }
       opts.onDropOnTrash(participants.map((p) => p.id), isGroup);
@@ -376,8 +388,8 @@ export function startResize(opts: StartResizeOptions): void {
 
   const onMove = (mv: PointerEvent) => {
     mv.preventDefault();
-    const dw = mv.clientX - startX;
-    const dh = mv.clientY - startY;
+    const dw = canvasDelta(mv.clientX - startX);
+    const dh = canvasDelta(mv.clientY - startY);
     const w = clampDim(origW + dw, MIN_NOTE_WIDTH, MAX_NOTE_WIDTH);
     const h = clampDim(origH + dh, MIN_NOTE_HEIGHT, MAX_NOTE_HEIGHT);
     noteEl.style.width = `${Math.round(w)}px`;
