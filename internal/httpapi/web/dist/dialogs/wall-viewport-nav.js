@@ -2,6 +2,18 @@
 // Listeners use the wall mount AbortSignal; space-held state clears on blur.
 import { clampPan, getViewportState, isNavigationSuppressed, panBy, scheduleSaveViewport, setViewportState, zoomAround, } from "./wall-viewport.js";
 const WHEEL_ZOOM_FACTOR = 1.08;
+// Approximate pixel sizes for line/page wheel modes (Firefox, some mice).
+const WHEEL_LINE_PX = 16;
+const WHEEL_PAGE_PX = 800;
+/** Normalize wheel deltas to pixels regardless of deltaMode. */
+function wheelPixels(ev) {
+    const unit = ev.deltaMode === WheelEvent.DOM_DELTA_LINE
+        ? WHEEL_LINE_PX
+        : ev.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? WHEEL_PAGE_PX
+            : 1;
+    return { dx: ev.deltaX * unit, dy: ev.deltaY * unit };
+}
 let spaceHeld = false;
 let spacePanActive = false;
 let middlePanActive = false;
@@ -17,12 +29,13 @@ function onWheel(ev) {
     if (isNavigationSuppressed(ev.target))
         return;
     ev.preventDefault();
+    const { dx, dy } = wheelPixels(ev);
     if (ev.ctrlKey || ev.metaKey) {
-        const factor = ev.deltaY < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR;
+        const factor = dy < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR;
         zoomAround(ev.clientX, ev.clientY, factor);
         return;
     }
-    panBy(-ev.deltaX, -ev.deltaY);
+    panBy(-dx, -dy);
 }
 function onKeyDown(ev) {
     if (ev.code !== "Space" || ev.repeat)
@@ -61,6 +74,10 @@ function bindPanPointer(surface, signal, shouldStart, onActiveChange) {
         ev.preventDefault();
         onActiveChange(true);
         beginPanGesture(ev.clientX, ev.clientY, getViewportState);
+        // Tear down the document listeners on pointerup/cancel AND if the wall
+        // closes mid-drag (wall signal). onUp is idempotent so abort + pointerup
+        // both firing is safe.
+        let ended = false;
         const onMove = (mv) => {
             mv.preventDefault();
             const st = getViewportState();
@@ -69,12 +86,17 @@ function bindPanPointer(surface, signal, shouldStart, onActiveChange) {
             });
         };
         const onUp = () => {
+            if (ended)
+                return;
+            ended = true;
             document.removeEventListener("pointermove", onMove);
             document.removeEventListener("pointerup", onUp);
             document.removeEventListener("pointercancel", onUp);
+            signal.removeEventListener("abort", onUp);
             onActiveChange(false);
             scheduleSaveViewport();
         };
+        signal.addEventListener("abort", onUp);
         document.addEventListener("pointermove", onMove, { passive: false });
         document.addEventListener("pointerup", onUp);
         document.addEventListener("pointercancel", onUp);

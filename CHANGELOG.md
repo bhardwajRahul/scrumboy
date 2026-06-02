@@ -12,6 +12,13 @@
 
 - **Wall coordinates** - Notes can be placed at negative canvas coordinates (matching the server’s ±100000 bound). Drag, resize, marquee select, edge preview, and create-at-pointer all use a shared screen-to-canvas transform so gestures stay correct at any zoom.
 
+### Fixed
+
+- **Wall fit view** - Fit-to-notes can zoom out below the manual zoom floor (`FIT_ZOOM_MIN`) so widely spread notes actually fit on screen; manual zoom still bottoms out at 0.2× for legibility.
+- **Wall viewport persistence** - Saved and loaded pan/zoom clamp pan against the stored zoom (not a stale module zoom), so reload after low-zoom sessions restores a consistent view.
+- **Wall pan while closing** - Middle-drag and Space+drag document listeners are torn down if the wall closes mid-gesture, preventing ghost panning or surprise viewport state on the next open.
+- **Wall wheel pan on Firefox** - Scroll-wheel deltas are normalized for line/page `deltaMode` so pan and zoom speed match pixel-mode wheels in Chromium.
+
 ### Documentation
 
 - **`docs/wall.md`** - Pan, zoom, and fit-view controls.

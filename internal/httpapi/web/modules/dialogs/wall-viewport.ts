@@ -14,6 +14,10 @@ import type { WallNote } from "./wall-rendering.js";
 
 export const ZOOM_MIN = 0.2;
 export const ZOOM_MAX = 3;
+// Fit-view can zoom out further than manual zoom so a wide spread of notes can
+// actually all fit on screen (manual ZOOM_MIN keeps notes legible; fit does not
+// have to). Below this, notes would be sub-pixel anyway.
+export const FIT_ZOOM_MIN = 0.02;
 /** Matches internal/store/wall.go maxNoteCoordinate */
 export const MAX_CANVAS_COORD = 100_000;
 
@@ -49,16 +53,27 @@ export function clampZoom(z: number): number {
   return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
 }
 
-function maxPanAbs(): number {
-  return MAX_CANVAS_COORD * zoom + 10_000;
+/** Zoom clamp for fit-view: allows deeper zoom-out than manual ZOOM_MIN. */
+export function clampFitZoom(z: number): number {
+  if (!Number.isFinite(z)) return 1;
+  return Math.max(FIT_ZOOM_MIN, Math.min(ZOOM_MAX, z));
 }
 
-export function clampPan(p: number): number {
+function panBoundForZoom(z: number): number {
+  return MAX_CANVAS_COORD * (Number.isFinite(z) ? z : 1) + 10_000;
+}
+
+/** Clamp pan using an explicit zoom (avoids depending on stale module zoom). */
+export function clampPanForZoom(p: number, z: number): number {
   if (!Number.isFinite(p)) return 0;
-  const bound = maxPanAbs();
+  const bound = panBoundForZoom(z);
   if (p < -bound) return -bound;
   if (p > bound) return bound;
   return p;
+}
+
+export function clampPan(p: number): number {
+  return clampPanForZoom(p, zoom);
 }
 
 function identityViewport(): ViewportState {
@@ -77,10 +92,11 @@ export function normalizePersistedViewport(raw: unknown): ViewportState | null {
   const py = o.panY;
   const z = o.zoom;
   if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(z)) return null;
+  const nextZoom = clampZoom(z as number);
   return {
-    panX: clampPan(px as number),
-    panY: clampPan(py as number),
-    zoom: clampZoom(z as number),
+    panX: clampPanForZoom(px as number, nextZoom),
+    panY: clampPanForZoom(py as number, nextZoom),
+    zoom: nextZoom,
   };
 }
 
@@ -103,10 +119,11 @@ export function loadViewport(slug: string): ViewportState {
 
 export function saveViewportNow(slug: string, state: ViewportState = getViewportState()): void {
   try {
+    const z = clampZoom(state.zoom);
     const payload: PersistedViewport = {
-      panX: clampPan(state.panX),
-      panY: clampPan(state.panY),
-      zoom: clampZoom(state.zoom),
+      panX: clampPanForZoom(state.panX, z),
+      panY: clampPanForZoom(state.panY, z),
+      zoom: z,
     };
     localStorage.setItem(storageKey(slug), JSON.stringify(payload));
   } catch {
@@ -134,9 +151,9 @@ export function initWallViewport(
   viewportContent = content;
   viewportSlug = slug;
   const loaded = persisted ?? loadViewport(slug);
-  panX = clampPan(loaded.panX);
-  panY = clampPan(loaded.panY);
   zoom = clampZoom(loaded.zoom);
+  panX = clampPanForZoom(loaded.panX, zoom);
+  panY = clampPanForZoom(loaded.panY, zoom);
   applyTransform();
 }
 
@@ -167,9 +184,9 @@ export function getViewportZoom(): number {
 }
 
 export function setViewportState(state: ViewportState): void {
-  panX = clampPan(state.panX);
-  panY = clampPan(state.panY);
   zoom = clampZoom(state.zoom);
+  panX = clampPanForZoom(state.panX, zoom);
+  panY = clampPanForZoom(state.panY, zoom);
   applyTransform();
   scheduleSaveViewport();
 }
@@ -246,12 +263,12 @@ export function fitToNotes(notes: WallNote[]): void {
   const r = surfaceRect();
   const availW = Math.max(1, r.width - FIT_PADDING_PX * 2);
   const availH = Math.max(1, r.height - FIT_PADDING_PX * 2);
-  const fitZoom = clampZoom(Math.min(availW / bboxW, availH / bboxH, 1));
+  const fitZoom = clampFitZoom(Math.min(availW / bboxW, availH / bboxH, 1));
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
   zoom = fitZoom;
-  panX = clampPan(r.width / 2 - cx * zoom);
-  panY = clampPan(r.height / 2 - cy * zoom);
+  panX = clampPanForZoom(r.width / 2 - cx * zoom, zoom);
+  panY = clampPanForZoom(r.height / 2 - cy * zoom, zoom);
   applyTransform();
   scheduleSaveViewport();
 }

@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  FIT_ZOOM_MIN,
   ZOOM_MAX,
   ZOOM_MIN,
   canvasDelta,
+  clampPanForZoom,
   ensureWallContent,
   fitToNotes,
+  getViewportState,
   initWallViewport,
   loadViewport,
   normalizePersistedViewport,
@@ -111,5 +114,34 @@ describe("wall-viewport", () => {
     initWallViewport(surface, ensureWallContent(surface), "empty", { panX: 500, panY: 500, zoom: 0.5 });
     fitToNotes([]);
     expect(screenToCanvas(100, 100)).toEqual({ x: 100, y: 100 });
+  });
+
+  it("fitToNotes zooms out below manual ZOOM_MIN for a wide spread (issue 2)", () => {
+    // ~20000px spread on an 800x600 surface needs zoom well under ZOOM_MIN.
+    fitToNotes([
+      { id: "a", x: -10000, y: -10000, width: 180, height: 140, color: "#fff", text: "", version: 1 },
+      { id: "b", x: 10000, y: 10000, width: 180, height: 140, color: "#fff", text: "", version: 1 },
+    ]);
+    const { zoom } = getViewportState();
+    expect(zoom).toBeLessThan(ZOOM_MIN);
+    expect(zoom).toBeGreaterThanOrEqual(FIT_ZOOM_MIN);
+  });
+
+  it("clampPanForZoom uses the passed zoom, not module state (issue 3)", () => {
+    // Bound scales with zoom: a small zoom clamps pan tighter than zoom=3.
+    const atLowZoom = clampPanForZoom(1_000_000, 0.02);
+    const atHighZoom = clampPanForZoom(1_000_000, 3);
+    expect(atLowZoom).toBeLessThan(atHighZoom);
+  });
+
+  it("loadViewport clamps stored pan against its own zoom (issue 3)", () => {
+    // Large pan saved with a tiny zoom must clamp to that zoom's bound on load.
+    localStorage.setItem(
+      storageKey("zedge"),
+      JSON.stringify({ panX: 99_999_999, panY: 0, zoom: 0.2 }),
+    );
+    const v = loadViewport("zedge");
+    expect(v.zoom).toBe(0.2);
+    expect(v.panX).toBe(clampPanForZoom(99_999_999, 0.2));
   });
 });
