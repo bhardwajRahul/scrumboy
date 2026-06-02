@@ -2,6 +2,29 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
 
+## [3.17.3] - 2026-06-01
+
+### Changed
+
+- **Temporary board lifetime** - Link-expiring boards now use a **90-day** rolling `expires_at` window (`TemporaryBoardLifetimeDays`), applied at creation, on import paths, and when **`UpdateBoardActivity`** refreshes activity (throttled to once every 5 minutes). Previously the window was 14 days.
+
+### Fixed
+
+- **Expired temporary boards** - Once `expires_at` is in the past, board reads and mutations return **404** until the project row is removed, including todo/tag routes and import-into-board targets. Rename and claim already refused expired boards; other paths now match.
+
+### Improvements
+
+- **Expiration cleanup scope** - Comments and operator docs clarify that **`DeleteExpiredProjects`** removes every expired temporary board (anonymous and authenticated), not only unowned paste boards.
+
+### Tests
+
+- **Temporary board expiration** - Store and HTTP coverage for 90-day initial expiry, rolling **`UpdateBoardActivity`** refresh, blocked anonymous project delete, expired-board **404**s, import replace forbidden in anonymous mode, anonymous-mode PATCH rename rules, authenticated temp cleanup, todo cascade on expiry, and append-only **`audit_events`** rows surviving project deletion.
+
+### Documentation
+
+- **`FAQ.md`** - New **“What is a temporary board?”** entry (sharing, 90-day rolling expiry, activity refresh).
+- **`docs/roles_and_permissions.md`** and **`docs/audit_trail.md`** - Expiration wording and **`audit_events`** retention vs project cleanup.
+
 ## [3.17.2] - 2026-05-29
 
 ### Fixed

@@ -942,6 +942,9 @@ func (s *Store) importIntoBoard(ctx context.Context, data *ExportData, mode Mode
 	if targetProject.ExpiresAt == nil {
 		return nil, fmt.Errorf("%w: target board is not an anonymous board", ErrValidation)
 	}
+	if err := rejectIfExpiredTemporaryProject(targetProject); err != nil {
+		return nil, err
+	}
 
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
@@ -1429,8 +1432,7 @@ func (s *Store) importMergeUpdate(ctx context.Context, data *ExportData, mode Mo
 				// For temporary boards, give a fresh expiration date instead of preserving the old one
 				expiresAtMs.Valid = true
 				if mode == ModeAnonymous {
-					// Anonymous boards: 14 days from now
-					expiresAtMs.Int64 = time.Now().UTC().Add(14 * 24 * time.Hour).UnixMilli()
+					expiresAtMs.Int64 = temporaryBoardExpiresAtMs(time.Now().UTC().UnixMilli())
 				} else {
 					// Full mode temp boards: preserve original expiration (user's choice)
 					expiresAtMs.Int64 = pExport.ExpiresAt.UnixMilli()
@@ -1750,8 +1752,7 @@ func (s *Store) importCreateCopy(ctx context.Context, data *ExportData, mode Mod
 			// This prevents importing boards that are already expired or about to expire
 			expiresAtMs.Valid = true
 			if mode == ModeAnonymous {
-				// Anonymous boards: 14 days from now
-				expiresAtMs.Int64 = time.Now().UTC().Add(14 * 24 * time.Hour).UnixMilli()
+				expiresAtMs.Int64 = temporaryBoardExpiresAtMs(time.Now().UTC().UnixMilli())
 			} else {
 				// Full mode temp boards: preserve original expiration (user's choice)
 				expiresAtMs.Int64 = pExport.ExpiresAt.UnixMilli()

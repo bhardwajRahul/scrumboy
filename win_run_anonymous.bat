@@ -9,7 +9,7 @@ echo ========================================
 echo.
 echo Data will be stored in ./data/app.db
 echo Mode: Anonymous (single-board, auto-creates on /^)
-echo Boards expire after 14 days of inactivity
+echo Boards expire after 90 days without activity
 echo.
 
 REM ---- Free port 8080 ----

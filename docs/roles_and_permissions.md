@@ -60,9 +60,11 @@ Permissions flow: `permissions.go` → store enforcement → API error mapping �
 
 **Bypass rules:**
 - Create, delete, move todos: allowed without auth
-- Rename project: allowed without auth
+- Rename project: allowed without auth (active boards only; past `expires_at` → 404)
 - Assignment: not allowed (validation error)
 - Project image, delete project: immutable (404)
+
+**Expiration:** Temporary boards use `expires_at` (initially 90 days from creation; board activity can roll the expiry forward). Once `expires_at` is in the past, board reads and mutations return **404** until the project row is removed. This applies to authenticated temporary boards in full mode as well as unowned anonymous boards.
 
 **UI:** New Todo and drag-and-drop are enabled for anonymous boards (same as Maintainer on durable boards).
 
