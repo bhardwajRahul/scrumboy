@@ -103,6 +103,12 @@ Store methods that write audit events:
 
 ---
 
+## Retention vs project cleanup
+
+`audit_events` references `project_id` but has **no foreign key** to `projects` and is **append-only** (migration 047 blocks updates and deletes on audit rows). When an expired temporary board is removed, dependent todos/tags cascade via `ON DELETE CASCADE`, but audit rows for that `project_id` may remain on purpose. That is expected, not a missing cascade.
+
+---
+
 ## Security
 
 - **Immutability:** Append-only triggers prevent tampering

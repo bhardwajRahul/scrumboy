@@ -2606,14 +2606,14 @@ func TestAnonymousMode_BoardRouteServesSPA(t *testing.T) {
 }
 
 func TestExpiredProjectCleanup(t *testing.T) {
+	// DeleteExpiredProjects removes every project with expires_at in the past (anonymous and authenticated temps).
 	_, sqlDB, cleanup := newTestHTTPServer(t, "full")
 	defer cleanup()
 
 	st := store.New(sqlDB, nil)
 
-	// Create a project with expires_at in the past
 	nowMs := time.Now().UTC().UnixMilli()
-	pastMs := nowMs - (15 * 24 * 60 * 60 * 1000) // 15 days ago
+	pastMs := nowMs - int64((91 * 24 * time.Hour).Milliseconds()) // clearly past any 90-day lifetime
 	_, err := sqlDB.Exec(`INSERT INTO projects(name, image, slug, last_activity_at, expires_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		"expired", "/scrumboy.png", "expired123", nowMs, pastMs, nowMs, nowMs)
 	if err != nil {
@@ -2942,7 +2942,7 @@ func TestAnonymousMode_RenameProjectAuthorization(t *testing.T) {
 
 	// Create temp board with creator_user_id set (authenticated temp board)
 	nowMs := time.Now().UTC().UnixMilli()
-	expiresAtMs := nowMs + (14 * 24 * 60 * 60 * 1000)
+	expiresAtMs := nowMs + int64((store.TemporaryBoardLifetimeDays * 24 * time.Hour).Milliseconds())
 	var authenticatedTempProjectID int64
 	if err := sqlDB.QueryRow(`INSERT INTO projects (name, image, slug, creator_user_id, last_activity_at, expires_at, created_at, updated_at) 
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
