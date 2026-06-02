@@ -5,6 +5,7 @@
 - [How do I enable Markdown in my notes?](#how-do-i-enable-markdown-in-my-notes)
 - [How do I enable Mermaid diagrams in my notes?](#how-do-i-enable-mermaid-diagrams-in-my-notes)
 - [How do I edit several todos at once?](#how-do-i-edit-several-todos-at-once)
+- [What is a temporary board?](#what-is-a-temporary-board)
 - [What does the done lane mean for dashboard stats?](#what-does-the-done-lane-mean-for-dashboard-stats)
 - [Are tag colors personal, or shared with the team?](#are-tag-colors-personal-or-shared-with-the-team)
 - [How do I use Scrumboy with Claude or other MCP clients?](#how-do-i-use-scrumboy-with-claude-or-other-mcp-clients)
@@ -64,6 +65,34 @@ On the board, hold **Ctrl** (Windows/Linux) or **⌘ Command** (Mac) and click t
 In that dialog, turn on only the changes you want (each field has its own checkbox), then click **Apply**. Updates apply to the selected todos only - not the whole board. Tags you add are merged onto each card; they do not remove existing tags.
 
 A normal click on a card (without Ctrl/⌘) opens the usual single-todo editor and clears the selection. Viewers cannot use multi-select; Ctrl/⌘+click still opens one todo for them.
+
+## What is a temporary board?
+
+A **temporary board** is a Scrumboy project with an **`expires_at`** timestamp. It is meant to be shared by URL (pastebin-style) rather than kept as a long-lived team project. Durable projects have **`expires_at` unset** and use normal sign-in, members, and roles.
+
+**How you get one**
+
+- Open **`/anon`** (or **`/temp`**, which redirects there). Scrumboy creates a new board and sends you to **`/{slug}`** - that link is how you share it.
+- In **full mode**, if you are signed in when the board is created, it is still temporary but recorded as yours (**“Temporary Board”**, with a `creator_user_id`). You can later **claim** it to turn it into a durable project (`POST /api/board/{slug}/claim` while logged in).
+- In **anonymous server mode** (`SCRUMBOY_MODE=anonymous`), the instance is built for temporary boards only; new boards from `/anon` have **no owner** (**“Anonymous Board”**, `creator_user_id` is null).
+
+**Anonymous temporary boards** (no owner: `expires_at` is set and `creator_user_id` is null) can be used **without signing in**. Anyone with the link can create, edit, move, and delete todos and rename the board. They cannot assign todos to users, change the project image, or delete the whole project from the UI. Tag colors on that board are shared for everyone on the link.
+
+**When it expires**
+
+- New temporary boards start with **`expires_at` about 90 days ahead** (`TemporaryBoardLifetimeDays` in the server code).
+- **Yes, activity resets the expiry window** - but not as a separate “inactivity counter.” When the board is used, the server runs **`UpdateBoardActivity`**, which sets **`expires_at` to about 90 days from that moment** (rolling lifetime). Qualifying activity includes loading the board (for example a full board read) and todo changes (create, update, move, delete). Updates are **throttled to at most once every 5 minutes** per board so rapid refreshes do not hammer the database.
+- After **`expires_at` has passed**, the board URL returns **404** for reads and edits until the server removes the expired row. There is no “grace period” in the API after expiry.
+
+**Compared to a normal project**
+
+| | Temporary board | Durable project |
+|--|-----------------|-----------------|
+| Lifetime | `expires_at` (90-day rolling window with activity) | No expiry |
+| Sharing | Link-based; anonymous temps need no login | Members and roles |
+| Delete project | Not offered for anonymous temps | Maintainers can delete |
+
+For permissions detail, see [`docs/roles_and_permissions.md`](docs/roles_and_permissions.md).
 
 # Dashboard
 
