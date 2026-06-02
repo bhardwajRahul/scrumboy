@@ -35,6 +35,12 @@ export function setupWallDom(refs: WallDomRefs, slug = "test-wall"): void {
   refs.wallDialogEl.innerHTML = "";
   refs.wallSurfaceEl.innerHTML = "";
   refs.wallDialogEl.appendChild(refs.wallSurfaceEl);
+  const modeBtn = document.createElement("button");
+  modeBtn.id = "wallModeToggleBtn";
+  refs.wallDialogEl.appendChild(modeBtn);
+  const fitBtn = document.createElement("button");
+  fitBtn.id = "wallFitViewBtn";
+  refs.wallDialogEl.appendChild(fitBtn);
   document.body.appendChild(refs.wallDialogEl);
   document.body.appendChild(refs.closeWallBtnEl);
   document.body.appendChild(refs.wallTrashEl);
@@ -88,6 +94,8 @@ export function dispatchPointer(
     clientX: 30,
     clientY: 30,
     button: 0,
+    pointerId: 1,
+    pointerType: "mouse",
     shiftKey: false,
     ctrlKey: false,
     metaKey: false,
