@@ -140,7 +140,7 @@ export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void>
   wallSurface.classList.toggle("wall-surface--readonly", !canEdit);
   const content = ensureWallContent(wallSurface);
   initWallViewport(wallSurface, content, opts.slug);
-  bindWallNavigation(wallSurface, state.abort.signal);
+  bindWallNavigation(wallSurface, state.abort.signal, () => dialog.open);
   renderSurface();
 
   if (closeWallBtn) {

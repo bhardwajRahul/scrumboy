@@ -19,5 +19,7 @@ Run each scenario in a real browser (Chromium/Firefox) at **zoom ≠ 1** and wit
 | 13 | Edit suppression | Wheel / Space+drag do nothing while editing note text |
 | 14 | Input suppression | Wheel does nothing when focus in textarea/button |
 | 15 | Teardown | Close wall → Space pan not stuck; page scroll normal |
+| 16 | Arrow-key pan | Arrow keys pan the canvas; Shift = larger steps; page behind modal does not scroll |
+| 17 | Arrow suppression | Arrow keys move the caret (no pan) while editing note text or with focus in an input/button |
 
-Navigation reference: wheel = pan, Ctrl/Cmd+wheel = zoom, middle-drag / Space+drag = pan.
+Navigation reference: wheel = pan, Ctrl/Cmd+wheel = zoom, middle-drag / Space+drag / arrow keys = pan.
