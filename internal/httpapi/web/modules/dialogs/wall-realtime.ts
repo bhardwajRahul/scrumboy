@@ -18,6 +18,7 @@
 //     `stop()` handle that unsubscribes from the event bus.
 
 import { wallDialog, wallSurface } from "../dom/elements.js";
+import { getWallContent } from "./wall-viewport.js";
 import { on, off } from "../events.js";
 import { showToast } from "../utils.js";
 import { updateEdgesForNote, type WallDocument } from "./wall-rendering.js";
@@ -127,7 +128,10 @@ export function applyTransient(
   if (el.classList.contains("wall-note--dragging")) return;
   el.style.left = `${Math.round(x)}px`;
   el.style.top = `${Math.round(y)}px`;
-  updateEdgesForNote(wallSurface, noteId, x + el.offsetWidth / 2, y + el.offsetHeight / 2);
+  const edgeRoot = getWallContent() ?? wallSurface;
+  if (edgeRoot) {
+    updateEdgesForNote(edgeRoot, noteId, x + el.offsetWidth / 2, y + el.offsetHeight / 2);
+  }
 }
 
 export interface StartRealtimeOptions {

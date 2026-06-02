@@ -21,6 +21,9 @@ Sticky-note board for durable projects. Open it from the board topbar (desktop o
 - **Exit multi-select on canvas** - **Click** empty space (no drag).
 - **Move a group** - With multiple notes selected, drag one of them; all selected notes move together. Selection clears when you release the drag.
 - **Delete several at once** - Drag the group over the trash; one confirmation lists how many notes will be deleted.
+- **Pan the canvas** - Scroll wheel, **middle-mouse drag**, hold **Space** and drag on empty canvas, or use the **arrow keys** (hold **Shift** for larger steps).
+- **Zoom** - **Ctrl**+scroll (Windows/Linux) or **⌘**+scroll (Mac). Pinch-to-zoom on trackpads uses the same modifier.
+- **Fit view** - Click the **⊡** button (top-right, beside close) or press **F** while the wall is open. Recenters on all notes (or origin when empty). Your pan/zoom per board is remembered in the browser.
 
 ## Disabling the wall
 

@@ -35,6 +35,8 @@ import { beginDrag as beginDragController, startResize as startResizeController,
 import { applyTransient as applyTransientImpl, refetchDoc as refetchDocImpl, startRealtime, } from "./wall-realtime.js";
 import { beginEdit as beginEditController } from "./wall-edit-controller.js";
 import { openWallNoteContextMenu } from "./wall-note-context-menu.js";
+import { clampCanvasCoord, ensureWallContent, fitToNotes, getWallContent, initWallViewport, screenToCanvas, teardownWallViewport, } from "./wall-viewport.js";
+import { bindWallNavigation, isSpacePanArmed } from "./wall-viewport-nav.js";
 const TEARDOWN_MARKER = Symbol("wallMounted");
 // Public entry: open the wall dialog and boot its full lifecycle.
 export async function openWallDialog(opts) {
@@ -69,10 +71,34 @@ export async function openWallDialog(opts) {
     setMounted(state);
     dialog[TEARDOWN_MARKER] = true;
     wallSurface.classList.toggle("wall-surface--readonly", !canEdit);
+    const content = ensureWallContent(wallSurface);
+    initWallViewport(wallSurface, content, opts.slug);
+    bindWallNavigation(wallSurface, state.abort.signal, () => dialog.open);
     renderSurface();
     if (closeWallBtn) {
         closeWallBtn.addEventListener("click", () => dialog.close(), { signal: state.abort.signal });
     }
+    const fitBtn = document.getElementById("wallFitViewBtn");
+    if (fitBtn) {
+        fitBtn.addEventListener("click", () => {
+            const m = getMounted();
+            if (m)
+                fitToNotes(m.doc.notes);
+        }, { signal: state.abort.signal });
+    }
+    window.addEventListener("keydown", (ev) => {
+        if (ev.key !== "f" && ev.key !== "F")
+            return;
+        if (!dialog.open)
+            return;
+        if (ev.target instanceof HTMLElement && ev.target.matches("textarea, input, select, [contenteditable='true']"))
+            return;
+        const m = getMounted();
+        if (m) {
+            ev.preventDefault();
+            fitToNotes(m.doc.notes);
+        }
+    }, { signal: state.abort.signal });
     dialog.addEventListener("close", teardown, { signal: state.abort.signal, once: true });
     dialog.addEventListener("cancel", () => dialog.close(), { signal: state.abort.signal });
     const stopRealtime = startRealtime({
@@ -100,8 +126,13 @@ function teardown() {
     state.transient.clear();
     state.selected.clear();
     state.abort.abort();
-    if (wallSurface)
-        wallSurface.innerHTML = "";
+    teardownWallViewport();
+    if (wallSurface) {
+        wallSurface.querySelectorAll(".wall-empty").forEach((el) => el.remove());
+        const content = wallSurface.querySelector(".wall-content");
+        if (content)
+            content.innerHTML = "";
+    }
     if (wallTrash) {
         wallTrash.classList.remove("wall-trash--visible");
         wallTrash.classList.remove("wall-trash--active");
@@ -231,9 +262,17 @@ export function __resetWallRenderCounters() {
     wallRenderCounters.fullRebuilds = 0;
     wallRenderCounters.incrementalPatches = 0;
 }
+function wallContentLayer() {
+    if (!wallSurface)
+        return null;
+    return getWallContent() ?? ensureWallContent(wallSurface);
+}
 function renderSurface() {
     const state = getMounted();
     if (!state || !wallSurface)
+        return;
+    const content = wallContentLayer();
+    if (!content)
         return;
     wallRenderCounters.fullRebuilds += 1;
     if (debugEnabled()) {
@@ -244,20 +283,21 @@ function renderSurface() {
             edges: state.doc.edges?.length ?? 0,
         });
     }
-    wallSurface.innerHTML = "";
+    wallSurface.querySelectorAll(".wall-empty").forEach((el) => el.remove());
+    content.innerHTML = "";
     if (state.doc.notes.length === 0) {
-        wallSurface.innerHTML = renderEmptyWallHtml(state.canEdit);
+        wallSurface.insertAdjacentHTML("beforeend", renderEmptyWallHtml(state.canEdit));
         return;
     }
     const frag = document.createDocumentFragment();
     for (const note of state.doc.notes) {
         frag.appendChild(buildNoteElement(note, state.canEdit));
     }
-    wallSurface.appendChild(frag);
+    content.appendChild(frag);
     // SVG overlay must be appended after notes are in the DOM so noteCenter()
     // can read offsetLeft/offsetWidth on the freshly-mounted note elements.
-    ensureEdgeOverlay(wallSurface);
-    renderEdges(wallSurface, state.doc.edges ?? []);
+    ensureEdgeOverlay(content);
+    renderEdges(content, state.doc.edges ?? []);
     // Drop selection entries whose notes no longer exist (remote delete,
     // server-side reconcile), then reapply the `--selected` class.
     pruneSelection();
@@ -288,8 +328,9 @@ function updateNoteElement(note) {
         display.textContent = note.text;
     // Keep edge endpoints in sync with the note's authoritative center after a
     // size or position change (e.g. resize commit, remote PATCH echo).
-    if (wallSurface) {
-        updateEdgesForNote(wallSurface, note.id, note.x + note.width / 2, note.y + note.height / 2);
+    const content = wallContentLayer();
+    if (content) {
+        updateEdgesForNote(content, note.id, note.x + note.width / 2, note.y + note.height / 2);
     }
 }
 function findNote(id) {
@@ -309,8 +350,8 @@ async function createNoteAt(x, y) {
         return;
     try {
         const created = await createNoteRemote(state.slug, {
-            x: Math.max(0, Math.round(x)),
-            y: Math.max(0, Math.round(y)),
+            x: Math.round(clampCanvasCoord(x)),
+            y: Math.round(clampCanvasCoord(y)),
             width: DEFAULT_NOTE_WIDTH,
             height: DEFAULT_NOTE_HEIGHT,
             color: RAINBOW_COLORS[0],
@@ -397,8 +438,9 @@ async function createEdge(fromId, toId) {
         if (!state.doc.edges.some((e) => e.id === created.id)) {
             state.doc.edges.push(created);
         }
-        if (wallSurface)
-            renderEdges(wallSurface, state.doc.edges);
+        const content = wallContentLayer();
+        if (content)
+            renderEdges(content, state.doc.edges);
     }
     catch (err) {
         console.warn("wall edge create failed", err);
@@ -416,8 +458,9 @@ async function deleteEdge(edgeId) {
         if (state.doc.edges) {
             state.doc.edges = state.doc.edges.filter((e) => e.id !== edgeId);
         }
-        if (wallSurface)
-            renderEdges(wallSurface, state.doc.edges ?? []);
+        const content = wallContentLayer();
+        if (content)
+            renderEdges(content, state.doc.edges ?? []);
     }
     catch (err) {
         console.warn("wall edge delete failed", err);
@@ -482,6 +525,8 @@ function bindSurfaceHandlers(state) {
             return;
         }
         if (noteEl) {
+            if (isSpacePanArmed())
+                return;
             const noteId = noteEl.dataset.noteId || "";
             if (!noteId)
                 return;
@@ -522,7 +567,8 @@ function bindSurfaceHandlers(state) {
         }
         // Empty canvas, primary button: begin marquee (unless Shift is held —
         // Shift is reserved for edge-from-note and has no empty-canvas meaning).
-        if (ev.button === 0 && !ev.shiftKey) {
+        // Space+drag is reserved for viewport pan (wall-viewport-nav).
+        if (ev.button === 0 && !ev.shiftKey && !isSpacePanArmed()) {
             beginMarquee(state, ev);
             return;
         }
@@ -604,20 +650,18 @@ function bindSurfaceHandlers(state) {
             return;
         }
         ev.preventDefault();
-        const rect = surface.getBoundingClientRect();
-        const x = ev.clientX - rect.left;
-        const y = ev.clientY - rect.top;
+        const { x, y } = screenToCanvas(ev.clientX, ev.clientY);
         void createNoteAt(x, y);
     }, { signal: state.abort.signal });
 }
 // ---- Marquee multi-select (empty-canvas drag) --------------------------
 function beginMarquee(state, ev) {
-    if (!wallSurface)
+    const content = wallContentLayer();
+    if (!content)
         return;
-    const surface = wallSurface;
-    const surfaceRect = surface.getBoundingClientRect();
-    const startX = ev.clientX - surfaceRect.left;
-    const startY = ev.clientY - surfaceRect.top;
+    const start = screenToCanvas(ev.clientX, ev.clientY);
+    const startX = start.x;
+    const startY = start.y;
     const downClientX = ev.clientX;
     const downClientY = ev.clientY;
     let marqueeEl = null;
@@ -626,7 +670,7 @@ function beginMarquee(state, ev) {
         if (!marqueeEl) {
             marqueeEl = document.createElement("div");
             marqueeEl.className = "wall-marquee";
-            surface.appendChild(marqueeEl);
+            content.appendChild(marqueeEl);
         }
         return marqueeEl;
     };
@@ -644,13 +688,13 @@ function beginMarquee(state, ev) {
     const onMove = (mv) => {
         const dx = mv.clientX - downClientX;
         const dy = mv.clientY - downClientY;
+        // Screen-space OK: promotion threshold is a screen-pixel feel constant.
         if (!promoted && dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX)
             return;
         promoted = true;
         mv.preventDefault();
-        const curX = mv.clientX - surfaceRect.left;
-        const curY = mv.clientY - surfaceRect.top;
-        paint(curX, curY);
+        const cur = screenToCanvas(mv.clientX, mv.clientY);
+        paint(cur.x, cur.y);
     };
     const onUp = (up) => {
         document.removeEventListener("pointermove", onMove);
@@ -665,8 +709,9 @@ function beginMarquee(state, ev) {
             clearSelection();
             return;
         }
-        const endX = up.clientX - surfaceRect.left;
-        const endY = up.clientY - surfaceRect.top;
+        const end = screenToCanvas(up.clientX, up.clientY);
+        const endX = end.x;
+        const endY = end.y;
         const rect = {
             left: Math.min(startX, endX),
             top: Math.min(startY, endY),
@@ -691,26 +736,24 @@ function beginMarquee(state, ev) {
 }
 // ---- Shift+drag edge creation -------------------------------------------
 function beginEdgeDrag(state, ev, sourceEl, sourceId) {
-    if (!wallSurface)
+    const content = wallContentLayer();
+    if (!content)
         return;
-    const surface = wallSurface;
-    const surfaceRect = surface.getBoundingClientRect();
-    const start = getNoteCenterFromElement(surface, sourceEl);
-    const preview = beginEdgePreview(surface, start);
-    // Initial endpoint follows the pointer immediately (Postbaby's preview
-    // line jumps to the cursor as soon as the drag starts).
-    preview.update(ev.clientX - surfaceRect.left, ev.clientY - surfaceRect.top);
+    const start = getNoteCenterFromElement(content, sourceEl);
+    const preview = beginEdgePreview(content, start);
+    const initial = screenToCanvas(ev.clientX, ev.clientY);
+    preview.update(initial.x, initial.y);
     const onMove = (mv) => {
         mv.preventDefault();
-        preview.update(mv.clientX - surfaceRect.left, mv.clientY - surfaceRect.top);
+        const pt = screenToCanvas(mv.clientX, mv.clientY);
+        preview.update(pt.x, pt.y);
     };
     const onUp = (up) => {
         document.removeEventListener("pointermove", onMove);
         document.removeEventListener("pointerup", onUp);
         document.removeEventListener("pointercancel", onUp);
         preview.end();
-        // Resolve drop target via elementFromPoint, then walk to the nearest
-        // .wall-note. Reject same-source drops; createEdge() handles dupes.
+        // Screen-space OK: elementFromPoint is a screen-based hit test API.
         const dropTarget = document.elementFromPoint(up.clientX, up.clientY);
         const targetNote = dropTarget?.closest(".wall-note") ?? null;
         if (!targetNote)
@@ -744,6 +787,7 @@ function armNoteInteraction(state, ev, noteEl, noteId) {
             return;
         const dx = mv.clientX - startX;
         const dy = mv.clientY - startY;
+        // Screen-space OK: drag promotion uses screen-pixel threshold.
         if (dx * dx + dy * dy >= DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
             promoted = true;
             document.removeEventListener("pointermove", onMove);

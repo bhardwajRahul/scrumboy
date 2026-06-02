@@ -17,6 +17,7 @@
 //   - `startRealtime({ slug, onApplyDoc, onApplyTransient })` returns a
 //     `stop()` handle that unsubscribes from the event bus.
 import { wallDialog, wallSurface } from "../dom/elements.js";
+import { getWallContent } from "./wall-viewport.js";
 import { on, off } from "../events.js";
 import { showToast } from "../utils.js";
 import { updateEdgesForNote } from "./wall-rendering.js";
@@ -116,7 +117,10 @@ export function applyTransient(payload, noteElementById) {
         return;
     el.style.left = `${Math.round(x)}px`;
     el.style.top = `${Math.round(y)}px`;
-    updateEdgesForNote(wallSurface, noteId, x + el.offsetWidth / 2, y + el.offsetHeight / 2);
+    const edgeRoot = getWallContent() ?? wallSurface;
+    if (edgeRoot) {
+        updateEdgesForNote(edgeRoot, noteId, x + el.offsetWidth / 2, y + el.offsetHeight / 2);
+    }
 }
 let currentDebounceHandle = null;
 export function startRealtime(opts) {

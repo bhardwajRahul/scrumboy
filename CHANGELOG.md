@@ -2,6 +2,29 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
 
+## [3.17.4] - 2026-06-02
+
+### Added
+
+- **Wall pan and zoom** - The sticky-note wall is now an infinite canvas (Mural-style): scroll to pan, Ctrl/Cmd+scroll (or trackpad pinch) to zoom, middle-drag or Space+drag to pan. A **fit view** control (⊡ button or **F**) recenters on all notes. Pan/zoom is remembered per board in the browser (`localStorage`); no server or data migration changes—existing note positions are unchanged at the default view.
+
+### Improvements
+
+- **Wall coordinates** - Notes can be placed at negative canvas coordinates (matching the server’s ±100000 bound). Drag, resize, marquee select, edge preview, and create-at-pointer all use a shared screen-to-canvas transform so gestures stay correct at any zoom.
+- **Wall keyboard pan** - **Arrow keys** pan the canvas (hold **Shift** for larger steps), complementing scroll-wheel, middle-drag, and Space+drag for users without horizontal scroll or a middle button. Suppressed while editing a note or when focus is in an input/button.
+
+### Fixed
+
+- **Wall fit view** - Fit-to-notes can zoom out below the manual zoom floor (`FIT_ZOOM_MIN`) so widely spread notes actually fit on screen; manual zoom still bottoms out at 0.2× for legibility.
+- **Wall viewport persistence** - Saved and loaded pan/zoom clamp pan against the stored zoom (not a stale module zoom), so reload after low-zoom sessions restores a consistent view.
+- **Wall pan while closing** - Middle-drag and Space+drag document listeners are torn down if the wall closes mid-gesture, preventing ghost panning or surprise viewport state on the next open.
+- **Wall wheel pan on Firefox** - Scroll-wheel deltas are normalized for line/page `deltaMode` so pan and zoom speed match pixel-mode wheels in Chromium.
+
+### Documentation
+
+- **`docs/wall.md`** - Pan, zoom, and fit-view controls.
+- **`docs/wall-viewport-manual-checklist.md`** - Manual browser sign-off checklist for pan/zoom (real-browser verification; Vitest/jsdom alone is not sufficient for layout transforms).
+
 ## [3.17.3] - 2026-06-01
 
 ### Changed

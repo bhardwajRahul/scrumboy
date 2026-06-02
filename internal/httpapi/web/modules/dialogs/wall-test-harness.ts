@@ -1,4 +1,6 @@
 // Shared test helpers for the wall feature's interaction tests.
+
+import { ensureWallContent, initWallViewport, teardownWallViewport } from "./wall-viewport.js";
 //
 // These helpers are **non-hoisted** by design: any `vi.hoisted` / `vi.mock`
 // call must stay in the test file itself so that vitest wires the module
@@ -27,7 +29,8 @@ export interface WallDomRefs {
   wallTrashEl: HTMLElement;
 }
 
-export function setupWallDom(refs: WallDomRefs): void {
+export function setupWallDom(refs: WallDomRefs, slug = "test-wall"): void {
+  teardownWallViewport();
   document.body.innerHTML = "";
   refs.wallDialogEl.innerHTML = "";
   refs.wallSurfaceEl.innerHTML = "";
@@ -35,6 +38,8 @@ export function setupWallDom(refs: WallDomRefs): void {
   document.body.appendChild(refs.wallDialogEl);
   document.body.appendChild(refs.closeWallBtnEl);
   document.body.appendChild(refs.wallTrashEl);
+  const content = ensureWallContent(refs.wallSurfaceEl);
+  initWallViewport(refs.wallSurfaceEl, content, slug);
 }
 
 export interface TestNote {
