@@ -183,13 +183,21 @@ export function ensureEdgeOverlay(surface: HTMLElement): SVGSVGElement {
   svg = document.createElementNS(SVG_NS, "svg") as SVGSVGElement;
   svg.setAttribute("id", EDGE_OVERLAY_ID);
   svg.setAttribute("class", "wall-edge-overlay");
-  // Cover the entire surface; SVG itself ignores pointer events, only
-  // hit-line children opt back in.
+  // The overlay lives inside `.wall-content`, which is intentionally 0x0 (it
+  // is only a transform anchor; notes are absolutely positioned). Edges are
+  // drawn in canvas coordinates and rely on `overflow: visible` to paint
+  // outside that box. Chromium will NOT paint SVG geometry that lies outside a
+  // *zero-sized* outer <svg> viewport (Firefox/WebKit tolerate it), so a
+  // `width/height: 100%` (== 0 here) overlay renders every connection line
+  // invisibly in Chrome/Edge. Give the SVG a non-zero box so painting is
+  // enabled; `overflow: visible` then lets lines extend to any canvas coord
+  // (including negative) in all engines. See wall-rendering.test.ts.
   svg.style.position = "absolute";
   svg.style.left = "0";
   svg.style.top = "0";
-  svg.style.width = "100%";
-  svg.style.height = "100%";
+  svg.style.width = "1px";
+  svg.style.height = "1px";
+  svg.style.overflow = "visible";
   svg.style.pointerEvents = "none";
   // Postbaby parity: lines paint *under* notes (.wall-note is z-index: 2 in
   // styles.css). This overlay uses z-index: 0 via .wall-edge-overlay; a

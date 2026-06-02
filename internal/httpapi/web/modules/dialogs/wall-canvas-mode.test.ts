@@ -200,20 +200,30 @@ describe("wall canvas mode toggle", () => {
     expect(wallSurfaceEl.classList.contains("wall-surface--pan-mode")).toBe(false);
   });
 
-  it("resets to Select mode after close and reopen", async () => {
+  it("persists Pan mode globally after close and reopen", async () => {
     await openWall();
     const btn = getModeBtn();
     btn.click();
     await flushPromises();
     expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(localStorage.getItem("scrumboy.wall.canvasMode")).toBe("pan");
 
     wallDialogEl.close();
     await flushPromises();
 
+    // Reopen a different project's wall: the global preference still applies.
     await openWall();
     const reopened = getModeBtn();
-    expect(reopened.getAttribute("aria-pressed")).toBe("false");
-    expect(reopened.innerHTML).toContain("lucide-square-dashed");
+    expect(reopened.getAttribute("aria-pressed")).toBe("true");
+    expect(reopened.innerHTML).toContain("lucide-hand");
+    expect(wallSurfaceEl.classList.contains("wall-surface--pan-mode")).toBe(true);
+  });
+
+  it("opens in Select mode when no saved preference exists", async () => {
+    await openWall();
+    const btn = getModeBtn();
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(btn.innerHTML).toContain("lucide-square-dashed");
     expect(wallSurfaceEl.classList.contains("wall-surface--pan-mode")).toBe(false);
   });
 
@@ -413,5 +423,48 @@ describe("wall canvas mode toggle", () => {
       "/api/board/alpha/wall/notes",
       expect.objectContaining({ method: "POST" }),
     );
+  });
+});
+
+describe("wall-canvas-mode persistence", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("normalizeWallCanvasMode rejects garbage and defaults to select", async () => {
+    const { normalizeWallCanvasMode } = await import("./wall-canvas-mode.js");
+    expect(normalizeWallCanvasMode("pan")).toBe("pan");
+    expect(normalizeWallCanvasMode("select")).toBe("select");
+    expect(normalizeWallCanvasMode("nonsense")).toBe("select");
+    expect(normalizeWallCanvasMode(null)).toBe("select");
+    expect(normalizeWallCanvasMode(undefined)).toBe("select");
+    expect(normalizeWallCanvasMode(42)).toBe("select");
+  });
+
+  it("loadWallCanvasMode reads a saved pan preference", async () => {
+    localStorage.setItem("scrumboy.wall.canvasMode", "pan");
+    const { loadWallCanvasMode, getWallCanvasMode } = await import("./wall-canvas-mode.js");
+    expect(loadWallCanvasMode()).toBe("pan");
+    expect(getWallCanvasMode()).toBe("pan");
+  });
+
+  it("loadWallCanvasMode defaults to select when unset or invalid", async () => {
+    const { loadWallCanvasMode } = await import("./wall-canvas-mode.js");
+    expect(loadWallCanvasMode()).toBe("select");
+    localStorage.setItem("scrumboy.wall.canvasMode", "bogus");
+    expect(loadWallCanvasMode()).toBe("select");
+  });
+
+  it("toggleWallCanvasMode and setWallCanvasMode write to localStorage", async () => {
+    const { toggleWallCanvasMode, setWallCanvasMode } = await import("./wall-canvas-mode.js");
+    expect(toggleWallCanvasMode()).toBe("pan");
+    expect(localStorage.getItem("scrumboy.wall.canvasMode")).toBe("pan");
+    setWallCanvasMode("select");
+    expect(localStorage.getItem("scrumboy.wall.canvasMode")).toBe("select");
   });
 });

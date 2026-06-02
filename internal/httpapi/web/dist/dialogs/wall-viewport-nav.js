@@ -152,8 +152,17 @@ function onWheel(ev) {
         return;
     ev.preventDefault();
     const { dx, dy } = wheelPixels(ev);
-    if (ev.ctrlKey || ev.metaKey) {
-        const factor = dy < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR;
+    // Shift is the primary zoom modifier; Ctrl/Cmd also zoom because browsers
+    // deliver trackpad pinch-to-zoom as synthetic Ctrl+wheel events.
+    if (ev.shiftKey || ev.ctrlKey || ev.metaKey) {
+        // On Windows, Shift+wheel is remapped to horizontal scroll, so the delta
+        // arrives in dx (dy ~ 0). Fall back to dx so zoom direction stays correct.
+        const zoomDelta = dy !== 0 ? dy : dx;
+        // A zero-delta wheel event (some inertia/end events, synthetic devices)
+        // carries no direction; do nothing rather than zooming out by default.
+        if (zoomDelta === 0)
+            return;
+        const factor = zoomDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR;
         zoomAround(ev.clientX, ev.clientY, factor);
         return;
     }
@@ -428,6 +437,10 @@ export function isSpacePanArmed() {
 /** For tests: drive the arrow-key pan handler directly. */
 export function __onArrowKeyDownForTest(ev, isOpen = () => true) {
     onArrowKeyDown(ev, isOpen);
+}
+/** For tests: drive the wheel pan/zoom handler directly. */
+export function __onWheelForTest(ev) {
+    onWheel(ev);
 }
 /** For tests: whether space-to-pan is armed. */
 export function __isSpaceHeldForTest() {
