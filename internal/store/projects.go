@@ -101,6 +101,9 @@ func (s *Store) getProjectForRead(ctx context.Context, projectID int64, mode Mod
 	// Temporary boards are share-links (pastebin-style): bypass ownership checks because the project is temporary/unowned,
 	// not because of request mode. Request mode remains orthogonal and request-scoped.
 	if p.ExpiresAt != nil {
+		if err := rejectIfExpiredTemporaryProject(p); err != nil {
+			return Project{}, err
+		}
 		return p, nil
 	}
 
@@ -160,6 +163,9 @@ func (s *Store) buildProjectContext(ctx context.Context, p Project, mode Mode) (
 
 	// Temporary boards bypass ownership checks
 	if p.ExpiresAt != nil {
+		if err := rejectIfExpiredTemporaryProject(p); err != nil {
+			return ProjectContext{}, err
+		}
 		pc.AuthEnabled = true // arbitrary; role unused for temp boards
 		return pc, nil
 	}
@@ -242,6 +248,23 @@ func isAnonymousTemporaryBoard(p Project) bool {
 // Use this for "link collaboration" write paths; use isAnonymousTemporaryBoard for unowned-only semantics.
 func isTemporaryProject(p Project) bool {
 	return p.ExpiresAt != nil
+}
+
+// TemporaryBoardLifetimeDays is the rolling lifetime applied to link-expiring boards at creation
+// and when UpdateBoardActivity extends expires_at.
+const TemporaryBoardLifetimeDays = 90
+
+func temporaryBoardExpiresAtMs(fromMs int64) int64 {
+	return fromMs + int64(TemporaryBoardLifetimeDays)*24*60*60*1000
+}
+
+// rejectIfExpiredTemporaryProject returns ErrNotFound when a link-expiring board is past expires_at.
+// Expired rows remain until DeleteExpiredProjects runs; until then all board access and mutations refuse.
+func rejectIfExpiredTemporaryProject(p Project) error {
+	if p.ExpiresAt != nil && !p.ExpiresAt.After(time.Now().UTC()) {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // effectiveTagModeForProject determines tag scoping based on project state.
@@ -817,6 +840,9 @@ func (s *Store) getProjectForReadTx(ctx context.Context, tx *sql.Tx, projectID i
 	}
 	// Temporary boards bypass ownership because of project state, not because of request mode.
 	if p.ExpiresAt != nil {
+		if err := rejectIfExpiredTemporaryProject(p); err != nil {
+			return Project{}, err
+		}
 		return p, nil
 	}
 	enabled, err := authEnabledTx(ctx, tx)
@@ -850,6 +876,9 @@ func (s *Store) getProjectForWriteTx(ctx context.Context, tx *sql.Tx, projectID 
 
 	// Temporary boards bypass role checks
 	if p.ExpiresAt != nil {
+		if err := rejectIfExpiredTemporaryProject(p); err != nil {
+			return Project{}, err
+		}
 		return p, nil
 	}
 
@@ -1013,10 +1042,8 @@ func (s *Store) UpdateProjectName(ctx context.Context, projectID int64, userID i
 	// Do not allow unauthenticated rename for any other case.
 	isAnonymousTempBoard := p.ExpiresAt != nil && p.CreatorUserID == nil
 	if isAnonymousTempBoard {
-		// Check if board is expired - expired boards cannot be renamed
-		now := time.Now().UTC()
-		if p.ExpiresAt.Before(now) {
-			return ErrNotFound
+		if err := rejectIfExpiredTemporaryProject(p); err != nil {
+			return err
 		}
 		// Anonymous temp boards can be renamed by anyone (no auth required)
 	} else {
@@ -1060,10 +1087,10 @@ func (s *Store) UpdateProjectName(ctx context.Context, projectID int64, userID i
 }
 
 // CreateAnonymousBoard creates a new project for anonymous board mode.
-// Sets expires_at = now + 14 days and last_activity_at = now.
+// Sets expires_at = now + TemporaryBoardLifetimeDays and last_activity_at = now.
 func (s *Store) CreateAnonymousBoard(ctx context.Context) (Project, error) {
 	nowMs := time.Now().UTC().UnixMilli()
-	expiresAtMs := nowMs + (14 * 24 * 60 * 60 * 1000) // 14 days in milliseconds
+	expiresAtMs := temporaryBoardExpiresAtMs(nowMs)
 	defaultImage := "/scrumboy.png"
 
 	var (
@@ -1152,7 +1179,7 @@ func (s *Store) CreateAnonymousBoard(ctx context.Context) (Project, error) {
 func (s *Store) UpdateBoardActivity(ctx context.Context, projectID int64) error {
 	nowMs := time.Now().UTC().UnixMilli()
 	throttleMs := nowMs - (5 * 60 * 1000) // 5 minutes ago
-	expiresAtMs := nowMs + (14 * 24 * 60 * 60 * 1000)
+	expiresAtMs := temporaryBoardExpiresAtMs(nowMs)
 
 	res, err := s.db.ExecContext(ctx, `
 UPDATE projects
@@ -1236,8 +1263,12 @@ func (s *Store) BackfillDominantColors(ctx context.Context, extractor func(strin
 	return updated, nil
 }
 
-// DeleteExpiredProjects deletes projects where expires_at IS NOT NULL AND expires_at < now().
-// Returns the count of deleted projects.
+// DeleteExpiredProjects deletes all link-expiring boards (expires_at IS NOT NULL) past their expiry time.
+// This includes unowned anonymous paste boards and authenticated temporary boards in full mode.
+// Returns the count of deleted project rows.
+//
+// audit_events has no FK to projects and is append-only (migration 047), so rows for a deleted
+// project_id may remain intentionally; that is not a failed CASCADE.
 func (s *Store) DeleteExpiredProjects(ctx context.Context) (int64, error) {
 	nowMs := time.Now().UTC().UnixMilli()
 	res, err := s.db.ExecContext(ctx, `DELETE FROM projects WHERE expires_at IS NOT NULL AND expires_at < ?`, nowMs)

@@ -177,7 +177,7 @@ func main() {
 		}
 	}()
 
-	// Start background cleanup process for expired anonymous boards
+	// Start background cleanup for expired temporary boards (any project with expires_at in the past).
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
@@ -190,7 +190,6 @@ func main() {
 			case <-ticker.C:
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
-				// Cleanup expired anonymous boards
 				deleted, err := st.DeleteExpiredProjects(ctx)
 				if err != nil {
 					logger.Printf("cleanup expired projects: %v", err)

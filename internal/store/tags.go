@@ -771,6 +771,9 @@ func (s *Store) DeleteTag(ctx context.Context, userID int64, tagID int64, isAnon
 			if err != nil {
 				return fmt.Errorf("get project: %w", err)
 			}
+			if err := rejectIfExpiredTemporaryProject(p); err != nil {
+				return err
+			}
 			if p.ExpiresAt == nil || p.CreatorUserID != nil {
 				return fmt.Errorf("%w: project is not anonymous", ErrUnauthorized)
 			}

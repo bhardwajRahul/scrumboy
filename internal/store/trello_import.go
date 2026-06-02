@@ -235,7 +235,7 @@ func (s *Store) insertTrelloDurableProjectRow(ctx context.Context, tx *sql.Tx, n
 
 func (s *Store) insertTrelloTemporaryProjectRow(ctx context.Context, tx *sql.Tx, name string, projectImportMetadata string, nowMs int64) (int64, Project, error) {
 	defaultImage := "/scrumboy.png"
-	expiresAtMs := nowMs + (14 * 24 * 60 * 60 * 1000)
+	expiresAtMs := temporaryBoardExpiresAtMs(nowMs)
 	var creatorUserID *int64
 	if userID, ok := UserIDFromContext(ctx); ok {
 		creatorUserID = &userID
