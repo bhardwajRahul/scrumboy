@@ -2,6 +2,21 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
 
+## [3.17.4] - 2026-06-02
+
+### Added
+
+- **Wall pan and zoom** - The sticky-note wall is now an infinite canvas (Mural-style): scroll to pan, Ctrl/Cmd+scroll (or trackpad pinch) to zoom, middle-drag or Space+drag to pan. A **fit view** control (⊡ button or **F**) recenters on all notes. Pan/zoom is remembered per board in the browser (`localStorage`); no server or data migration changes—existing note positions are unchanged at the default view.
+
+### Improvements
+
+- **Wall coordinates** - Notes can be placed at negative canvas coordinates (matching the server’s ±100000 bound). Drag, resize, marquee select, edge preview, and create-at-pointer all use a shared screen-to-canvas transform so gestures stay correct at any zoom.
+
+### Documentation
+
+- **`docs/wall.md`** - Pan, zoom, and fit-view controls.
+- **`docs/wall-viewport-manual-checklist.md`** - Manual browser sign-off checklist for pan/zoom (real-browser verification; Vitest/jsdom alone is not sufficient for layout transforms).
+
 ## [3.17.3] - 2026-06-01
 
 ### Changed

@@ -15,6 +15,7 @@
 // orchestration, event wiring, and teardown.
 import { HEX_COLOR_RE, sanitizeHexColor } from "../utils.js";
 import { colorIndexFromHex } from "./wall-postbaby-constants.js";
+import { screenToCanvas } from "./wall-viewport.js";
 const DEFAULT_NOTE_COLOR = "#ffd966";
 // Clamp to the same limits the backend enforces. Keep in sync with
 // internal/store/wall.go (clampNoteDim / validateWallColor).
@@ -279,7 +280,9 @@ export function getNoteCenterFromElement(surface, noteEl) {
             cy: noteEl.offsetTop + noteEl.offsetHeight / 2,
         };
     }
+    // Screen-space fallback: convert note center through the active viewport
+    // transform (offsetLeft path above is canvas-local when parent is .wall-content).
     const a = noteEl.getBoundingClientRect();
-    const s = surface.getBoundingClientRect();
-    return { cx: a.left - s.left + a.width / 2, cy: a.top - s.top + a.height / 2 };
+    const c = screenToCanvas(a.left + a.width / 2, a.top + a.height / 2);
+    return { cx: c.x, cy: c.y };
 }
