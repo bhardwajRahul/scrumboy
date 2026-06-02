@@ -1,6 +1,8 @@
-// Pan/zoom navigation bindings for #wallSurface (wheel, space-drag, middle-drag).
-// Listeners use the wall mount AbortSignal; space-held state clears on blur.
+// Pan/zoom navigation bindings for #wallSurface (wheel, space-drag, middle-drag,
+// and Pan-mode empty-canvas pointer navigation). Listeners use the wall mount
+// AbortSignal; space-held state clears on blur.
 import { clampPan, getViewportState, isNavigationSuppressed, panBy, scheduleSaveViewport, setViewportState, zoomAround, } from "./wall-viewport.js";
+import { isWallPanMode } from "./wall-canvas-mode.js";
 const WHEEL_ZOOM_FACTOR = 1.08;
 // Approximate pixel sizes for line/page wheel modes (Firefox, some mice).
 const WHEEL_LINE_PX = 16;
@@ -24,9 +26,126 @@ let panStartX = 0;
 let panStartY = 0;
 let panStartPanX = 0;
 let panStartPanY = 0;
+let navigationSurface = null;
+let activeNavigationCleanup = null;
+let activeNavigationKind = "none";
+let activeTouchPointerId = null;
+let pinchDistance = 0;
+let touchResumeBlocked = false;
+const activeTouchPointers = new Map();
+const capturedPointerIds = new Set();
+const PINCH_DISTANCE_MIN_PX = 8;
+const PINCH_FACTOR_MIN = 0.5;
+const PINCH_FACTOR_MAX = 2;
 function clearSpaceHeld() {
     spaceHeld = false;
     spacePanActive = false;
+}
+function clearTouchGestureState() {
+    activeTouchPointerId = null;
+    pinchDistance = 0;
+    touchResumeBlocked = false;
+    activeTouchPointers.clear();
+}
+function setPanningClass(active) {
+    navigationSurface?.classList.toggle("wall-surface--panning", active);
+}
+function rememberCapturedPointerId(pointerId) {
+    capturedPointerIds.add(pointerId);
+}
+function trySetPointerCapture(surface, pointerId) {
+    if (typeof surface.setPointerCapture !== "function")
+        return;
+    try {
+        surface.setPointerCapture(pointerId);
+        rememberCapturedPointerId(pointerId);
+    }
+    catch {
+        // Some test environments and pointer types do not support capture.
+    }
+}
+function tryReleasePointerCapture(surface, pointerId) {
+    if (!surface || typeof surface.releasePointerCapture !== "function")
+        return;
+    try {
+        surface.releasePointerCapture(pointerId);
+    }
+    catch {
+        // Safe to ignore: release is best-effort during teardown/cancel.
+    }
+}
+function releaseCapturedPointers() {
+    const surface = navigationSurface;
+    for (const pointerId of capturedPointerIds) {
+        tryReleasePointerCapture(surface, pointerId);
+    }
+    capturedPointerIds.clear();
+}
+function pointerDistance(a, b) {
+    const dx = b.clientX - a.clientX;
+    const dy = b.clientY - a.clientY;
+    return Math.hypot(dx, dy);
+}
+function pointerMidpoint(a, b) {
+    return {
+        clientX: (a.clientX + b.clientX) / 2,
+        clientY: (a.clientY + b.clientY) / 2,
+    };
+}
+function activeTouchPair() {
+    if (activeTouchPointers.size !== 2)
+        return null;
+    return Array.from(activeTouchPointers.values());
+}
+function beginTouchSinglePan(clientX, clientY, pointerId) {
+    beginPanGesture(clientX, clientY, getViewportState);
+    activeTouchPointerId = pointerId;
+    setPanningClass(true);
+}
+function maybePromoteTouchPinch() {
+    const pair = activeTouchPair();
+    if (!pair) {
+        activeTouchPointerId = null;
+        pinchDistance = 0;
+        return;
+    }
+    activeTouchPointerId = null;
+    pinchDistance = pointerDistance(pair[0], pair[1]);
+    setPanningClass(true);
+}
+function isEmptyCanvasGestureTarget(surface, target) {
+    if (!(target instanceof Element))
+        return false;
+    if (!surface.contains(target))
+        return false;
+    if (target.closest(".wall-note"))
+        return false;
+    if (target.closest(".wall-note__resize-handle"))
+        return false;
+    if (target.closest(".wall-edge-hit"))
+        return false;
+    if (target.closest(".wall-note-context-menu"))
+        return false;
+    if (target.closest("button, textarea, input, select, [contenteditable='true']"))
+        return false;
+    return true;
+}
+function clearTouchPointer(pointerId) {
+    tryReleasePointerCapture(navigationSurface, pointerId);
+    activeTouchPointers.delete(pointerId);
+    capturedPointerIds.delete(pointerId);
+}
+export function cancelWallNavigationGestures() {
+    const cleanup = activeNavigationCleanup;
+    activeNavigationCleanup = null;
+    if (cleanup)
+        cleanup();
+    clearTouchGestureState();
+    middlePanActive = false;
+    spacePanActive = false;
+    setPanningClass(false);
+    releaseCapturedPointers();
+    activeNavigationKind = "none";
 }
 function onWheel(ev) {
     if (isNavigationSuppressed(ev.target))
@@ -99,6 +218,151 @@ function beginPanGesture(clientX, clientY, getPan) {
 function movePanGesture(clientX, clientY, setPan) {
     setPan(panStartPanX + (clientX - panStartX), panStartPanY + (clientY - panStartY));
 }
+function startPointerPanGesture(surface, signal, ev, onActiveChange) {
+    cancelWallNavigationGestures();
+    activeNavigationKind = "pointer";
+    onActiveChange(true);
+    setPanningClass(true);
+    beginPanGesture(ev.clientX, ev.clientY, getViewportState);
+    trySetPointerCapture(surface, ev.pointerId);
+    let ended = false;
+    const pointerId = ev.pointerId;
+    const onMove = (mv) => {
+        if (mv.pointerId !== pointerId)
+            return;
+        mv.preventDefault();
+        const st = getViewportState();
+        movePanGesture(mv.clientX, mv.clientY, (px, py) => {
+            setViewportState({ panX: clampPan(px), panY: clampPan(py), zoom: st.zoom });
+        });
+    };
+    const cleanup = () => {
+        if (ended)
+            return;
+        ended = true;
+        document.removeEventListener("pointermove", onMove);
+        document.removeEventListener("pointerup", onUp);
+        document.removeEventListener("pointercancel", onUp);
+        signal.removeEventListener("abort", cleanup);
+        tryReleasePointerCapture(surface, pointerId);
+        capturedPointerIds.delete(pointerId);
+        onActiveChange(false);
+        setPanningClass(false);
+        if (activeNavigationCleanup === cleanup)
+            activeNavigationCleanup = null;
+        activeNavigationKind = "none";
+        scheduleSaveViewport();
+    };
+    const onUp = (up) => {
+        if (up.pointerId !== pointerId)
+            return;
+        cleanup();
+    };
+    activeNavigationCleanup = cleanup;
+    signal.addEventListener("abort", cleanup);
+    document.addEventListener("pointermove", onMove, { passive: false });
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+}
+function startTouchNavigationGesture(surface, signal, ev) {
+    if (activeNavigationKind !== "touch") {
+        cancelWallNavigationGestures();
+        activeNavigationKind = "touch";
+        clearTouchGestureState();
+        let ended = false;
+        const onMove = (mv) => {
+            const tracked = activeTouchPointers.get(mv.pointerId);
+            if (!tracked)
+                return;
+            tracked.clientX = mv.clientX;
+            tracked.clientY = mv.clientY;
+            if (activeTouchPointers.size === 1) {
+                if (touchResumeBlocked || activeTouchPointerId !== mv.pointerId)
+                    return;
+                mv.preventDefault();
+                const st = getViewportState();
+                movePanGesture(mv.clientX, mv.clientY, (px, py) => {
+                    setViewportState({ panX: clampPan(px), panY: clampPan(py), zoom: st.zoom });
+                });
+                return;
+            }
+            const pair = activeTouchPair();
+            if (!pair) {
+                activeTouchPointerId = null;
+                pinchDistance = 0;
+                return;
+            }
+            const currentDistance = pointerDistance(pair[0], pair[1]);
+            if (currentDistance < PINCH_DISTANCE_MIN_PX) {
+                pinchDistance = currentDistance;
+                return;
+            }
+            if (pinchDistance < PINCH_DISTANCE_MIN_PX) {
+                pinchDistance = currentDistance;
+                return;
+            }
+            let factor = currentDistance / pinchDistance;
+            if (!Number.isFinite(factor) || factor <= 0) {
+                pinchDistance = currentDistance;
+                return;
+            }
+            factor = Math.max(PINCH_FACTOR_MIN, Math.min(PINCH_FACTOR_MAX, factor));
+            const midpoint = pointerMidpoint(pair[0], pair[1]);
+            mv.preventDefault();
+            zoomAround(midpoint.clientX, midpoint.clientY, factor);
+            pinchDistance = currentDistance;
+        };
+        const maybeEndSession = () => {
+            if (activeTouchPointers.size === 0) {
+                cleanup();
+            }
+            else if (activeTouchPointers.size === 1) {
+                activeTouchPointerId = null;
+                pinchDistance = 0;
+                touchResumeBlocked = true;
+                setPanningClass(false);
+            }
+            else {
+                activeTouchPointerId = null;
+                maybePromoteTouchPinch();
+            }
+        };
+        const onUp = (up) => {
+            if (!activeTouchPointers.has(up.pointerId))
+                return;
+            clearTouchPointer(up.pointerId);
+            maybeEndSession();
+        };
+        const cleanup = () => {
+            if (ended)
+                return;
+            ended = true;
+            document.removeEventListener("pointermove", onMove);
+            document.removeEventListener("pointerup", onUp);
+            document.removeEventListener("pointercancel", onUp);
+            signal.removeEventListener("abort", cleanup);
+            releaseCapturedPointers();
+            clearTouchGestureState();
+            setPanningClass(false);
+            if (activeNavigationCleanup === cleanup)
+                activeNavigationCleanup = null;
+            activeNavigationKind = "none";
+            scheduleSaveViewport();
+        };
+        activeNavigationCleanup = cleanup;
+        signal.addEventListener("abort", cleanup);
+        document.addEventListener("pointermove", onMove, { passive: false });
+        document.addEventListener("pointerup", onUp);
+        document.addEventListener("pointercancel", onUp);
+    }
+    activeTouchPointers.set(ev.pointerId, { clientX: ev.clientX, clientY: ev.clientY });
+    trySetPointerCapture(surface, ev.pointerId);
+    if (activeTouchPointers.size === 1 && !touchResumeBlocked) {
+        beginTouchSinglePan(ev.clientX, ev.clientY, ev.pointerId);
+        return;
+    }
+    maybePromoteTouchPinch();
+}
 function bindPanPointer(surface, signal, shouldStart, onActiveChange) {
     surface.addEventListener("pointerdown", (ev) => {
         if (!shouldStart(ev))
@@ -106,34 +370,28 @@ function bindPanPointer(surface, signal, shouldStart, onActiveChange) {
         if (isNavigationSuppressed(ev.target))
             return;
         ev.preventDefault();
-        onActiveChange(true);
-        beginPanGesture(ev.clientX, ev.clientY, getViewportState);
-        // Tear down the document listeners on pointerup/cancel AND if the wall
-        // closes mid-drag (wall signal). onUp is idempotent so abort + pointerup
-        // both firing is safe.
-        let ended = false;
-        const onMove = (mv) => {
-            mv.preventDefault();
-            const st = getViewportState();
-            movePanGesture(mv.clientX, mv.clientY, (px, py) => {
-                setViewportState({ panX: clampPan(px), panY: clampPan(py), zoom: st.zoom });
-            });
-        };
-        const onUp = () => {
-            if (ended)
-                return;
-            ended = true;
-            document.removeEventListener("pointermove", onMove);
-            document.removeEventListener("pointerup", onUp);
-            document.removeEventListener("pointercancel", onUp);
-            signal.removeEventListener("abort", onUp);
-            onActiveChange(false);
-            scheduleSaveViewport();
-        };
-        signal.addEventListener("abort", onUp);
-        document.addEventListener("pointermove", onMove, { passive: false });
-        document.addEventListener("pointerup", onUp);
-        document.addEventListener("pointercancel", onUp);
+        startPointerPanGesture(surface, signal, ev, onActiveChange);
+    }, { signal });
+}
+function bindPanModeCanvasNavigation(surface, signal) {
+    surface.addEventListener("pointerdown", (ev) => {
+        if (!isWallPanMode())
+            return;
+        if (ev.button !== 0)
+            return;
+        if (!isEmptyCanvasGestureTarget(surface, ev.target))
+            return;
+        if (isNavigationSuppressed(ev.target))
+            return;
+        ev.preventDefault();
+        if (ev.pointerType === "touch") {
+            startTouchNavigationGesture(surface, signal, ev);
+            return;
+        }
+        startPointerPanGesture(surface, signal, ev, () => {
+            // Pan mode owns the visual state via .wall-surface--pan-mode and
+            // .wall-surface--panning, so there is no extra per-gesture flag here.
+        });
     }, { signal });
 }
 /**
@@ -141,6 +399,8 @@ function bindPanPointer(surface, signal, shouldStart, onActiveChange) {
  * All listeners abort when `signal` fires (wall teardown).
  */
 export function bindWallNavigation(surface, signal, isOpen = () => true) {
+    cancelWallNavigationGestures();
+    navigationSurface = surface;
     const opts = { signal, passive: false };
     surface.addEventListener("wheel", onWheel, opts);
     window.addEventListener("keydown", onKeyDown, { signal });
@@ -148,12 +408,18 @@ export function bindWallNavigation(surface, signal, isOpen = () => true) {
     window.addEventListener("keydown", (ev) => onArrowKeyDown(ev, isOpen), { signal });
     surface.addEventListener("blur", onBlur, { signal, capture: true });
     window.addEventListener("blur", onBlur, { signal });
+    signal.addEventListener("abort", () => {
+        cancelWallNavigationGestures();
+        if (navigationSurface === surface)
+            navigationSurface = null;
+    }, { once: true });
     bindPanPointer(surface, signal, (ev) => ev.button === 1, (active) => {
         middlePanActive = active;
     });
     bindPanPointer(surface, signal, (ev) => ev.button === 0 && spaceHeld && !ev.shiftKey, (active) => {
         spacePanActive = active;
     });
+    bindPanModeCanvasNavigation(surface, signal);
 }
 /** True while Space is held (marquee / note drag should defer to pan). */
 export function isSpacePanArmed() {
@@ -168,7 +434,9 @@ export function __isSpaceHeldForTest() {
     return spaceHeld;
 }
 export function __resetNavStateForTest() {
+    cancelWallNavigationGestures();
     spaceHeld = false;
     spacePanActive = false;
     middlePanActive = false;
+    navigationSurface = null;
 }
