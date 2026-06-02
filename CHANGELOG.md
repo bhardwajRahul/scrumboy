@@ -2,6 +2,21 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
 
+## [3.17.6] - 2026-06-02
+
+### Fixed
+
+- **Wall edge lines in Chrome/Edge** - Shift-drag connections were created but invisible in Chromium: the edge SVG overlay lived inside the 0×0 `.wall-content` transform anchor with `width/height: 100%` (== 0), so lines never painted. The overlay now uses a non-zero box with `overflow: visible`.
+
+### Improvements
+
+- **Wall zoom modifier** - **Shift**+scroll is now the primary zoom control on the wall (Ctrl/Cmd+scroll and trackpad pinch still zoom).
+- **Wall canvas mode preference** - The Select/Pan toggle is remembered globally in the browser and applies to every project's wall.
+
+### Documentation
+
+- **`docs/wall.md`** - Shift+scroll zoom, global canvas-mode preference.
+
 ## [3.17.5] - 2026-06-02
 
 ### Improvements
