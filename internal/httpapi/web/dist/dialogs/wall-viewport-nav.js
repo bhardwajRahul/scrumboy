@@ -5,6 +5,9 @@ const WHEEL_ZOOM_FACTOR = 1.08;
 // Approximate pixel sizes for line/page wheel modes (Firefox, some mice).
 const WHEEL_LINE_PX = 16;
 const WHEEL_PAGE_PX = 800;
+// Arrow-key pan step (screen px). Shift pans in coarse steps.
+const ARROW_PAN_STEP_PX = 64;
+const ARROW_PAN_STEP_COARSE_PX = ARROW_PAN_STEP_PX * 4;
 /** Normalize wheel deltas to pixels regardless of deltaMode. */
 function wheelPixels(ev) {
     const unit = ev.deltaMode === WheelEvent.DOM_DELTA_LINE
@@ -44,6 +47,37 @@ function onKeyDown(ev) {
         return;
     ev.preventDefault();
     spaceHeld = true;
+}
+// Arrow keys pan the canvas (additive to wheel / Space+drag / middle-drag).
+// Direction = the way the viewport moves toward content, matching scroll-to-pan.
+function onArrowKeyDown(ev, isOpen) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey)
+        return;
+    let dx = 0;
+    let dy = 0;
+    const step = ev.shiftKey ? ARROW_PAN_STEP_COARSE_PX : ARROW_PAN_STEP_PX;
+    switch (ev.key) {
+        case "ArrowRight":
+            dx = -step;
+            break;
+        case "ArrowLeft":
+            dx = step;
+            break;
+        case "ArrowDown":
+            dy = -step;
+            break;
+        case "ArrowUp":
+            dy = step;
+            break;
+        default:
+            return;
+    }
+    if (!isOpen())
+        return;
+    if (isNavigationSuppressed(ev.target))
+        return;
+    ev.preventDefault();
+    panBy(dx, dy);
 }
 function onKeyUp(ev) {
     if (ev.code !== "Space")
@@ -106,11 +140,12 @@ function bindPanPointer(surface, signal, shouldStart, onActiveChange) {
  * Bind wheel / keyboard / space+drag / middle-drag pan on the wall surface.
  * All listeners abort when `signal` fires (wall teardown).
  */
-export function bindWallNavigation(surface, signal) {
+export function bindWallNavigation(surface, signal, isOpen = () => true) {
     const opts = { signal, passive: false };
     surface.addEventListener("wheel", onWheel, opts);
     window.addEventListener("keydown", onKeyDown, { signal });
     window.addEventListener("keyup", onKeyUp, { signal });
+    window.addEventListener("keydown", (ev) => onArrowKeyDown(ev, isOpen), { signal });
     surface.addEventListener("blur", onBlur, { signal, capture: true });
     window.addEventListener("blur", onBlur, { signal });
     bindPanPointer(surface, signal, (ev) => ev.button === 1, (active) => {
@@ -123,6 +158,10 @@ export function bindWallNavigation(surface, signal) {
 /** True while Space is held (marquee / note drag should defer to pan). */
 export function isSpacePanArmed() {
     return spaceHeld;
+}
+/** For tests: drive the arrow-key pan handler directly. */
+export function __onArrowKeyDownForTest(ev, isOpen = () => true) {
+    onArrowKeyDown(ev, isOpen);
 }
 /** For tests: whether space-to-pan is armed. */
 export function __isSpaceHeldForTest() {

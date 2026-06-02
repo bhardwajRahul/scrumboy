@@ -11,6 +11,7 @@
 ### Improvements
 
 - **Wall coordinates** - Notes can be placed at negative canvas coordinates (matching the server’s ±100000 bound). Drag, resize, marquee select, edge preview, and create-at-pointer all use a shared screen-to-canvas transform so gestures stay correct at any zoom.
+- **Wall keyboard pan** - **Arrow keys** pan the canvas (hold **Shift** for larger steps), complementing scroll-wheel, middle-drag, and Space+drag for users without horizontal scroll or a middle button. Suppressed while editing a note or when focus is in an input/button.
 
 ### Fixed
 
