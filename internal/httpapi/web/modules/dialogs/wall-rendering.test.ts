@@ -154,6 +154,22 @@ describe('wall edge overlay', () => {
     expect(surface.querySelectorAll('svg').length).toBe(1);
   });
 
+  it('ensureEdgeOverlay is non-zero sized with overflow:visible (Chromium paints out-of-box edges)', () => {
+    // Regression guard: the overlay lives inside the 0x0 `.wall-content`
+    // transform anchor. If the SVG itself is sized 100% (== 0 here) Chromium
+    // refuses to paint any connection line that lies outside the zero-sized
+    // viewport, so Shift-drag edges become invisible in Chrome/Edge while the
+    // edge data is still created. A non-zero box + overflow:visible fixes it.
+    const surface = document.createElement('div');
+    document.body.appendChild(surface);
+    const svg = ensureEdgeOverlay(surface);
+    expect(svg.style.width).not.toBe('100%');
+    expect(svg.style.height).not.toBe('100%');
+    expect(parseFloat(svg.style.width)).toBeGreaterThan(0);
+    expect(parseFloat(svg.style.height)).toBeGreaterThan(0);
+    expect(svg.style.overflow).toBe('visible');
+  });
+
   it('renderEdges draws hit + visible lines between note centers', () => {
     const { surface } = mountSurfaceWithNotes();
     renderEdges(surface, [{ id: 'e1', from: 'na', to: 'nb' }]);

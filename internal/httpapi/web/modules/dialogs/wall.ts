@@ -102,7 +102,7 @@ import {
 import {
   getWallCanvasMode,
   isWallPanMode,
-  resetWallCanvasMode,
+  loadWallCanvasMode,
   toggleWallCanvasMode,
   type WallCanvasMode,
 } from "./wall-canvas-mode.js";
@@ -188,7 +188,7 @@ export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void>
   setMounted(state);
   (dialog as any)[TEARDOWN_MARKER] = true;
 
-  resetWallCanvasMode();
+  loadWallCanvasMode();
   wallSurface.classList.toggle("wall-surface--readonly", !canEdit);
   const content = ensureWallContent(wallSurface);
   initWallViewport(wallSurface, content, opts.slug);
@@ -256,7 +256,6 @@ function teardown(): void {
   state.transient.clear();
   state.selected.clear();
   cancelWallNavigationGestures();
-  resetWallCanvasMode();
   syncWallCanvasModeUi();
   state.abort.abort();
   teardownWallViewport();
