@@ -2,6 +2,17 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
 
+## [3.17.5] - 2026-06-02
+
+### Improvements
+
+- **Wall canvas mode** - Added a Select/Pan toggle for touch-screen navigation: Select keeps marquee drag, Pan lets empty-canvas mouse/touch drag move the wall and supports touch pinch zoom.
+
+### Documentation
+
+- **`docs/wall.md`** - Select/Pan mode toggle and touch pinch zoom.
+- **`docs/wall-viewport-manual-checklist.md`** - Manual sign-off for canvas mode, touch marquee, pan swipe, and pinch zoom.
+
 ## [3.17.4] - 2026-06-02
 
 ### Added

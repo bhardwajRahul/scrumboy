@@ -36,8 +36,44 @@ import { applyTransient as applyTransientImpl, refetchDoc as refetchDocImpl, sta
 import { beginEdit as beginEditController } from "./wall-edit-controller.js";
 import { openWallNoteContextMenu } from "./wall-note-context-menu.js";
 import { clampCanvasCoord, ensureWallContent, fitToNotes, getWallContent, initWallViewport, screenToCanvas, teardownWallViewport, } from "./wall-viewport.js";
-import { bindWallNavigation, isSpacePanArmed } from "./wall-viewport-nav.js";
+import { bindWallNavigation, cancelWallNavigationGestures, isSpacePanArmed, } from "./wall-viewport-nav.js";
+import { getWallCanvasMode, isWallPanMode, resetWallCanvasMode, toggleWallCanvasMode, } from "./wall-canvas-mode.js";
 const TEARDOWN_MARKER = Symbol("wallMounted");
+const SELECT_MODE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-dashed-icon lucide-square-dashed"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg>`;
+const PAN_MODE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hand-icon lucide-hand"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>`;
+function wallModeButtonState(mode) {
+    if (mode === "pan") {
+        return {
+            pressed: "true",
+            label: "Canvas mode: Pan",
+            title: "Canvas mode: Pan — drag empty canvas to move around",
+            svg: PAN_MODE_SVG,
+        };
+    }
+    return {
+        pressed: "false",
+        label: "Canvas mode: Select",
+        title: "Canvas mode: Select — drag empty canvas to select notes",
+        svg: SELECT_MODE_SVG,
+    };
+}
+function syncWallCanvasModeUi() {
+    const mode = getWallCanvasMode();
+    if (wallSurface) {
+        wallSurface.classList.toggle("wall-surface--pan-mode", mode === "pan");
+        wallSurface.classList.toggle("wall-surface--select-mode", mode === "select");
+        if (mode !== "pan")
+            wallSurface.classList.remove("wall-surface--panning");
+    }
+    const btn = document.getElementById("wallModeToggleBtn");
+    if (!(btn instanceof HTMLButtonElement))
+        return;
+    const next = wallModeButtonState(mode);
+    btn.setAttribute("aria-pressed", next.pressed);
+    btn.setAttribute("aria-label", next.label);
+    btn.setAttribute("title", next.title);
+    btn.innerHTML = next.svg;
+}
 // Public entry: open the wall dialog and boot its full lifecycle.
 export async function openWallDialog(opts) {
     if (!wallDialog || !wallSurface) {
@@ -70,10 +106,12 @@ export async function openWallDialog(opts) {
     };
     setMounted(state);
     dialog[TEARDOWN_MARKER] = true;
+    resetWallCanvasMode();
     wallSurface.classList.toggle("wall-surface--readonly", !canEdit);
     const content = ensureWallContent(wallSurface);
     initWallViewport(wallSurface, content, opts.slug);
     bindWallNavigation(wallSurface, state.abort.signal, () => dialog.open);
+    syncWallCanvasModeUi();
     renderSurface();
     if (closeWallBtn) {
         closeWallBtn.addEventListener("click", () => dialog.close(), { signal: state.abort.signal });
@@ -84,6 +122,18 @@ export async function openWallDialog(opts) {
             const m = getMounted();
             if (m)
                 fitToNotes(m.doc.notes);
+            if (fitBtn instanceof HTMLButtonElement)
+                fitBtn.blur();
+        }, { signal: state.abort.signal });
+    }
+    const modeBtn = document.getElementById("wallModeToggleBtn");
+    if (modeBtn instanceof HTMLButtonElement) {
+        modeBtn.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            cancelWallNavigationGestures();
+            toggleWallCanvasMode();
+            syncWallCanvasModeUi();
+            modeBtn.blur();
         }, { signal: state.abort.signal });
     }
     window.addEventListener("keydown", (ev) => {
@@ -125,6 +175,9 @@ function teardown() {
     }
     state.transient.clear();
     state.selected.clear();
+    cancelWallNavigationGestures();
+    resetWallCanvasMode();
+    syncWallCanvasModeUi();
     state.abort.abort();
     teardownWallViewport();
     if (wallSurface) {
@@ -568,7 +621,7 @@ function bindSurfaceHandlers(state) {
         // Empty canvas, primary button: begin marquee (unless Shift is held —
         // Shift is reserved for edge-from-note and has no empty-canvas meaning).
         // Space+drag is reserved for viewport pan (wall-viewport-nav).
-        if (ev.button === 0 && !ev.shiftKey && !isSpacePanArmed()) {
+        if (ev.button === 0 && !ev.shiftKey && !isSpacePanArmed() && !isWallPanMode()) {
             beginMarquee(state, ev);
             return;
         }
