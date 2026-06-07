@@ -2,6 +2,16 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
 
+## [3.17.7] - 2026-06-07
+
+### Added
+
+- **Architecture diagram viewer** - Interactive Mermaid viewer under `docs/diagrams/` with split-pane markdown and diagrams, color-coded category tabs, and 12 Scrumboy architecture diagrams (overview, HTTP routing, bootstrap, data model, auth, features, integrations, frontend).
+
+### Documentation
+
+- **`docs/diagrams/`** - Local static server (`serve-diagrams.bat` / `serve.py` on port 8775) so the viewer can fetch markdown over HTTP; semantic yes/no branch label coloring aligned with the SPA Mermaid helper.
+
 ## [3.17.6] - 2026-06-02
 
 ### Fixed

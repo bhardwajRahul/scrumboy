@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Scrumboy - Architecture diagrams</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js"></script>
+  <script src="mermaid-semantic-edges.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --panel: #111827;
+      --panel2: #0f172a;
+      --border: rgba(255, 255, 255, 0.08);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #60a5fa;
+      --accent-dim: #3b82f6;
+      --gold: #efbf04;
+      --danger: #ef4444;
+      --radius: calc(14px * 1.125);
+      --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+      --mono: "Cascadia Code", "Consolas", monospace;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.55;
+      color-scheme: dark;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      padding: 1.1rem 1.5rem 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: var(--shadow);
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.3rem;
+      color: var(--gold);
+    }
+
+    header p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.85rem;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 1rem;
+      padding: 0.75rem 1.5rem;
+      background: var(--panel2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .category-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-right: 0.25rem;
+    }
+
+    .sub-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .sub-tab {
+      padding: 0.35rem 0.75rem;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.78rem;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sub-tab:hover { color: var(--text); border-color: var(--accent-dim); }
+
+    .sub-tab.active { color: var(--text); }
+
+    .sub-tab[data-category="overview"].active {
+      border-color: #efbf04;
+      background: rgba(239, 191, 4, 0.14);
+    }
+
+    .sub-tab[data-category="server"].active {
+      border-color: #60a5fa;
+      background: rgba(96, 165, 250, 0.14);
+    }
+
+    .sub-tab[data-category="data"].active {
+      border-color: #34d399;
+      background: rgba(52, 211, 153, 0.14);
+    }
+
+    .sub-tab[data-category="auth"].active {
+      border-color: #a78bfa;
+      background: rgba(167, 139, 250, 0.14);
+    }
+
+    .sub-tab[data-category="features"].active {
+      border-color: #fb923c;
+      background: rgba(251, 146, 60, 0.14);
+    }
+
+    .sub-tab[data-category="integrations"].active {
+      border-color: #f472b6;
+      background: rgba(244, 114, 182, 0.14);
+    }
+
+    .sub-tab[data-category="frontend"].active {
+      border-color: #22d3ee;
+      background: rgba(34, 211, 238, 0.14);
+    }
+
+    .doc-select-wrap {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .doc-select-wrap label {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    #doc-select {
+      min-width: 240px;
+      padding: 0.45rem 0.65rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.82rem;
+      color-scheme: dark;
+      cursor: pointer;
+    }
+
+    #doc-select:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.55);
+      outline-offset: 1px;
+    }
+
+    #doc-select option {
+      background-color: var(--panel);
+      color: var(--text);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 42%) minmax(320px, 58%);
+      gap: 0;
+      min-height: calc(100vh - 130px);
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      padding: 1.25rem 1.5rem;
+      overflow-y: auto;
+      max-height: calc(100vh - 130px);
+    }
+
+    .panel-left {
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .panel-right {
+      background: var(--panel2);
+    }
+
+    .panel-header {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .prose h1 { font-size: 1.35rem; margin-bottom: 0.75rem; color: var(--text); }
+    .prose h2 { font-size: 1.05rem; margin: 1.25rem 0 0.5rem; color: var(--accent); }
+    .prose h3 { font-size: 0.95rem; margin: 1rem 0 0.4rem; }
+    .prose p { margin-bottom: 0.75rem; color: var(--text); }
+    .prose ul, .prose ol { margin: 0.5rem 0 0.75rem 1.25rem; }
+    .prose li { margin-bottom: 0.35rem; }
+    .prose code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: var(--panel);
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+    }
+    .prose table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      margin: 0.75rem 0;
+    }
+    .prose th, .prose td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+    }
+    .prose th { background: var(--panel); color: var(--muted); }
+    .prose a { color: var(--accent); }
+    .prose strong { color: #fff; }
+
+    .diagram-tabs {
+      display: flex;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .diagram-tab {
+      padding: 0.3rem 0.65rem;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .diagram-tab.active {
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    .diagram-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      overflow-x: auto;
+      min-height: 200px;
+      box-shadow: var(--shadow);
+    }
+
+    .diagram-card.hidden { display: none; }
+
+    .diagram-card .diagram-mermaid-canvas {
+      display: block;
+      width: 100%;
+    }
+
+    .diagram-card .diagram-mermaid-canvas > svg {
+      display: block;
+      margin: 0 auto;
+      max-width: 100%;
+      background: transparent;
+    }
+
+    .diagram-card foreignObject {
+      overflow: visible;
+    }
+
+    .diagram-card .labelBkg {
+      border-radius: 4px;
+      box-sizing: border-box;
+      white-space: nowrap;
+    }
+
+    .loading, .error-banner {
+      padding: 2rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .error-banner {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      border-radius: var(--radius);
+      margin: 1rem 1.5rem;
+      color: #fca5a5;
+      text-align: left;
+    }
+
+    .error-banner code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      display: block;
+      margin-top: 0.75rem;
+      padding: 0.5rem;
+      background: var(--panel);
+      border-radius: 6px;
+      color: var(--text);
+    }
+
+    footer {
+      padding: 0.75rem 1.5rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    footer code {
+      font-family: var(--mono);
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Scrumboy architecture (as of: June 7th 2026)</h1>
+    <p>Go monolith + embedded SPA + SQLite - sourced from <code>docs/diagrams/*.md</code></p>
+  </header>
+
+  <div class="toolbar">
+    <span class="category-label">Category</span>
+    <div class="sub-tabs" id="sub-tabs" role="tablist"></div>
+    <div class="doc-select-wrap">
+      <label for="doc-select">Diagram</label>
+      <select id="doc-select" aria-label="Select diagram document"></select>
+    </div>
+  </div>
+
+  <div id="fetch-error" class="error-banner" hidden></div>
+
+  <div class="layout">
+    <section class="panel panel-left" aria-label="Explanation">
+      <div class="panel-header">Explanation</div>
+      <div id="prose" class="prose">
+        <div class="loading">Loading…</div>
+      </div>
+    </section>
+    <section class="panel panel-right" aria-label="Diagrams">
+      <div class="panel-header">Diagram</div>
+      <div id="diagram-tabs" class="diagram-tabs" hidden></div>
+      <div id="diagrams"></div>
+    </section>
+  </div>
+
+  <footer>
+    Run <code>serve-diagrams.bat</code> or <code>python serve.py</code> in this folder, then open <code>http://127.0.0.1:8775/</code>. Browser blocks <code>file://</code> fetch.
+  </footer>
+
+  <script>
+    const CATALOG = {
+      overview: {
+        label: "Overview",
+        docs: [
+          { file: "scrumboy_overview.md", title: "System overview", desc: "Context and package map" },
+        ],
+      },
+      server: {
+        label: "Server",
+        docs: [
+          { file: "scrumboy_http_routing.md", title: "HTTP routing", desc: "ServeHTTP dispatch tree" },
+          { file: "scrumboy_bootstrap.md", title: "Bootstrap", desc: "main.go startup and jobs" },
+        ],
+      },
+      data: {
+        label: "Data",
+        docs: [
+          { file: "scrumboy_data_model.md", title: "Data model", desc: "SQLite store migrations" },
+        ],
+      },
+      auth: {
+        label: "Auth",
+        docs: [
+          { file: "scrumboy_auth_permissions.md", title: "Auth and permissions", desc: "Sessions OIDC 2FA roles" },
+        ],
+      },
+      features: {
+        label: "Features",
+        docs: [
+          { file: "scrumboy_board_kanban.md", title: "Board Kanban", desc: "Lanes drag-drop workflows" },
+          { file: "scrumboy_wall_canvas.md", title: "Wall canvas", desc: "Scrumbaby sticky notes" },
+          { file: "scrumboy_backup_import.md", title: "Backup import", desc: "JSON export Trello import" },
+        ],
+      },
+      integrations: {
+        label: "Integrations",
+        docs: [
+          { file: "scrumboy_realtime_events.md", title: "Realtime events", desc: "SSE webhooks push" },
+          { file: "scrumboy_mcp_agora.md", title: "MCP and Agora", desc: "Agent tool surface" },
+          { file: "scrumboy_voiceflow.md", title: "VoiceFlow", desc: "Speech to mutations" },
+        ],
+      },
+      frontend: {
+        label: "Frontend",
+        docs: [
+          { file: "scrumboy_frontend_spa.md", title: "Frontend SPA", desc: "Router state views" },
+        ],
+      },
+    };
+
+    let state = {
+      category: "overview",
+      docFile: null,
+      diagramIndex: 0,
+    };
+
+    const subTabsEl = document.getElementById("sub-tabs");
+    const docSelectEl = document.getElementById("doc-select");
+    const proseEl = document.getElementById("prose");
+    const diagramsEl = document.getElementById("diagrams");
+    const diagramTabsEl = document.getElementById("diagram-tabs");
+    const fetchErrorEl = document.getElementById("fetch-error");
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        darkMode: true,
+        background: "#0b0f17",
+        mainBkg: "#0f172a",
+        secondBkg: "#0f172a",
+        primaryTextColor: "#e5e7eb",
+        textColor: "#e5e7eb",
+        lineColor: "#9ca3af",
+        primaryColor: "#60a5fa",
+        primaryBorderColor: "rgba(255, 255, 255, 0.08)",
+        secondaryColor: "#111827",
+        tertiaryColor: "#0f172a",
+        clusterBkg: "#111827",
+        clusterBorder: "rgba(255, 255, 255, 0.12)",
+        titleColor: "#9ca3af",
+        edgeLabelBackground: "transparent",
+      },
+      flowchart: { useMaxWidth: true, htmlLabels: true },
+      sequence: { useMaxWidth: true },
+    });
+
+    marked.setOptions({ gfm: true, breaks: false });
+
+    function parseMarkdown(raw) {
+      const text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const mermaidBlocks = [];
+      const re = /```mermaid\s*\n([\s\S]*?)```/g;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        mermaidBlocks.push(m[1].trim());
+      }
+      const prose = text.replace(/```mermaid\s*\n[\s\S]*?```/g, "").trim();
+      return { prose, mermaidBlocks };
+    }
+
+    function getDocsInCategory(category) {
+      const cat = CATALOG[category];
+      return cat ? cat.docs : [];
+    }
+
+    function renderSubTabs() {
+      subTabsEl.innerHTML = "";
+      Object.entries(CATALOG).forEach(([key, cat]) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "sub-tab" + (key === state.category ? " active" : "");
+        btn.textContent = cat.label;
+        btn.dataset.category = key;
+        btn.setAttribute("role", "tab");
+        btn.setAttribute("aria-selected", key === state.category ? "true" : "false");
+        btn.addEventListener("click", () => {
+          state.category = key;
+          const docs = getDocsInCategory(key);
+          state.docFile = docs[0]?.file ?? null;
+          state.diagramIndex = 0;
+          renderSubTabs();
+          renderDocSelect();
+          loadCurrentDoc();
+        });
+        subTabsEl.appendChild(btn);
+      });
+    }
+
+    function renderDocSelect() {
+      const docs = getDocsInCategory(state.category);
+      docSelectEl.innerHTML = "";
+      docs.forEach((doc) => {
+        const opt = document.createElement("option");
+        opt.value = doc.file;
+        opt.textContent = doc.title;
+        if (doc.file === state.docFile) opt.selected = true;
+        docSelectEl.appendChild(opt);
+      });
+      if (!state.docFile && docs[0]) state.docFile = docs[0].file;
+    }
+
+    let semanticEdgeConfigPromise = null;
+
+    async function getSemanticEdgeConfig() {
+      if (!semanticEdgeConfigPromise) {
+        semanticEdgeConfigPromise = MermaidSemanticEdges.loadMermaidSemanticEdgeConfig();
+      }
+      return semanticEdgeConfigPromise;
+    }
+
+    async function renderMermaidBlocks(blocks) {
+      diagramsEl.innerHTML = "";
+      diagramTabsEl.innerHTML = "";
+      diagramTabsEl.hidden = blocks.length <= 1;
+
+      if (blocks.length === 0) {
+        diagramsEl.innerHTML = '<div class="loading">No mermaid diagram in this document.</div>';
+        return;
+      }
+
+      const semanticConfig = await getSemanticEdgeConfig();
+
+      for (let i = 0; i < blocks.length; i++) {
+        const src = blocks[i];
+
+        if (blocks.length > 1) {
+          const tab = document.createElement("button");
+          tab.type = "button";
+          tab.className = "diagram-tab" + (i === state.diagramIndex ? " active" : "");
+          tab.textContent = "Diagram " + (i + 1);
+          tab.addEventListener("click", () => {
+            state.diagramIndex = i;
+            document.querySelectorAll(".diagram-tab").forEach((t, j) => {
+              t.classList.toggle("active", j === i);
+            });
+            document.querySelectorAll(".diagram-card").forEach((c, j) => {
+              c.classList.toggle("hidden", j !== i);
+            });
+          });
+          diagramTabsEl.appendChild(tab);
+        }
+
+        const card = document.createElement("div");
+        card.className = "diagram-card" + (blocks.length > 1 && i !== state.diagramIndex ? " hidden" : "");
+        diagramsEl.appendChild(card);
+
+        try {
+          const labelColors = MermaidSemanticEdges.buildMermaidSemanticLabelColors(src, semanticConfig);
+          const canvas = document.createElement("div");
+          canvas.className = "mermaid diagram-mermaid-canvas";
+          canvas.textContent = src;
+          card.appendChild(canvas);
+          await mermaid.run({ nodes: [canvas] });
+          MermaidSemanticEdges.paintMermaidSemanticLabelBackgrounds(canvas, labelColors);
+        } catch (err) {
+          card.innerHTML =
+            '<div class="error-banner">Diagram ' +
+            (i + 1) +
+            " failed: " +
+            escapeHtml(String(err.message || err)) +
+            "</div>";
+        }
+      }
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    async function loadCurrentDoc() {
+      if (!state.docFile) return;
+      proseEl.innerHTML = '<div class="loading">Loading…</div>';
+      diagramsEl.innerHTML = "";
+      fetchErrorEl.hidden = true;
+
+      try {
+        const res = await fetch(state.docFile);
+        if (!res.ok) throw new Error("HTTP " + res.status + " for " + state.docFile);
+        const raw = await res.text();
+        const { prose, mermaidBlocks } = parseMarkdown(raw);
+        proseEl.innerHTML = marked.parse(prose);
+        await renderMermaidBlocks(mermaidBlocks);
+      } catch (err) {
+        fetchErrorEl.hidden = false;
+        fetchErrorEl.innerHTML =
+          "<strong>Could not load markdown.</strong> Serve this folder over HTTP.<br><br>" +
+          escapeHtml(String(err.message || err)) +
+          "<code>cd docs/diagrams\npython serve.py\n# open http://127.0.0.1:8775/</code>";
+        proseEl.innerHTML = '<div class="loading">Load failed - see banner above.</div>';
+      }
+    }
+
+    function initCategory(category) {
+      state.category = category;
+      const docs = getDocsInCategory(category);
+      state.docFile = docs[0]?.file ?? null;
+      state.diagramIndex = 0;
+      renderSubTabs();
+      renderDocSelect();
+      loadCurrentDoc();
+    }
+
+    docSelectEl.addEventListener("change", () => {
+      state.docFile = docSelectEl.value;
+      state.diagramIndex = 0;
+      loadCurrentDoc();
+    });
+
+    initCategory("overview");
+  </script>
+</body>
+</html>
