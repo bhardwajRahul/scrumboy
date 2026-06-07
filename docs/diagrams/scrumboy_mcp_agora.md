@@ -1,10 +1,10 @@
 # MCP and Agora integration
 
-AI agents call the same store-backed tools as operators, via MCP HTTP or Agoragentic envelopes.
+Optional automation surface: API-token or session-authenticated clients can call the same store-backed tools as the REST API, via MCP HTTP or Agoragentic envelopes.
 
 ```mermaid
 flowchart TB
-  Client[MCP or Agora client]
+  Client[Automation client MCP or Agora]
   AuthC[Session cookie or API token]
 
   Client --> AuthC

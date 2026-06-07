@@ -17,17 +17,41 @@ flowchart TB
   DnD --> Patch --> API
 ```
 
-## Workflow columns
+## Workflow columns (per project)
+
+Lanes are **not** hard-coded. Each project stores an ordered list in `project_workflow_columns`: stable `key`, display label, color, sort order, and exactly one `is_done` flag.
+
+```mermaid
+flowchart TB
+  Proj[Project]
+  WF[project_workflow_columns]
+  Template[Default template on create]
+  Settings[Settings workflow UI add rename reorder recolor]
+  DoneLane[One column is_done]
+  API[Board JSON columnOrder]
+  Lanes[Rendered swimlanes]
+
+  Proj --> WF
+  Template --> WF
+  Settings --> WF
+  WF --> DoneLane
+  WF --> API --> Lanes
+```
+
+Default template keys (example only; boards can diverge):
 
 ```mermaid
 flowchart LR
-  Backlog[backlog]
-  NotStarted[not_started]
-  InProgress[in_progress]
-  Testing[testing]
-  Done[done]
-
-  Backlog --> NotStarted --> InProgress --> Testing --> Done
+  subgraph example [Default template example]
+    B[backlog]
+    NS[not_started]
+    IP[in_progress]
+    T[testing]
+    D["done (is_done)"]
+    B --> NS --> IP --> T --> D
+  end
 ```
 
-Lane colors and sprint chips are defined in `styles.css` CSS variables. Sprints filter board scope via `sprintId` query param; tags and search filters apply client-side in `board-filters.ts`.
+Projects may add lanes (up to store limit), rename labels, recolor columns, reorder them, and choose which lane counts as done. Todos reference lanes by `column_key`, not a fixed enum.
+
+Lane colors and sprint chips use `styles.css` CSS variables. Sprints filter board scope via `sprintId` query param; tags and search filters apply client-side in `board-filters.ts`.

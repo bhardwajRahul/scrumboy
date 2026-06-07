@@ -106,6 +106,11 @@
       background: rgba(239, 191, 4, 0.14);
     }
 
+    .sub-tab[data-category="operations"].active {
+      border-color: #84cc16;
+      background: rgba(132, 204, 22, 0.14);
+    }
+
     .sub-tab[data-category="server"].active {
       border-color: #60a5fa;
       background: rgba(96, 165, 250, 0.14);
@@ -259,10 +264,12 @@
     }
 
     .diagram-card {
+      position: relative;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 1.25rem;
+      padding-bottom: 2.75rem;
       margin-bottom: 1rem;
       overflow-x: auto;
       min-height: 200px;
@@ -270,6 +277,159 @@
     }
 
     .diagram-card.hidden { display: none; }
+
+    .diagram-expand-btn {
+      position: absolute;
+      right: 0.65rem;
+      bottom: 0.65rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+    }
+
+    .diagram-expand-btn:hover {
+      color: var(--text);
+      border-color: var(--accent-dim);
+      background: var(--panel2);
+    }
+
+    .diagram-expand-btn:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.55);
+      outline-offset: 1px;
+    }
+
+    .diagram-expand-btn svg {
+      width: 1.1rem;
+      height: 1.1rem;
+      display: block;
+    }
+
+    .diagram-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.25rem;
+    }
+
+    .diagram-overlay[hidden] { display: none; }
+
+    .diagram-overlay-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(3, 7, 18, 0.82);
+      backdrop-filter: blur(4px);
+    }
+
+    .diagram-overlay-panel {
+      position: relative;
+      z-index: 1;
+      width: min(96vw, 1400px);
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+
+    .diagram-overlay-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel2);
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .diagram-overlay-title {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .diagram-overlay-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2rem;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      flex-shrink: 0;
+    }
+
+    .diagram-overlay-close:hover {
+      color: var(--text);
+      border-color: var(--accent-dim);
+      background: var(--bg);
+    }
+
+    .diagram-overlay-close:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.55);
+      outline-offset: 1px;
+    }
+
+    .diagram-overlay-close svg {
+      width: 1.1rem;
+      height: 1.1rem;
+      display: block;
+    }
+
+    .diagram-overlay-content {
+      overflow: auto;
+      padding: 1.5rem;
+      min-height: 200px;
+    }
+
+    .diagram-overlay-content .diagram-mermaid-canvas {
+      display: block;
+      width: max-content;
+      min-width: 100%;
+      margin: 0 auto;
+    }
+
+    .diagram-overlay-content .diagram-mermaid-canvas > svg {
+      display: block;
+      margin: 0 auto;
+      max-width: none;
+      height: auto;
+      background: transparent;
+    }
+
+    .diagram-overlay-content foreignObject {
+      overflow: visible;
+    }
+
+    .diagram-overlay-content .labelBkg {
+      border-radius: 4px;
+      box-sizing: border-box;
+      white-space: nowrap;
+    }
+
+    body.diagram-overlay-open {
+      overflow: hidden;
+    }
 
     .diagram-card .diagram-mermaid-canvas {
       display: block;
@@ -369,12 +529,35 @@
     Run <code>serve-diagrams.bat</code> or <code>python serve.py</code> in this folder, then open <code>http://127.0.0.1:8775/</code>. Browser blocks <code>file://</code> fetch.
   </footer>
 
+  <div id="diagram-overlay" class="diagram-overlay" hidden>
+    <div class="diagram-overlay-backdrop" data-overlay-dismiss></div>
+    <div class="diagram-overlay-panel" role="dialog" aria-modal="true" aria-labelledby="diagram-overlay-title">
+      <div class="diagram-overlay-header">
+        <span id="diagram-overlay-title" class="diagram-overlay-title">Diagram</span>
+        <button type="button" class="diagram-overlay-close" aria-label="Minimize diagram"></button>
+      </div>
+      <div id="diagram-overlay-content" class="diagram-overlay-content"></div>
+    </div>
+  </div>
+
   <script>
+    const ICON_MAXIMIZE =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+
+    const ICON_MINIMIZE =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 10 7-7"/><path d="M20 10h-6V4"/><path d="m3 21 7-7"/><path d="M4 14h6v6"/></svg>';
+
     const CATALOG = {
       overview: {
         label: "Overview",
         docs: [
           { file: "scrumboy_overview.md", title: "System overview", desc: "Context and package map" },
+        ],
+      },
+      operations: {
+        label: "Operations",
+        docs: [
+          { file: "scrumboy_deployment_ops.md", title: "Deployment and ops", desc: "Docker SQLite backup upgrade" },
         ],
       },
       server: {
@@ -400,16 +583,16 @@
         label: "Features",
         docs: [
           { file: "scrumboy_board_kanban.md", title: "Board Kanban", desc: "Lanes drag-drop workflows" },
-          { file: "scrumboy_wall_canvas.md", title: "Wall canvas", desc: "Scrumbaby sticky notes" },
+          { file: "scrumboy_wall_canvas.md", title: "Wall canvas", desc: "Sticky-note wall canvas" },
           { file: "scrumboy_backup_import.md", title: "Backup import", desc: "JSON export Trello import" },
+          { file: "scrumboy_voiceflow.md", title: "VoiceFlow", desc: "Optional browser speech commands" },
         ],
       },
       integrations: {
         label: "Integrations",
         docs: [
           { file: "scrumboy_realtime_events.md", title: "Realtime events", desc: "SSE webhooks push" },
-          { file: "scrumboy_mcp_agora.md", title: "MCP and Agora", desc: "Agent tool surface" },
-          { file: "scrumboy_voiceflow.md", title: "VoiceFlow", desc: "Speech to mutations" },
+          { file: "scrumboy_mcp_agora.md", title: "MCP and Agora", desc: "Optional API automation" },
         ],
       },
       frontend: {
@@ -432,6 +615,49 @@
     const diagramsEl = document.getElementById("diagrams");
     const diagramTabsEl = document.getElementById("diagram-tabs");
     const fetchErrorEl = document.getElementById("fetch-error");
+    const diagramOverlayEl = document.getElementById("diagram-overlay");
+    const diagramOverlayTitleEl = document.getElementById("diagram-overlay-title");
+    const diagramOverlayContentEl = document.getElementById("diagram-overlay-content");
+    const diagramOverlayCloseEl = diagramOverlayEl.querySelector(".diagram-overlay-close");
+
+    diagramOverlayCloseEl.innerHTML = ICON_MINIMIZE;
+    diagramOverlayEl.querySelectorAll("[data-overlay-dismiss]").forEach((el) => {
+      el.addEventListener("click", closeDiagramOverlay);
+    });
+    diagramOverlayCloseEl.addEventListener("click", closeDiagramOverlay);
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !diagramOverlayEl.hidden) {
+        closeDiagramOverlay();
+      }
+    });
+
+    function closeDiagramOverlay() {
+      diagramOverlayEl.hidden = true;
+      diagramOverlayContentEl.innerHTML = "";
+      document.body.classList.remove("diagram-overlay-open");
+    }
+
+    function openDiagramOverlay(canvas, title) {
+      const clone = canvas.cloneNode(true);
+      clone.removeAttribute("id");
+      diagramOverlayTitleEl.textContent = title;
+      diagramOverlayContentEl.innerHTML = "";
+      diagramOverlayContentEl.appendChild(clone);
+      diagramOverlayEl.hidden = false;
+      document.body.classList.add("diagram-overlay-open");
+      diagramOverlayCloseEl.focus();
+    }
+
+    function attachDiagramExpandButton(card, canvas, diagramLabel) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "diagram-expand-btn";
+      btn.setAttribute("aria-label", "Expand diagram");
+      btn.innerHTML = ICON_MAXIMIZE;
+      btn.addEventListener("click", () => openDiagramOverlay(canvas, diagramLabel));
+      card.appendChild(btn);
+    }
 
     mermaid.initialize({
       startOnLoad: false,
@@ -523,6 +749,7 @@
     }
 
     async function renderMermaidBlocks(blocks) {
+      closeDiagramOverlay();
       diagramsEl.innerHTML = "";
       diagramTabsEl.innerHTML = "";
       diagramTabsEl.hidden = blocks.length <= 1;
@@ -543,6 +770,7 @@
           tab.className = "diagram-tab" + (i === state.diagramIndex ? " active" : "");
           tab.textContent = "Diagram " + (i + 1);
           tab.addEventListener("click", () => {
+            closeDiagramOverlay();
             state.diagramIndex = i;
             document.querySelectorAll(".diagram-tab").forEach((t, j) => {
               t.classList.toggle("active", j === i);
@@ -555,7 +783,12 @@
         }
 
         const card = document.createElement("div");
-        card.className = "diagram-card" + (blocks.length > 1 && i !== state.diagramIndex ? " hidden" : "");
+        card.className = "diagram-card";
+        if (blocks.length > 1 && i !== state.diagramIndex) {
+          card.style.position = "fixed";
+          card.style.left = "-10000px";
+          card.style.visibility = "hidden";
+        }
         diagramsEl.appendChild(card);
 
         try {
@@ -566,6 +799,11 @@
           card.appendChild(canvas);
           await mermaid.run({ nodes: [canvas] });
           MermaidSemanticEdges.paintMermaidSemanticLabelBackgrounds(canvas, labelColors);
+          const diagramLabel =
+            blocks.length > 1
+              ? docSelectEl.selectedOptions[0]?.textContent + " - Diagram " + (i + 1)
+              : docSelectEl.selectedOptions[0]?.textContent || "Diagram";
+          attachDiagramExpandButton(card, canvas, diagramLabel);
         } catch (err) {
           card.innerHTML =
             '<div class="error-banner">Diagram ' +
@@ -573,6 +811,13 @@
             " failed: " +
             escapeHtml(String(err.message || err)) +
             "</div>";
+        }
+
+        card.style.position = "";
+        card.style.left = "";
+        card.style.visibility = "";
+        if (blocks.length > 1 && i !== state.diagramIndex) {
+          card.classList.add("hidden");
         }
       }
     }

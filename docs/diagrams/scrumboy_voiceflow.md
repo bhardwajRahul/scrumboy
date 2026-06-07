@@ -1,6 +1,6 @@
 # VoiceFlow pipeline
 
-Browser speech drives board mutations through parse, resolve, and execute stages.
+Optional browser speech shortcuts for board actions (push-to-talk or hands-free). Parses utterances locally, then calls the same REST or MCP paths as manual UI actions.
 
 ```mermaid
 flowchart LR

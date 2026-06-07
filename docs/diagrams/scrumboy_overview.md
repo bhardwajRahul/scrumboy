@@ -1,38 +1,40 @@
 # Scrumboy system overview
 
-Self-hosted Kanban / project management: one Go binary serves REST, MCP, Agora, SSE realtime, webhooks, and an embedded SPA backed by SQLite.
+Self-hosted Kanban and project management: one Go binary serves the embedded SPA, REST API, realtime SSE, and optional automation hooks, backed by SQLite.
 
 ```mermaid
 flowchart TB
-  Browser[Browser SPA PWA]
-  Agents[AI agents MCP Agora clients]
+  Users[Users browser PWA]
 
   subgraph monolith [Go monolith cmd/scrumboy]
-    HTTP[httpapi.Server]
-    MCP[mcp.Adapter]
-    Agora[agora.Handler]
-    Store[store layer]
+    HTTP[httpapi.Server REST SSE SPA]
+    Store[store layer authz]
     Bus[eventbus.Fanout]
+    MCP[mcp.Adapter optional]
+    Agora[agora.Handler optional]
   end
 
-  DB[(SQLite data/scrumboy.db)]
+  DB[(SQLite DATA_DIR app.db)]
   IdP[Optional OIDC IdP]
-  Hooks[Outbound webhooks]
-  Push[Web Push endpoints]
+  Hooks[Optional outbound webhooks]
+  Push[Optional Web Push VAPID]
+  Auto[Optional API token clients]
 
-  Browser --> HTTP
-  Agents --> MCP
-  Agents --> Agora
+  Users --> HTTP
   HTTP --> Store
-  MCP --> Store
-  Agora --> MCP
   Store --> DB
   HTTP --> IdP
   Store --> Bus
-  Bus --> Browser
+  Bus --> Users
   Bus --> Hooks
   Bus --> Push
+  Auto -. optional .-> MCP
+  Auto -. optional .-> Agora
+  MCP --> Store
+  Agora --> MCP
 ```
+
+Core path: browser to HTTP to store to SQLite, with SSE for live board updates. MCP, Agora, webhooks, and push are the same store and auth model, but optional for operators who want automation or notifications.
 
 ## Package map
 
@@ -41,7 +43,9 @@ flowchart TB
 | `cmd/scrumboy` | Process entry, TLS, hourly maintenance |
 | `internal/httpapi` | HTTP routing, SSE hub, SPA embed, webhooks, push |
 | `internal/store` | Domain logic and authorization |
-| `internal/mcp` | MCP HTTP and JSON-RPC tool surface |
-| `internal/agora` | Agoragentic discover and invoke over MCP |
 | `internal/httpapi/web` | TypeScript SPA compiled to `dist/` |
 | `internal/migrate` | Versioned SQL migrations |
+| `internal/mcp` | Optional MCP HTTP and JSON-RPC tools |
+| `internal/agora` | Optional Agoragentic adapter over MCP |
+
+For deployment, backup, and upgrade, see `scrumboy_deployment_ops.md`.

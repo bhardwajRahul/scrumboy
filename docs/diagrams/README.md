@@ -22,14 +22,12 @@ cd C:\dev\project\scrumboy\docs\diagrams
 dir
 ```
 
-You should see **`index.html`**, **`serve.py`**, and about **12** `scrumboy_*.md` files.
+You should see **`index.html`**, **`serve.py`**, and about **13** `scrumboy_*.md` files.
 
 | If `dir` shows… | You are… |
 |-----------------|----------|
-| Only `README.md` | **Wrong folder** - likely `voxidian\docs\mermaid` (redirect stub), not Scrumboy |
+| Only `README.md` | **Wrong folder** - open `docs/diagrams` inside the Scrumboy repo |
 | `index.html` + many `scrumboy_*.md` | Correct - run `python serve.py` here |
-
-**Do not use port 8765** - other repos in this workspace often already serve a README-only folder there.
 
 ### Yes/no branch label colors
 
@@ -38,14 +36,15 @@ The viewer ports Scrumboy's semantic edge coloring (`mermaid-semantic-edges.js` 
 | File | Topic |
 |------|--------|
 | [scrumboy_overview.md](scrumboy_overview.md) | System context and major packages |
+| [scrumboy_deployment_ops.md](scrumboy_deployment_ops.md) | Docker, SQLite, backup, upgrade |
 | [scrumboy_http_routing.md](scrumboy_http_routing.md) | `ServeHTTP` request dispatch |
 | [scrumboy_bootstrap.md](scrumboy_bootstrap.md) | `main.go` startup and background jobs |
 | [scrumboy_data_model.md](scrumboy_data_model.md) | SQLite, migrations, `store` domains |
 | [scrumboy_auth_permissions.md](scrumboy_auth_permissions.md) | Sessions, OIDC, 2FA, roles |
 | [scrumboy_board_kanban.md](scrumboy_board_kanban.md) | Board REST, drag-drop, workflows |
 | [scrumboy_realtime_events.md](scrumboy_realtime_events.md) | Eventbus, SSE, webhooks, push |
-| [scrumboy_mcp_agora.md](scrumboy_mcp_agora.md) | MCP tools and Agora adapter |
-| [scrumboy_voiceflow.md](scrumboy_voiceflow.md) | Speech to MCP execute pipeline |
+| [scrumboy_mcp_agora.md](scrumboy_mcp_agora.md) | Optional MCP and Agora automation |
+| [scrumboy_voiceflow.md](scrumboy_voiceflow.md) | Optional browser speech commands |
 | [scrumboy_wall_canvas.md](scrumboy_wall_canvas.md) | Scrumbaby wall canvas |
 | [scrumboy_backup_import.md](scrumboy_backup_import.md) | Backup JSON and Trello import |
 | [scrumboy_frontend_spa.md](scrumboy_frontend_spa.md) | SPA router, state, views |
