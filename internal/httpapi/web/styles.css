@@ -1282,6 +1282,13 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   margin-bottom: 0;
 }
 
+.field__label[title],
+.chip[title],
+#searchInput[title],
+.card__points[title] {
+  cursor: help;
+}
+
 /* ============================================
    BUTTONS
    ============================================ */

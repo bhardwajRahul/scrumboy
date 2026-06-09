@@ -6,6 +6,7 @@ import { getBoard, getSlug } from '../state/selectors.js';
 import { setBoard } from '../state/mutations.js';
 import { normalizeSprints } from '../sprints.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
+import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
 
 type BindSprintsTabInteractionsOptions = {
   signal: AbortSignal;
@@ -149,7 +150,7 @@ export async function renderSprintsTabContent(): Promise<string> {
         <div class="settings-section__title">Create Sprint</div>
         <div class="settings-section__description muted">
           Default duration is
-          <select id="sprintDefaultWeeksSelect" class="input" style="display: inline-block; width: auto; min-width: 64px; margin: 0 4px;">
+          <select id="sprintDefaultWeeksSelect" class="input" style="display: inline-block; width: auto; min-width: 64px; margin: 0 4px;"${titleAttr(FIELD_TOOLTIPS.sprintDefaultWeeks)}>
             <option value="1" ${defaultWeeks === 1 ? 'selected' : ''}>1</option>
             <option value="2" ${defaultWeeks === 2 ? 'selected' : ''}>2</option>
           </select>
@@ -157,17 +158,17 @@ export async function renderSprintsTabContent(): Promise<string> {
         </div>
         <div class="settings-create-sprint-form" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
           <label class="field settings-create-sprint-form__name" style="flex: 1; min-width: 120px;">
-            <div class="field__label">Name</div>
-            <input class="input" id="sprintNameInput" placeholder="e.g. Sprint 1 or 2026 Q1 Sprint 1" />
+            ${fieldLabelHTML('Name', FIELD_TOOLTIPS.sprintName)}
+            <input class="input" id="sprintNameInput" placeholder="e.g. Sprint 1 or 2026 Q1 Sprint 1"${titleAttr(FIELD_TOOLTIPS.sprintName)} />
           </label>
           <div class="settings-create-sprint-form__dates" style="display: flex; gap: 12px; align-items: flex-end;">
             <label class="field" style="min-width: 140px;">
-              <div class="field__label">Start</div>
-              <input class="input" type="datetime-local" id="sprintStartInput" value="${defaultStartStr}" />
+              ${fieldLabelHTML('Start', FIELD_TOOLTIPS.sprintStart)}
+              <input class="input" type="datetime-local" id="sprintStartInput" value="${defaultStartStr}"${titleAttr(FIELD_TOOLTIPS.sprintStart)} />
             </label>
             <label class="field" style="min-width: 140px;">
-              <div class="field__label">End</div>
-              <input class="input" type="datetime-local" id="sprintEndInput" value="${defaultEndStr}" />
+              ${fieldLabelHTML('End', FIELD_TOOLTIPS.sprintEnd)}
+              <input class="input" type="datetime-local" id="sprintEndInput" value="${defaultEndStr}"${titleAttr(FIELD_TOOLTIPS.sprintEnd)} />
             </label>
           </div>
           <div class="settings-create-sprint-form__submit">

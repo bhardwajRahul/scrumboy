@@ -4,6 +4,7 @@ import { ingestProjectsFromApp } from '../core/notifications.js';
 import { navigate } from '../router.js';
 import type { Board } from '../types.js';
 import { escapeHTML, showToast, renderUserAvatar, confirmDelete, showPromptDialog } from '../utils.js';
+import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
 import {
   getProjectsTab,
   getProjectView,
@@ -125,7 +126,7 @@ function renderWorkflowEditorBody(
           <button type="button" class="btn btn--ghost btn--small workflow-lane__handle" aria-label="Reorder lane">↕</button>
           <input class="input" data-lane-name="${escapeHTML(lane.key)}" value="${escapeHTML(lane.name)}" maxlength="50" />
           <input type="color" class="settings-color-picker" data-lane-color="${escapeHTML(lane.key)}" value="${escapeHTML(lane.color || "#64748b")}" aria-label="Lane color for ${escapeHTML(lane.name)}" />
-          <label class="muted workflow-done-label-wrap" style="display:flex; align-items:center; gap:4px;" title="Done lane">
+          <label class="muted workflow-done-label-wrap" style="display:flex; align-items:center; gap:4px;"${titleAttr(FIELD_TOOLTIPS.doneLane)}>
             <input type="radio" name="workflowModalDoneLane" data-lane-done="${escapeHTML(lane.key)}" ${lane.isDone ? "checked" : ""} aria-label="Set ${escapeHTML(lane.name)} as done lane" />
             <span class="workflow-done-label">Done</span>
           </label>
@@ -134,7 +135,7 @@ function renderWorkflowEditorBody(
       `).join("")}
     </div>
     <div class="row" style="gap:8px;align-items:center;">
-      <input class="input" id="${escapeHTML(ghostId)}" placeholder="Add lane..." style="flex:1;min-width:0;" />
+      <input class="input" id="${escapeHTML(ghostId)}" placeholder="Add lane..." style="flex:1;min-width:0;"${titleAttr(FIELD_TOOLTIPS.workflowAddLane)} />
       <button type="button" class="btn btn--small" id="workflowModalGhostAdd" aria-label="Add lane">Add</button>
     </div>
   `;

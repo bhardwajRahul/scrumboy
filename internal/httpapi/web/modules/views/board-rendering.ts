@@ -8,6 +8,7 @@ import {
   renderUserAvatar,
   sanitizeHexColor,
 } from '../utils.js';
+import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
 
 export type BoardColumn = { key: string; title: string; color?: string; isDone: boolean };
 export type ChipType = "tag" | "sprint";
@@ -127,6 +128,16 @@ export function getCombinedChipData(
 function buildChipHTML(d: ChipData): string {
   const activeClass = d.active ? "chip--active" : "";
   const label = escapeHTML(d.name);
+  let chipTitle = "";
+  if (d.type === "sprint") {
+    if (d.id === "scheduled") {
+      chipTitle = titleAttr(FIELD_TOOLTIPS.sprintFilterScheduled);
+    } else if (d.id === "unscheduled") {
+      chipTitle = titleAttr(FIELD_TOOLTIPS.sprintFilterUnscheduled);
+    } else if (d.isActiveSprint) {
+      chipTitle = titleAttr(FIELD_TOOLTIPS.sprintFilterActive);
+    }
+  }
   if (d.type === "tag") {
     const safe = sanitizeHexColor(d.color);
     const colorStyle = safe ? `style="border-color: ${safe}; background: ${safe}20;"` : "";
@@ -138,7 +149,7 @@ function buildChipHTML(d: ChipData): string {
   const activeSprintClass = d.isActiveSprint ? " chip--active-sprint" : "";
   const closedSprintClass = d.isClosedSprint ? " chip--closed-sprint" : "";
   const plannedSprintClass = d.isPlannedSprint ? " chip--planned-sprint" : "";
-  return `<button class="chip chip--sprint${activeSprintClass}${closedSprintClass}${plannedSprintClass} ${activeClass}" data-sprint-id="${escapeHTML(d.id)}">${label}</button>`;
+  return `<button class="chip chip--sprint${activeSprintClass}${closedSprintClass}${plannedSprintClass} ${activeClass}" data-sprint-id="${escapeHTML(d.id)}"${chipTitle}>${label}</button>`;
 }
 
 export function buildChipsHTML(data: ChipData[]): string {
@@ -166,7 +177,9 @@ export function renderTodoCard(
   const avatarHTML = assignee
     ? `<div class="todo-avatar" title="${escapeHTML(assignee.name || assignee.email || '')}">${renderAvatarContent({ name: assignee.name, email: assignee.email, image: assignee.image })}</div>`
     : '';
-  const pointsHTML = showPoints ? `<span class="card__points" aria-label="Estimation points">${t.estimationPoints}</span>` : "";
+  const pointsHTML = showPoints
+    ? `<span class="card__points"${titleAttr(FIELD_TOOLTIPS.estimationPoints)} aria-label="Estimation points">${t.estimationPoints}</span>`
+    : "";
   const footerContent = pointsHTML + avatarHTML;
   const selectedClass = opts?.selectedIds?.has(t.id) ? " card--selected" : "";
   return `
@@ -291,6 +304,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
             class="search-input"
             placeholder="${searchPlaceholder}"
             value="${escapeHTML(search || "")}"
+            ${titleAttr(FIELD_TOOLTIPS.boardSearch)}
           />
           ${search && search.trim() !== "" ? `<button class="search-clear" id="searchClear" aria-label="Clear search" title="Clear search">✕</button>` : ''}
         </div>
@@ -325,6 +339,7 @@ export function buildTopbarHtml(args: BuildTopbarHtmlArgs): string {
             class="search-input"
             placeholder="${searchPlaceholder}"
             value="${escapeHTML(search || "")}"
+            ${titleAttr(FIELD_TOOLTIPS.boardSearch)}
           />
           ${search && search.trim() !== "" ? `<button class="search-clear" id="searchClear" aria-label="Clear search" title="Clear search">✕</button>` : ''}
         </div>

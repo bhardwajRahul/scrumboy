@@ -6,6 +6,7 @@ import { THEME_CHANGE_EVENT } from '../theme.js';
 import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getMermaidNotesEnabled, getSlug, getTagColors, getUser } from '../state/selectors.js';
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
 import { escapeHTML, isAnonymousBoard, showConfirmDialog, showToast } from '../utils.js';
+import { applyFieldTooltips, TODO_DIALOG_TOOLTIPS } from '../field-tooltips.js';
 import { normalizeSprints } from '../sprints.js';
 import { bindShareTodoButton, bindTodoDialogLinkLifecycle, initializeTodoDialogLinks, resetTodoDialogLinks, } from './todo-links.js';
 import { computeTodoDialogPermissions, setTodoFormPermissions, } from './todo-permissions.js';
@@ -15,6 +16,7 @@ export { getTagsFromChips, normalizeTagName, removeTag, renderTagAutocomplete, r
 let todoNotesMode = "markdown";
 let todoNotesPreviewBound = false;
 let todoDialogCloseGuardsBound = false;
+let todoTooltipsApplied = false;
 let todoDialogBaseline = null;
 let todoDialogClosePromptOpen = false;
 export function resolveColumnKey(raw) {
@@ -216,7 +218,14 @@ async function closeTodoDialogInternal(options = {}) {
         todoDialogClosePromptOpen = false;
     }
 }
+function ensureTodoDialogTooltips() {
+    if (todoTooltipsApplied || !todoDialog)
+        return;
+    todoTooltipsApplied = true;
+    applyFieldTooltips(TODO_DIALOG_TOOLTIPS, todoDialog);
+}
 function bindTodoDialogCloseGuards() {
+    ensureTodoDialogTooltips();
     if (todoDialogCloseGuardsBound || !todoDialog) {
         return;
     }

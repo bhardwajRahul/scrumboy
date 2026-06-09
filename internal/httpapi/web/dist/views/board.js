@@ -4,6 +4,7 @@ import { ingestProjectsFromApp } from '../core/notifications.js';
 import { fetchProjectMembers, invalidateMembersCache } from '../members-cache.js';
 import { navigate } from '../router.js';
 import { escapeHTML, showToast, renderAvatarContent, processImageFile, confirmDelete, showConfirmDialog, showPromptDialog } from '../utils.js';
+import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
 import { getBoard, getMobileTab, getSlug, getTag, getSearch, getSprintIdFromUrl, getEditingTodo, getProjectId, getTagColors, getUser, getBoardLaneMeta, getLaneDisplayCount, getBoardMembers, getWallEnabled, } from '../state/selectors.js';
 import { setProjectId, setBoard, setOpenTodoSegment, setMobileTab, setTagColors, setSettingsActiveTab, setBoardMembers, setLaneLoading, appendLaneTodos, } from '../state/mutations.js';
 import { isAnonymousBoard, isTemporaryBoard } from '../utils.js';
@@ -1070,8 +1071,8 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                 </label>
 
                 <label class="field">
-                  <div class="field__label">Role</div>
-                  <select id="addMemberRole" class="input" required>
+                  ${fieldLabelHTML('Role', FIELD_TOOLTIPS.memberRole)}
+                  <select id="addMemberRole" class="input" required${titleAttr(FIELD_TOOLTIPS.memberRole)}>
                     <option value="viewer">Viewer</option>
                     <option value="contributor" selected>Contributor</option>
                     <option value="maintainer">Maintainer</option>
