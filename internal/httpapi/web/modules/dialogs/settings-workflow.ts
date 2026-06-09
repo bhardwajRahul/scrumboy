@@ -10,6 +10,7 @@ import {
   getTag,
 } from '../state/selectors.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
+import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
 
 type WorkflowLaneCountsState =
   | { status: 'loading' }
@@ -214,6 +215,7 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
           placeholder="Add lane..."
           aria-label="Add lane"
           style="flex:1; min-width:0;"
+          ${titleAttr(FIELD_TOOLTIPS.workflowAddLane)}
         />
         <button type="button" class="btn btn--small" data-workflow-add>Add</button>
       </div>

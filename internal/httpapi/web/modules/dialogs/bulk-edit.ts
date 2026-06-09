@@ -1,6 +1,7 @@
 import { bulkEditDialog, bulkEditForm } from "../dom/elements.js";
 import { apiFetch } from "../api.js";
 import { showToast, escapeHTML, isAnonymousBoard, sanitizeHexColor } from "../utils.js";
+import { applyFieldTooltips, BULK_EDIT_TOOLTIPS } from "../field-tooltips.js";
 import {
   getBoard,
   getSlug,
@@ -373,6 +374,8 @@ export function initBulkEditDialog(
 ): void {
   if (bound) return;
   bound = true;
+
+  applyFieldTooltips(BULK_EDIT_TOOLTIPS, bulkEditForm ?? document);
 
   const form = bulkEditForm as HTMLFormElement | null;
   const closeBtn = document.getElementById("closeBulkEditBtn");

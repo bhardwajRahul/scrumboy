@@ -23,6 +23,7 @@ import { THEME_CHANGE_EVENT } from '../theme.js';
 import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getMermaidNotesEnabled, getSlug, getTagColors, getUser } from '../state/selectors.js';
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
 import { escapeHTML, isAnonymousBoard, showConfirmDialog, showToast } from '../utils.js';
+import { applyFieldTooltips, TODO_DIALOG_TOOLTIPS } from '../field-tooltips.js';
 import { normalizeSprints } from '../sprints.js';
 import {
   bindShareTodoButton,
@@ -69,6 +70,7 @@ type TodoDialogSnapshot = {
 let todoNotesMode: TodoNotesMode = "markdown";
 let todoNotesPreviewBound = false;
 let todoDialogCloseGuardsBound = false;
+let todoTooltipsApplied = false;
 let todoDialogBaseline: TodoDialogSnapshot | null = null;
 let todoDialogClosePromptOpen = false;
 
@@ -302,7 +304,14 @@ async function closeTodoDialogInternal(
   }
 }
 
+function ensureTodoDialogTooltips(): void {
+  if (todoTooltipsApplied || !todoDialog) return;
+  todoTooltipsApplied = true;
+  applyFieldTooltips(TODO_DIALOG_TOOLTIPS, todoDialog);
+}
+
 function bindTodoDialogCloseGuards(): void {
+  ensureTodoDialogTooltips();
   if (todoDialogCloseGuardsBound || !todoDialog) {
     return;
   }

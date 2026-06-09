@@ -11,6 +11,7 @@ import {
   type VoiceFlowMode,
 } from '../core/voiceflow-preferences.js';
 import { isAnonymousBoard, isTemporaryBoard, showConfirmDialog, showToast } from '../utils.js';
+import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
 import { canRunVoiceMutationCommands, canShowVoiceCommands } from '../views/board-command-capabilities.js';
 import { executeCommandIR } from './execute.js';
 import { callMcpTool } from './mcp-client.js';
@@ -321,8 +322,8 @@ function createDialog(): HTMLDialogElement {
       </div>
 
       <label class="field">
-        <div class="field__label">Command</div>
-        <textarea id="voiceTranscript" class="input voice-command__transcript" rows="3" maxlength="260" placeholder="create story Fix login"></textarea>
+        ${fieldLabelHTML('Command', FIELD_TOOLTIPS.voiceCommand)}
+        <textarea id="voiceTranscript" class="input voice-command__transcript" rows="3" maxlength="260" placeholder="create story Fix login"${titleAttr(FIELD_TOOLTIPS.voiceCommand)}></textarea>
       </label>
       <div class="voice-command__confirmation-policy" id="voiceHandsFreeConfirmPolicy" hidden>
         <label class="voice-command__switch">

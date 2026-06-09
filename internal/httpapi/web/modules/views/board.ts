@@ -4,6 +4,7 @@ import { ingestProjectsFromApp } from '../core/notifications.js';
 import { fetchProjectMembers, invalidateMembersCache } from '../members-cache.js';
 import { navigate } from '../router.js';
 import { escapeHTML, showToast, renderAvatarContent, processImageFile, confirmDelete, showConfirmDialog, showPromptDialog } from '../utils.js';
+import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
 import {
   getBoard,
   getMobileTab,
@@ -1179,8 +1180,8 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
                 </label>
 
                 <label class="field">
-                  <div class="field__label">Role</div>
-                  <select id="addMemberRole" class="input" required>
+                  ${fieldLabelHTML('Role', FIELD_TOOLTIPS.memberRole)}
+                  <select id="addMemberRole" class="input" required${titleAttr(FIELD_TOOLTIPS.memberRole)}>
                     <option value="viewer">Viewer</option>
                     <option value="contributor" selected>Contributor</option>
                     <option value="maintainer">Maintainer</option>
