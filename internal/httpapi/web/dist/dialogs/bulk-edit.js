@@ -1,6 +1,7 @@
 import { bulkEditDialog, bulkEditForm } from "../dom/elements.js";
 import { apiFetch } from "../api.js";
 import { showToast, escapeHTML, isAnonymousBoard, sanitizeHexColor } from "../utils.js";
+import { applyFieldTooltips, BULK_EDIT_TOOLTIPS } from "../field-tooltips.js";
 import { getBoard, getSlug, getTag, getSearch, getSprintIdFromUrl, getBoardMembers, } from "../state/selectors.js";
 import { invalidateBoard } from "../orchestration/board-refresh.js";
 import { setBulkUpdating } from "../realtime/guard.js";
@@ -356,6 +357,7 @@ export function initBulkEditDialog(onSuccess) {
     if (bound)
         return;
     bound = true;
+    applyFieldTooltips(BULK_EDIT_TOOLTIPS, bulkEditForm ?? document);
     const form = bulkEditForm;
     const closeBtn = document.getElementById("closeBulkEditBtn");
     const cancelBtn = document.getElementById("cancelBulkEditBtn");
