@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initI18n, resetI18nForTests, setLocale } from './i18n/index.js';
-import { temporaryBoardsNavLabel } from './nav-labels.js';
+import { temporaryBoardsNavLabel, temporaryBoardsNavLabelKey } from './nav-labels.js';
 
 const enCatalog = {
   'nav.temporaryBoards.long': 'Temporary Boards',
@@ -31,6 +31,11 @@ describe('nav-labels', () => {
   afterEach(() => {
     resetI18nForTests();
     localStorage.clear();
+  });
+
+  it('returns the shared temporary board label keys at the current breakpoint', () => {
+    expect(temporaryBoardsNavLabelKey(767)).toBe('nav.temporaryBoards.short');
+    expect(temporaryBoardsNavLabelKey(768)).toBe('nav.temporaryBoards.long');
   });
 
   it('returns localized desktop and mobile temporary board labels', async () => {

@@ -2,6 +2,7 @@ import { app, settingsDialog } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
 import { ingestProjectsFromApp } from '../core/notifications.js';
 import { t } from '../i18n/index.js';
+import { temporaryBoardsNavLabelKey } from '../nav-labels.js';
 import { navigate } from '../router.js';
 import type { Board } from '../types.js';
 import { escapeHTML, showToast, renderUserAvatar, confirmDelete, showPromptDialog } from '../utils.js';
@@ -29,7 +30,6 @@ declare const Sortable: any;
 const boardPrefetchPromises = new Map<string, Promise<Board>>();
 const resolvedBoardBySlug = new Map<string, Board>();
 const PREFETCH_DELAY_MS = 250;
-const TEMPORARY_BOARDS_MOBILE_BREAKPOINT = 767;
 
 const DEFAULT_WORKFLOW_LANES: WorkflowLaneDraft[] = [
   { key: "backlog", name: "Backlog", color: "#9CA3AF", position: 0, isDone: false },
@@ -112,12 +112,6 @@ function validateWorkflowLanes(lanes: WorkflowLaneDraft[]): string | null {
   }
   if (doneCount !== 1) return t("projects.workflow.validation.exactlyOneDone");
   return null;
-}
-
-function temporaryBoardsTabLabelKey(): string {
-  return window.innerWidth <= TEMPORARY_BOARDS_MOBILE_BREAKPOINT
-    ? "nav.temporaryBoards.short"
-    : "nav.temporaryBoards.long";
 }
 
 function renderWorkflowEditorBody(
@@ -394,7 +388,7 @@ export async function renderProjects(): Promise<void> {
     getProjectsTab() === "temporary"
       ? "projects.actions.createTemporaryBoard"
       : "projects.actions.create";
-  const temporaryLabelKey = temporaryBoardsTabLabelKey();
+  const temporaryLabelKey = temporaryBoardsNavLabelKey();
   const tabsHTML = `
     <div class="chips" style="margin-top: 10px; margin-bottom: 12px;">
       <button class="chip" id="dashboardTabBtn" type="button" data-i18n-text="projects.tabs.dashboard">
