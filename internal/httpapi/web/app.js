@@ -25,6 +25,7 @@ import { registerPwaGlobals } from './dist/pwaUpdate.js';
 import { initKeybindings } from './dist/core/keybindings.js';
 import { initModalOutsideClickClose } from './dist/core/modal-outside-click.js';
 import { I18N_LOCALE_CHANGED, hydrateI18n, initI18n } from './dist/i18n/index.js';
+import { installI18nQa } from './dist/i18n/qa.js';
 
 let tagInputHandlersSetup = false;
 
@@ -215,6 +216,7 @@ initI18n()
     console.warn("i18n initialization failed; continuing with English fallbacks.", err);
   })
   .then(() => {
+    installI18nQa();
     hydrateI18n(document.body);
     return router().catch((err) => showToast(err.message));
   });
