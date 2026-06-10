@@ -1,10 +1,11 @@
-export const SUPPORTED_LOCALES = ["en", "de", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "de"];
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "de", "fr"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
     en: "English",
     de: "Deutsch",
+    fr: "Français",
     pseudo: "Pseudo",
 };
 const BOOTSTRAP_EN_CATALOG = {
@@ -314,6 +315,8 @@ export function normalizeLocale(value) {
         return "pseudo";
     if (normalized === "de" || normalized.startsWith("de-"))
         return "de";
+    if (normalized === "fr" || normalized.startsWith("fr-"))
+        return "fr";
     if (normalized === "en" || normalized.startsWith("en-"))
         return "en";
     return null;

@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "de", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de"] as const;
+export const PUBLIC_LOCALES = ["en", "de", "fr"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type MessageCatalog = Record<string, string>;
 export type MessageValues = Record<string, string | number | boolean | null | undefined>;
@@ -10,6 +10,7 @@ export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS: Record<LocaleId, string> = {
   en: "English",
   de: "Deutsch",
+  fr: "Français",
   pseudo: "Pseudo",
 };
 
@@ -351,6 +352,7 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   const normalized = value.trim().toLowerCase().replace("_", "-");
   if (normalized === "pseudo") return "pseudo";
   if (normalized === "de" || normalized.startsWith("de-")) return "de";
+  if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
 }

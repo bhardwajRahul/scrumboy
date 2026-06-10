@@ -131,12 +131,15 @@ describe("i18n locale detection", () => {
   it("falls back to navigator language aliases and then English", async () => {
     const i18n = await loadModule();
 
-    expect(i18n.detectLocale({ storage: null, languages: ["fr-FR", "de-DE", "en-US"] })).toBe("de");
-    expect(i18n.detectLocale({ storage: null, languages: ["fr-FR", "en-US"] })).toBe("en");
-    expect(i18n.detectLocale({ storage: null, languages: ["fr-FR"] })).toBe("en");
+    expect(i18n.detectLocale({ storage: null, languages: ["fr-FR", "de-DE", "en-US"] })).toBe("fr");
+    expect(i18n.detectLocale({ storage: null, languages: ["de-DE", "fr-FR", "en-US"] })).toBe("de");
+    expect(i18n.detectLocale({ storage: null, languages: ["fr-FR", "en-US"] })).toBe("fr");
+    expect(i18n.detectLocale({ storage: null, languages: ["fr-FR"] })).toBe("fr");
     expect(i18n.normalizeLocale("en_GB")).toBe("en");
     expect(i18n.normalizeLocale("de")).toBe("de");
     expect(i18n.normalizeLocale("de-DE")).toBe("de");
+    expect(i18n.normalizeLocale("fr")).toBe("fr");
+    expect(i18n.normalizeLocale("fr-FR")).toBe("fr");
   });
 });
 

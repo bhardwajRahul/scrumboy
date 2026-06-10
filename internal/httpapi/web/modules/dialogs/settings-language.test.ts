@@ -214,7 +214,7 @@ describe('settings language selector', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('renders English and German public locale options only', async () => {
+  it('renders public locale options only', async () => {
     const { settings, cleanup } = await setupCustomizationSettings();
     try {
       await settings.renderSettingsModal();
@@ -224,6 +224,7 @@ describe('settings language selector', () => {
       expect(Array.from(select?.options ?? []).map((option) => [option.value, option.textContent])).toEqual([
         ['en', 'English'],
         ['de', 'Deutsch'],
+        ['fr', 'Français'],
       ]);
       expect(Array.from(select?.options ?? []).some((option) => option.value === 'pseudo')).toBe(false);
       expect(document.querySelector('label[for="settingsLocaleSelect"]')?.textContent).toBe('Language');
@@ -271,7 +272,7 @@ describe('settings language selector', () => {
 
       expect(i18n.getLocale()).toBe('pseudo');
       const select = document.getElementById('settingsLocaleSelect') as HTMLSelectElement | null;
-      expect(Array.from(select?.options ?? []).map((option) => option.value)).toEqual(['en', 'de']);
+      expect(Array.from(select?.options ?? []).map((option) => option.value)).toEqual(['en', 'de', 'fr']);
       expect(Array.from(select?.options ?? []).some((option) => option.value === 'pseudo')).toBe(false);
     } finally {
       cleanup();
