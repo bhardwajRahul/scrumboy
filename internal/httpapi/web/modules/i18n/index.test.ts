@@ -293,6 +293,31 @@ describe("i18n catalog loading", () => {
     expect(i18n.formatNumber(1234.5)).toBe("1,234.5");
   });
 
+  it("preserves the English ordinal long-date style", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+    const date = new Date(2026, 0, 2, 12, 0, 0);
+
+    expect(i18n.formatLongDateWithWeekday(date)).toBe("Friday, January 2nd 2026");
+  });
+
+  it("uses locale-aware German long-date formatting without English ordinal suffixes", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+    const date = new Date(2026, 0, 2, 12, 0, 0);
+    const formatted = i18n.formatLongDateWithWeekday(date);
+
+    expect(formatted).toBe(
+      new Intl.DateTimeFormat("de", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }).format(date),
+    );
+    expect(formatted).not.toMatch(/\b\d+(st|nd|rd|th)\b/);
+  });
+
   it("prefers reason-specific and code-level localized API errors before a fallback key", async () => {
     const i18n = await loadModule();
     await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });

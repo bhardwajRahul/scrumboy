@@ -1,6 +1,6 @@
 import { app, settingsDialog } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
-import { formatDate, getLocale, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
+import { formatDate, formatLongDateWithWeekday, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 import { navigate } from '../router.js';
 import { escapeHTML, renderUserAvatar, sanitizeHexColor } from '../utils.js';
 import {
@@ -350,27 +350,8 @@ function groupTodosByProject(todos: DashboardTodo[]): { projectId: number; proje
   });
 }
 
-function ordinal(n: number): string {
-  const s = n % 100;
-  if (s >= 11 && s <= 13) return "th";
-  switch (n % 10) {
-    case 1: return "st";
-    case 2: return "nd";
-    case 3: return "rd";
-    default: return "th";
-  }
-}
-
 function formatSprintTooltipDateRange(startAt: number, endAt: number): string {
-  const start = new Date(startAt);
-  const end = new Date(endAt);
-  const fmt = (d: Date) => {
-    if (getLocale() === 'de') {
-      return formatDate(d, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-    }
-    return `${formatDate(d, { weekday: "long" })}, ${formatDate(d, { month: "long" })} ${d.getDate()}${ordinal(d.getDate())} ${d.getFullYear()}`;
-  };
-  return `${fmt(start)} - ${fmt(end)}`;
+  return `${formatLongDateWithWeekday(startAt)} - ${formatLongDateWithWeekday(endAt)}`;
 }
 
 function renderDashboardTodoGroups(todos: DashboardTodo[], projectsByProjectId?: Map<number, DashboardProject>): string {

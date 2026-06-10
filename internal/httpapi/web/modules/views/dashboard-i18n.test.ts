@@ -498,6 +498,74 @@ describe("dashboard i18n", () => {
     }
   });
 
+  it("uses the shared long-date helper for sprint tooltip ranges", async () => {
+    const sprintStart = new Date(2026, 0, 5, 12, 0, 0).getTime();
+    const sprintEnd = new Date(2026, 0, 16, 12, 0, 0).getTime();
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/dashboard/summary?")) {
+        return baseSummary({
+          projects: [
+            {
+              projectId: 1,
+              projectName: "Project Raw",
+              projectSlug: "project-raw",
+              sprintSections: [
+                {
+                  id: 10,
+                  name: "Sprint Raw",
+                  state: "ACTIVE",
+                  startAt: sprintStart,
+                  endAt: sprintEnd,
+                },
+              ],
+            },
+          ],
+        });
+      }
+      if (url === "/api/dashboard/todos?limit=20") {
+        return {
+          items: [
+            {
+              id: 43,
+              localId: 43,
+              title: "Todo Raw",
+              projectId: 1,
+              projectName: "Project Raw",
+              projectSlug: "project-raw",
+              projectDominantColor: "#663399",
+              statusName: "Doing Raw",
+              statusColor: "#336699",
+              updatedAt: "2026-01-02T15:04:05.000Z",
+              sprintId: 10,
+            },
+          ],
+          nextCursor: null,
+        };
+      }
+      if (url === "/api/projects") {
+        return baseProjects();
+      }
+      throw new Error(`unexpected apiFetch url: ${url}`);
+    });
+
+    const { i18n, cleanup } = await setupI18n("de");
+    const formatLongDateSpy = vi.spyOn(i18n, "formatLongDateWithWeekday");
+    try {
+      const mod = await import("./dashboard.js");
+      await mod.renderDashboard();
+
+      const sprintTab = document.querySelector('[data-sprint-section="active"] .dashboard-project-group__tab--sprint');
+      expect(sprintTab?.getAttribute("title")).toBe(
+        `Sprint Raw\n${i18n.formatLongDateWithWeekday(sprintStart)} - ${i18n.formatLongDateWithWeekday(sprintEnd)}`,
+      );
+      expect(formatLongDateSpy).toHaveBeenCalledWith(sprintStart);
+      expect(formatLongDateSpy).toHaveBeenCalledWith(sprintEnd);
+      expect(apiFetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      cleanup();
+    }
+  });
+
   it("restores the previous sort when the dashboard sort refetch fails", async () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     apiFetchMock.mockImplementation(async (url: string) => {
