@@ -533,6 +533,29 @@ export function formatDate(value, options) {
     const date = value instanceof Date ? value : new Date(value);
     return new Intl.DateTimeFormat(intlLocale(), options).format(date);
 }
+function ordinalSuffix(n) {
+    const s = n % 100;
+    if (s >= 11 && s <= 13)
+        return "th";
+    switch (n % 10) {
+        case 1: return "st";
+        case 2: return "nd";
+        case 3: return "rd";
+        default: return "th";
+    }
+}
+export function formatLongDateWithWeekday(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    if (intlLocale() === "en") {
+        return `${formatDate(date, { weekday: "long" })}, ${formatDate(date, { month: "long" })} ${date.getDate()}${ordinalSuffix(date.getDate())} ${date.getFullYear()}`;
+    }
+    return formatDate(date, {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    });
+}
 export function formatNumber(value, options) {
     return new Intl.NumberFormat(intlLocale(), options).format(value);
 }

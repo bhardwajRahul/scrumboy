@@ -591,6 +591,32 @@ export function formatDate(
   return new Intl.DateTimeFormat(intlLocale(), options).format(date);
 }
 
+function ordinalSuffix(n: number): string {
+  const s = n % 100;
+  if (s >= 11 && s <= 13) return "th";
+  switch (n % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
+  }
+}
+
+export function formatLongDateWithWeekday(
+  value: string | number | Date,
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (intlLocale() === "en") {
+    return `${formatDate(date, { weekday: "long" })}, ${formatDate(date, { month: "long" })} ${date.getDate()}${ordinalSuffix(date.getDate())} ${date.getFullYear()}`;
+  }
+  return formatDate(date, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export function formatNumber(
   value: number,
   options?: Intl.NumberFormatOptions,
