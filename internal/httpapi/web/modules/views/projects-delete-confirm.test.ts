@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 const confirmDeleteMock = vi.hoisted(() => vi.fn());
+const showToastMock = vi.hoisted(() => vi.fn());
 const settingsDialogMock = vi.hoisted(() => document.createElement("dialog"));
 
 vi.mock("../dom/elements.js", () => ({
@@ -21,7 +22,7 @@ vi.mock("../router.js", () => ({
 
 vi.mock("../utils.js", () => ({
   escapeHTML: (s: string) => s,
-  showToast: vi.fn(),
+  showToast: showToastMock,
   renderUserAvatar: () => "",
   confirmDelete: confirmDeleteMock,
 }));
@@ -65,6 +66,7 @@ describe("projects delete confirmation", () => {
     apiFetchMock.mockReset();
     navigateMock.mockReset();
     confirmDeleteMock.mockReset();
+    showToastMock.mockReset();
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === "/api/projects") {
         return [{ id: 99, slug: "alpha", name: "Alpha", role: "maintainer" }];
@@ -99,5 +101,28 @@ describe("projects delete confirmation", () => {
 
     expect(confirmDeleteMock).toHaveBeenCalledWith("Delete this project and all its todos?");
     expect(apiFetchMock).toHaveBeenCalledWith("/api/projects/99", { method: "DELETE" });
+  });
+
+  it("keeps raw delete failure messages when the delete request fails", async () => {
+    confirmDeleteMock.mockResolvedValue(true);
+    apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/projects" && !init) {
+        return [{ id: 99, slug: "alpha", name: "Alpha", role: "maintainer" }];
+      }
+      if (url === "/api/projects/99" && init?.method === "DELETE") {
+        throw new Error("delete raw failure");
+      }
+      return {};
+    });
+
+    const mod = await import("./projects.js");
+    await mod.renderProjects();
+
+    const deleteBtn = document.querySelector("[data-del='99']");
+    if (!(deleteBtn instanceof HTMLElement)) throw new Error("missing delete button");
+    deleteBtn.click();
+    await flushPromises(10);
+
+    expect(showToastMock).toHaveBeenCalledWith("delete raw failure");
   });
 });

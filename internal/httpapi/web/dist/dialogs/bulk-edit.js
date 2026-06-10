@@ -2,6 +2,7 @@ import { bulkEditDialog, bulkEditForm } from "../dom/elements.js";
 import { apiFetch } from "../api.js";
 import { showToast, escapeHTML, isAnonymousBoard, sanitizeHexColor } from "../utils.js";
 import { applyFieldTooltips, BULK_EDIT_TOOLTIPS } from "../field-tooltips.js";
+import { hasI18nKey, I18N_LOCALE_CHANGED, t } from "../i18n/index.js";
 import { getBoard, getSlug, getTag, getSearch, getSprintIdFromUrl, getBoardMembers, } from "../state/selectors.js";
 import { invalidateBoard } from "../orchestration/board-refresh.js";
 import { setBulkUpdating } from "../realtime/guard.js";
@@ -11,6 +12,24 @@ import { normalizeTagName, resolveColumnKey } from "./todo.js";
 const EST_POINTS = new Set([1, 2, 3, 5, 8, 13, 20, 40]);
 let bulkTagsList = [];
 let bound = false;
+function sprintStateLabel(state) {
+    const key = `todo.sprint.state.${state}`;
+    return state && hasI18nKey(key) ? t(key) : state;
+}
+function bulkEditHint(count) {
+    return count === 1
+        ? t("board.bulkEdit.editingSingle")
+        : t("board.bulkEdit.editingMultiple", { count });
+}
+function syncBulkEditDialogCopy(todoCount) {
+    const els = getBulkFormEls();
+    if (els.title) {
+        els.title.textContent = t("board.bulkEdit.title");
+    }
+    if (els.hint && typeof todoCount === "number" && todoCount > 0) {
+        els.hint.textContent = bulkEditHint(todoCount);
+    }
+}
 function findTodoInBoardState(id) {
     const board = getBoard();
     if (!board?.columns)
@@ -60,7 +79,7 @@ function renderBulkTagChips() {
         const c = colorByName[name];
         const safe = sanitizeHexColor(c || null);
         const colorStyle = safe ? `style="border-color: ${safe}; background: ${safe}20; color: ${safe};"` : "";
-        return `<span class="tag-chip" data-tag="${escapeHTML(name)}" ${colorStyle}>${escapeHTML(name)}<button type="button" class="tag-chip-remove" data-remove-bulk-tag="${escapeHTML(name)}" aria-label="Remove tag">×</button></span>`;
+        return `<span class="tag-chip" data-tag="${escapeHTML(name)}" ${colorStyle}>${escapeHTML(name)}<button type="button" class="tag-chip-remove" data-remove-bulk-tag="${escapeHTML(name)}" aria-label="${escapeHTML(t("board.bulkEdit.removeTag"))}">×</button></span>`;
     })
         .join("");
     el.querySelectorAll("[data-remove-bulk-tag]").forEach((btn) => {
@@ -111,7 +130,7 @@ function populateStatusSelect(select) {
     if (!select)
         return "";
     if (!order || order.length === 0) {
-        select.innerHTML = `<option value="backlog">Backlog</option>`;
+        select.innerHTML = `<option value="backlog">${escapeHTML(t("board.status.backlog"))}</option>`;
         return "backlog";
     }
     select.innerHTML = order.map((c) => `<option value="${escapeHTML(c.key)}">${escapeHTML(c.name)}</option>`).join("");
@@ -122,7 +141,7 @@ function populateAssigneeSelect(sel) {
         return;
     const members = getBoardMembers();
     const cur = sel.value;
-    sel.innerHTML = '<option value="">Unassigned</option>';
+    sel.innerHTML = `<option value="">${escapeHTML(t("todo.assignee.unassigned"))}</option>`;
     members.forEach((m) => {
         const opt = document.createElement("option");
         opt.value = String(m.userId);
@@ -146,7 +165,7 @@ async function populateSprintSelect(sel) {
         for (const sp of sprints) {
             const opt = document.createElement("option");
             opt.value = String(sp.id);
-            opt.textContent = `${sp.name} (${sp.state})`;
+            opt.textContent = `${sp.name} (${sprintStateLabel(sp.state)})`;
             sel.appendChild(opt);
         }
         if (cur && sel.querySelector(`option[value="${cur}"]`))
@@ -211,14 +230,11 @@ export async function openBulkEditDialog(initialIds, opts) {
     }
     opts.onPruned(kept);
     if (kept.length < 2) {
-        showToast("Not enough todos on the board to edit.");
+        showToast(t("board.bulkEdit.noTodosSelected"));
         return;
     }
+    syncBulkEditDialogCopy(kept.length);
     const els = getBulkFormEls();
-    if (els.hint)
-        els.hint.textContent = `Editing ${kept.length} todos.`;
-    if (els.title)
-        els.title.textContent = "Bulk edit";
     [els.applyAssign, els.applySprint, els.applyStatus, els.applyTags, els.applyEst].forEach((c) => {
         if (c)
             c.checked = false;
@@ -275,7 +291,7 @@ async function runBulkApply(todoIds) {
         onPruned?.(keptIds);
         setBulkEditPendingIds(keptIds, onPruned || undefined);
         if (keptIds.length === 0) {
-            showToast("No todos left to update.");
+            showToast(t("board.bulkEdit.noTodosSelected"));
             return;
         }
         for (const id of keptIds) {
@@ -344,13 +360,15 @@ async function runBulkApply(todoIds) {
     });
     const total = success + failed;
     if (total === 0) {
-        showToast("Nothing to update.");
+        showToast(t("board.bulkEdit.nothingToUpdate"));
     }
     else if (failed === 0) {
-        showToast(`Updated ${success} todos`);
+        showToast(success === 1
+            ? t("board.bulkEdit.updatedSingle")
+            : t("board.bulkEdit.updatedMultiple", { count: success }));
     }
     else {
-        showToast(`Updated ${success} of ${total} todos (${failed} failed)`);
+        showToast(t("board.bulkEdit.updatedPartial", { success, total, failed }));
     }
 }
 export function initBulkEditDialog(onSuccess) {
@@ -371,6 +389,11 @@ export function initBulkEditDialog(onSuccess) {
     ];
     checkboxes.forEach((id) => {
         document.getElementById(id)?.addEventListener("change", updateApplyButtonState);
+    });
+    document.addEventListener(I18N_LOCALE_CHANGED, () => {
+        const ids = form?.__bulkTodoIds;
+        syncBulkEditDialogCopy(ids?.length);
+        renderBulkTagChips();
     });
     function addBulkTagFromInput() {
         const input = document.getElementById("bulkTagsInput");

@@ -38,7 +38,7 @@
     <dialog id="bulkEditDialog" class="dialog">
       <form method="dialog" class="dialog__form" id="bulkEditForm">
         <div class="dialog__header">
-          <div class="dialog__title" id="bulkEditDialogTitle">Bulk edit</div>
+          <div class="dialog__title" id="bulkEditDialogTitle" data-i18n-text="board.bulkEdit.title">Bulk edit</div>
           <button class="btn btn--ghost" type="button" id="closeBulkEditBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
         </div>
         <p class="muted bulk-edit-dialog__hint" id="bulkEditHint"></p>
@@ -49,7 +49,7 @@
             <span data-i18n-text="shell.bulkEdit.assignUser">Assign user</span>
           </label>
           <select class="select" id="bulkAssignee" aria-label="Assign to" data-i18n-aria-label="shell.bulkEdit.assignTo">
-            <option value="">Unassigned</option>
+            <option value="" data-i18n-text="todo.assignee.unassigned">Unassigned</option>
           </select>
         </div>
 
@@ -113,25 +113,25 @@
     <dialog id="todoDialog" class="dialog">
       <form method="dialog" class="dialog__form" id="todoForm">
         <div class="dialog__header">
-          <div class="dialog__title" id="todoDialogTitle">Todo</div>
+          <div class="dialog__title" id="todoDialogTitle" data-i18n-text="todo.dialog.title.view">Todo</div>
           <div class="dialog__header-right">
             <span class="todo-dialog-updated muted" id="todoDialogUpdated" aria-hidden="true"><span class="todo-dialog-datetime-value"></span></span>
-            <button class="btn btn--ghost" type="button" id="closeTodoBtn" aria-label="Close">✕</button>
+            <button class="btn btn--ghost" type="button" id="closeTodoBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
           </div>
         </div>
 
         <div class="todo-dialog__body">
         <label class="field">
-          <div class="field__label">Title</div>
+          <div class="field__label" data-i18n-text="todo.fields.title">Title</div>
           <input class="input" id="todoTitle" name="title" required maxlength="200" autocomplete="off" />
         </label>
 
         <div class="field todo-notes-field">
           <div class="field__label-row">
-            <label class="field__label" for="todoBody">Notes</label>
-            <div class="todo-notes-tabs" id="todoBodyToggle" hidden role="tablist" aria-label="Notes editor mode">
-              <button class="todo-notes-tab is-active" type="button" id="todoBodyWriteTab" role="tab" aria-pressed="true">markdown</button>
-              <button class="todo-notes-tab" type="button" id="todoBodyPreviewTab" role="tab" aria-pressed="false">preview</button>
+            <label class="field__label" for="todoBody" data-i18n-text="todo.fields.notes">Notes</label>
+            <div class="todo-notes-tabs" id="todoBodyToggle" hidden role="tablist" aria-label="Notes editor mode" data-i18n-aria-label="todo.notes.modeLabel">
+              <button class="todo-notes-tab is-active" type="button" id="todoBodyWriteTab" role="tab" aria-pressed="true" data-i18n-text="todo.notes.markdown">markdown</button>
+              <button class="todo-notes-tab" type="button" id="todoBodyPreviewTab" role="tab" aria-pressed="false" data-i18n-text="todo.notes.preview">preview</button>
             </div>
           </div>
           <div class="todo-notes-editor">
@@ -141,56 +141,56 @@
         </div>
 
         <label class="field">
-          <div class="field__label">Tags</div>
+          <div class="field__label" data-i18n-text="todo.fields.tags">Tags</div>
           <div class="tags-input-container">
             <div class="tags-input-row">
-              <input class="input tags-input" id="todoTags" name="tags" autocomplete="off" placeholder="Type tag and press Enter or Tab" />
-              <button class="btn tags-add-btn" type="button" id="addTagBtn">Add</button>
+              <input class="input tags-input" id="todoTags" name="tags" autocomplete="off" placeholder="Type tag and press Enter or Tab" data-i18n-placeholder="todo.tags.placeholder" />
+              <button class="btn tags-add-btn" type="button" id="addTagBtn" data-i18n-text="common.add">Add</button>
             </div>
             <div class="tags-chips" id="tagsChips"></div>
           </div>
         </label>
 
         <label class="field" id="todoLinksField" style="display: none;">
-          <div class="field__label">Linked Stories</div>
+          <div class="field__label" data-i18n-text="todo.fields.linkedStories">Linked Stories</div>
           <div class="tags-input-container">
             <div class="tags-input-row">
-              <input class="input tags-input" id="linksSearchInput" autocomplete="off" placeholder="Search by #id or title..." />
-              <button class="btn tags-add-btn" type="button" id="addLinkBtn">Add</button>
+              <input class="input tags-input" id="linksSearchInput" autocomplete="off" placeholder="Search by #id or title..." data-i18n-placeholder="todo.links.searchPlaceholder" />
+              <button class="btn tags-add-btn" type="button" id="addLinkBtn" data-i18n-text="common.add">Add</button>
             </div>
             <div class="tags-chips" id="linksChips"></div>
           </div>
         </label>
 
         <label class="field" id="todoAssigneeField" style="display: none;">
-          <div class="field__label">Assigned to</div>
+          <div class="field__label" data-i18n-text="todo.fields.assignedTo">Assigned to</div>
           <select class="select" id="todoAssignee" name="assigneeUserId">
-            <option value="">Unassigned</option>
+            <option value="" data-i18n-text="todo.assignee.unassigned">Unassigned</option>
           </select>
         </label>
 
         <label class="field" id="todoSprintField" style="display: none;">
-          <div class="field__label">Sprint</div>
+          <div class="field__label" data-i18n-text="todo.fields.sprint">Sprint</div>
           <select class="select" id="todoSprint" name="sprintId">
             <option value="">—</option>
           </select>
         </label>
 
         <label class="field">
-          <div class="field__label">Status</div>
+          <div class="field__label" data-i18n-text="todo.fields.status">Status</div>
           <select class="select" id="todoStatus" name="status">
-            <option value="BACKLOG">Backlog</option>
-            <option value="NOT_STARTED">Not Started</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="TESTING">Testing</option>
-            <option value="DONE">Done</option>
+            <option value="BACKLOG" data-i18n-text="todo.status.backlog">Backlog</option>
+            <option value="NOT_STARTED" data-i18n-text="todo.status.notStarted">Not Started</option>
+            <option value="IN_PROGRESS" data-i18n-text="todo.status.inProgress">In Progress</option>
+            <option value="TESTING" data-i18n-text="todo.status.testing">Testing</option>
+            <option value="DONE" data-i18n-text="todo.status.done">Done</option>
           </select>
         </label>
 
         <label class="field" id="todoEstimationField">
-          <div class="field__label">Estimation Points</div>
+          <div class="field__label" data-i18n-text="todo.fields.estimationPoints">Estimation Points</div>
           <select class="select" id="todoEstimationPoints" name="estimationPoints">
-            <option value="">No estimate</option>
+            <option value="" data-i18n-text="todo.estimation.none">No estimate</option>
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -204,10 +204,10 @@
         </div>
 
         <div class="dialog__footer">
-          <button class="btn btn--danger" type="button" id="deleteTodoBtn">Delete</button>
+          <button class="btn btn--danger" type="button" id="deleteTodoBtn" data-i18n-text="common.delete">Delete</button>
           <div class="todo-dialog-dates muted" id="todoDialogCreated" aria-hidden="true"><span class="todo-dialog-datetime-value"></span></div>
-          <button class="btn" type="submit" value="save" id="saveTodoBtn">Save</button>
-          <button class="btn btn--ghost todo-share-btn" type="button" id="shareTodoBtn" aria-label="Share story link">↗</button>
+          <button class="btn" type="submit" value="save" id="saveTodoBtn" data-i18n-text="common.save">Save</button>
+          <button class="btn btn--ghost todo-share-btn" type="button" id="shareTodoBtn" aria-label="Share story link" data-i18n-aria-label="todo.links.shareAriaLabel">↗</button>
         </div>
       </form>
     </dialog>

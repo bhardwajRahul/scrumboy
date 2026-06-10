@@ -24,6 +24,7 @@ import { getBoard, getBoardMembers, getMarkdownNotesEnabled, getMermaidNotesEnab
 import { setAvailableTags, setAvailableTagsMap, setEditingTodo, setTagColors } from '../state/mutations.js';
 import { escapeHTML, isAnonymousBoard, showConfirmDialog, showToast } from '../utils.js';
 import { applyFieldTooltips, TODO_DIALOG_TOOLTIPS } from '../field-tooltips.js';
+import { apiErrorMessage, formatDate as formatLocalizedDate, hasI18nKey, t } from '../i18n/index.js';
 import { normalizeSprints } from '../sprints.js';
 import {
   bindShareTodoButton,
@@ -73,6 +74,18 @@ let todoDialogCloseGuardsBound = false;
 let todoTooltipsApplied = false;
 let todoDialogBaseline: TodoDialogSnapshot | null = null;
 let todoDialogClosePromptOpen = false;
+
+function sprintStateLabel(state: string): string {
+  const key = `todo.sprint.state.${state}`;
+  return state && hasI18nKey(key) ? t(key) : state;
+}
+
+function setTodoDialogTitleKey(key: string): void {
+  const titleEl = todoDialogTitle as HTMLElement | null;
+  if (!titleEl) return;
+  titleEl.setAttribute("data-i18n-text", key);
+  titleEl.textContent = t(key);
+}
 
 export function resolveColumnKey(raw: string | undefined | null): string {
   const v = (raw || "").trim();
@@ -156,7 +169,7 @@ async function renderTodoNotesPreview(): Promise<void> {
       { mermaidEnabled: getMermaidNotesEnabled() },
     );
   } catch (err: any) {
-    showToast(err?.message || "Markdown preview is unavailable");
+    showToast(apiErrorMessage(err, { fallbackKey: "todo.notes.previewUnavailable" }));
     todoNotesMode = "markdown";
     syncTodoNotesModeUI();
   }
@@ -290,9 +303,9 @@ async function closeTodoDialogInternal(
   todoDialogClosePromptOpen = true;
   try {
     const discard = await showConfirmDialog(
-      "You have unsaved changes. Discard them?",
-      "Unsaved changes",
-      "Discard",
+      t("todo.confirm.discardMessage"),
+      t("todo.confirm.discardTitle"),
+      t("todo.confirm.discardAction"),
     );
     if (!discard) {
       return false;
@@ -446,7 +459,7 @@ export async function openTodoDialog(opts: {
         for (const sp of sprints) {
           const opt = document.createElement("option");
           opt.value = String(sp.id);
-          opt.textContent = `${sp.name} (${sp.state})`;
+          opt.textContent = `${sp.name} (${sprintStateLabel(sp.state)})`;
           options.push(opt);
         }
         sprintSelect.replaceChildren(...options);
@@ -468,7 +481,7 @@ export async function openTodoDialog(opts: {
       assigneeSelect.innerHTML = "";
       const unassigned = document.createElement("option");
       unassigned.value = "";
-      unassigned.textContent = "Unassigned";
+      unassigned.textContent = t("todo.assignee.unassigned");
       assigneeSelect.appendChild(unassigned);
 
       if (canAssignOthers) {
@@ -486,7 +499,9 @@ export async function openTodoDialog(opts: {
             if (assigneeMember) {
               const opt = document.createElement("option");
               opt.value = String(assigneeMember.userId);
-              opt.textContent = `Current: ${assigneeMember.name || assigneeMember.email || String(assigneeMember.userId)}`;
+              opt.textContent = t("todo.assignee.current", {
+                name: assigneeMember.name || assigneeMember.email || String(assigneeMember.userId),
+              });
               opt.disabled = true;
               assigneeSelect.appendChild(opt);
             }
@@ -495,13 +510,13 @@ export async function openTodoDialog(opts: {
         if (user) {
           const opt = document.createElement("option");
           opt.value = String(user.id);
-          opt.textContent = user.name || user.email || "Me";
+          opt.textContent = user.name || user.email || t("todo.assignee.me");
           assigneeSelect.appendChild(opt);
         }
       }
       assigneeSelect.value = todo?.assigneeUserId != null ? String(todo.assigneeUserId) : "";
     } else {
-      assigneeSelect.innerHTML = '<option value="">Unassigned</option>';
+      assigneeSelect.innerHTML = `<option value="">${escapeHTML(t("todo.assignee.unassigned"))}</option>`;
     }
   }
 
@@ -515,7 +530,7 @@ export async function openTodoDialog(opts: {
     try {
       await initializeTodoDialogLinks(slug!, todo.localId, onNavigateToLinkedTodo);
     } catch (err: any) {
-      showToast(err.message || "Failed to load linked stories");
+      showToast(apiErrorMessage(err, { fallbackKey: "todo.loadLinkedFailed" }));
     }
   } else {
     resetTodoDialogLinks();
@@ -539,8 +554,8 @@ export async function openTodoDialog(opts: {
 
   const createdEl = document.getElementById("todoDialogCreated") as HTMLElement | null;
   const updatedEl = document.getElementById("todoDialogUpdated") as HTMLElement | null;
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleString(undefined, {
+  const formatDialogDate = (d: string) =>
+    formatLocalizedDate(d, {
       year: "2-digit",
       month: "numeric",
       day: "numeric",
@@ -554,7 +569,7 @@ export async function openTodoDialog(opts: {
         if (valueEl) (valueEl as HTMLElement).textContent = "";
         createdEl.setAttribute("aria-hidden", "true");
       } else {
-        if (valueEl) (valueEl as HTMLElement).textContent = formatDate(createdAt);
+        if (valueEl) (valueEl as HTMLElement).textContent = formatDialogDate(createdAt);
         createdEl.setAttribute("aria-hidden", "false");
       }
     }
@@ -564,14 +579,14 @@ export async function openTodoDialog(opts: {
         if (valueEl) (valueEl as HTMLElement).textContent = "";
         updatedEl.setAttribute("aria-hidden", "true");
       } else {
-        if (valueEl) (valueEl as HTMLElement).textContent = formatDate(updatedAt);
+        if (valueEl) (valueEl as HTMLElement).textContent = formatDialogDate(updatedAt);
         updatedEl.setAttribute("aria-hidden", "false");
       }
     }
   };
 
   if (mode === "create") {
-    (todoDialogTitle as HTMLElement).textContent = "New Todo";
+    setTodoDialogTitleKey("todo.dialog.title.new");
     (todoTitle as HTMLInputElement).value = normalizeSeedTitle(opts.initialTitle);
     (todoBody as HTMLTextAreaElement).value = "";
     (todoTags as HTMLInputElement).value = "";
@@ -582,7 +597,7 @@ export async function openTodoDialog(opts: {
     if (shareTodoBtn) (shareTodoBtn as HTMLElement).style.display = "none";
     setDates(undefined, undefined);
   } else {
-    (todoDialogTitle as HTMLElement).textContent = permissions.canSubmitTodo ? "Edit Todo" : "View Todo";
+    setTodoDialogTitleKey(permissions.canSubmitTodo ? "todo.dialog.title.edit" : "todo.dialog.title.view");
     (todoTitle as HTMLInputElement).value = todo.title || "";
     (todoBody as HTMLTextAreaElement).value = todo.body || "";
     (todoTags as HTMLInputElement).value = "";
@@ -662,7 +677,7 @@ export async function openTodoDialog(opts: {
 export function resetAssigneeSelect(): void {
   const assigneeSelect = document.getElementById("todoAssignee") as HTMLSelectElement | null;
   if (assigneeSelect) {
-    assigneeSelect.innerHTML = '<option value="">Unassigned</option>';
+    assigneeSelect.innerHTML = `<option value="">${escapeHTML(t("todo.assignee.unassigned"))}</option>`;
   }
   const estimationSelect = todoEstimationPoints as HTMLSelectElement | null;
   if (estimationSelect) {

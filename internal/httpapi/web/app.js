@@ -24,7 +24,7 @@ import { recordLocalMutation } from './dist/realtime/guard.js';
 import { registerPwaGlobals } from './dist/pwaUpdate.js';
 import { initKeybindings } from './dist/core/keybindings.js';
 import { initModalOutsideClickClose } from './dist/core/modal-outside-click.js';
-import { I18N_LOCALE_CHANGED, hydrateI18n, initI18n } from './dist/i18n/index.js';
+import { I18N_LOCALE_CHANGED, apiErrorMessage, hydrateI18n, initI18n, t } from './dist/i18n/index.js';
 import { installI18nQa } from './dist/i18n/qa.js';
 
 let tagInputHandlersSetup = false;
@@ -113,7 +113,11 @@ todoDialog.addEventListener("close", () => {
 deleteTodoBtn.addEventListener("click", async () => {
   const todo = getEditingTodo();
   if (!todo) return;
-  if (!await showConfirmDialog("Delete this todo?", "Delete", "Delete")) return;
+  if (!await showConfirmDialog(
+    t("todo.confirm.deleteMessage"),
+    t("todo.confirm.deleteTitle"),
+    t("todo.confirm.deleteAction"),
+  )) return;
   try {
     recordLocalMutation();
     await apiFetch(`/api/board/${getSlug()}/todos/${todo.localId}`, { method: "DELETE" });
@@ -122,7 +126,7 @@ deleteTodoBtn.addEventListener("click", async () => {
     await requestTodoDialogClose({ force: true, reason: "delete" });
     await loadBoardBySlug(getSlug(), getTag(), getSearch(), getSprintIdFromUrl());
   } catch (err) {
-    showToast(err.message);
+    showToast(apiErrorMessage(err, { fallbackKey: "todo.deleteFailed" }));
   }
 });
 
@@ -178,7 +182,7 @@ todoForm.addEventListener("submit", async (e) => {
           body: JSON.stringify({ toColumnKey: columnKey, afterId: null, beforeId: null }),
         });
       }
-      showToast("Todo updated");
+      showToast(t("todo.updated"));
     } else {
       const assigneeEl = document.getElementById("todoAssignee");
       const assigneeUserId =
@@ -199,7 +203,7 @@ todoForm.addEventListener("submit", async (e) => {
         method: "POST",
         body: JSON.stringify(createPayload),
       });
-      showToast("Todo created");
+      showToast(t("todo.created"));
     }
 
     await requestTodoDialogClose({ force: true, reason: "save" });
@@ -207,7 +211,7 @@ todoForm.addEventListener("submit", async (e) => {
     invalidateTagsCache();
     await loadBoardBySlug(getSlug(), getTag(), getSearch(), getSprintIdFromUrl());
   } catch (err) {
-    showToast(err.message);
+    showToast(apiErrorMessage(err, { fallbackKey: "todo.saveFailed" }));
   }
 });
 
@@ -218,7 +222,7 @@ initI18n()
   .then(() => {
     installI18nQa();
     hydrateI18n(document.body);
-    return router().catch((err) => showToast(err.message));
+    return router().catch((err) => showToast(apiErrorMessage(err)));
   });
 
 // Export render functions for views/index.js to re-export (breaking circular dependency)

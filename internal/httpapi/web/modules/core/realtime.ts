@@ -10,6 +10,7 @@ import { playAssignmentSound, showAssignmentDesktopNotification } from './assign
 import { appendTodoAssignedNotification, incrementUnread } from './notifications.js';
 import { isSseDebugEnabled, SseConnectionManager } from './sse-client.js';
 import { scheduleResumeResync } from './foreground-resume.js';
+import { t } from '../i18n/index.js';
 
 const MAX_SEEN_IDS = 500;
 const seenEventIds = new Set<string>();
@@ -168,10 +169,11 @@ function handleTodoAssignedSideEffects(parsed: RealtimePayload): void {
     return;
   }
 
-  const t = typeof inner.title === 'string' ? inner.title : '';
-  showToast(`Assigned: ${t || 'Todo'}`);
+  const title = typeof inner.title === 'string' ? inner.title : '';
+  const fallbackTitle = title || t("realtime.todoFallback");
+  showToast(t("realtime.assigned", { title: fallbackTitle }));
   playAssignmentSound();
-  showAssignmentDesktopNotification(t || 'Todo');
+  showAssignmentDesktopNotification(fallbackTitle);
 
   appendTodoAssignedNotification(parsed);
 

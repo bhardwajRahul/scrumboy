@@ -2,6 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const enCatalog = {
+  "board.backToProjects": "\u2190 Projects",
+  "board.filters.label": "Tags:",
+  "board.selection.multiple": "Edit {count} selected",
+  "board.selection.single": "Edit 1 selected",
   "common.add": "Add",
   "common.apply": "Apply",
   "common.cancel": "Cancel",
@@ -11,7 +15,10 @@ const enCatalog = {
   "common.prompt": "Prompt",
   "common.save": "Save",
   "common.value": "Value",
+  "errors.CONFLICT": "Conflict",
   "errors.NOT_FOUND": "Not found",
+  "errors.VALIDATION_ERROR": "Please check the request and try again.",
+  "errors.VALIDATION_ERROR.name_required": "Please enter a name.",
   "errors.generic": "Something went wrong.",
   "errors.httpStatus": "HTTP {status}",
   "test.aria": "Close panel",
@@ -20,9 +27,20 @@ const enCatalog = {
   "test.placeholder": "Type <safe>",
   "test.shell": "Shell text",
   "test.title": "Title & <safe>",
+  "todo.dialog.title.new": "New Todo",
+  "todo.fields.title": "Title",
+  "todo.links.remove": "Remove link",
+  "todo.notes.markdown": "markdown",
+  "todo.notes.modeLabel": "Notes editor mode",
+  "todo.tags.placeholder": "Type tag and press Enter or Tab",
+  "todo.saveFailed": "Save fallback",
 };
 
 const pseudoCatalog = {
+  "board.backToProjects": "[!! \u2190 Projects !!]",
+  "board.filters.label": "[!! Tags: !!]",
+  "board.selection.multiple": "[!! Edit {count} selected !!]",
+  "board.selection.single": "[!! Edit 1 selected !!]",
   "common.add": "[!! Add !!]",
   "common.apply": "[!! Apply !!]",
   "common.cancel": "[!! Cancel !!]",
@@ -32,7 +50,10 @@ const pseudoCatalog = {
   "common.prompt": "[!! Prompt !!]",
   "common.save": "[!! Save !!]",
   "common.value": "[!! Value !!]",
+  "errors.CONFLICT": "[!! Conflict !!]",
   "errors.NOT_FOUND": "[!! Not found !!]",
+  "errors.VALIDATION_ERROR": "[!! Please check the request and try again. !!]",
+  "errors.VALIDATION_ERROR.name_required": "[!! Please enter a name. !!]",
   "errors.generic": "[!! Something went wrong. !!]",
   "errors.httpStatus": "[!! HTTP {status} !!]",
   "test.aria": "[!! Close panel !!]",
@@ -41,9 +62,20 @@ const pseudoCatalog = {
   "test.placeholder": "[!! Type <safe> !!]",
   "test.shell": "[!! Shell text !!]",
   "test.title": "[!! Title & <safe> !!]",
+  "todo.dialog.title.new": "[!! New Todo !!]",
+  "todo.fields.title": "[!! Title !!]",
+  "todo.links.remove": "[!! Remove link !!]",
+  "todo.notes.markdown": "[!! markdown !!]",
+  "todo.notes.modeLabel": "[!! Notes editor mode !!]",
+  "todo.tags.placeholder": "[!! Type tag and press Enter or Tab !!]",
+  "todo.saveFailed": "[!! Save fallback !!]",
 };
 
 const deCatalog = {
+  "board.backToProjects": "\u2190 Projekte",
+  "board.filters.label": "Tags:",
+  "board.selection.multiple": "{count} ausgew\u00e4hlte Eintr\u00e4ge bearbeiten",
+  "board.selection.single": "1 ausgew\u00e4hlten Eintrag bearbeiten",
   "common.add": "Hinzufügen",
   "common.apply": "Anwenden",
   "common.cancel": "Abbrechen",
@@ -53,7 +85,10 @@ const deCatalog = {
   "common.prompt": "Eingabe",
   "common.save": "Speichern",
   "common.value": "Wert",
+  "errors.CONFLICT": "Konflikt",
   "errors.NOT_FOUND": "Nicht gefunden",
+  "errors.VALIDATION_ERROR": "Bitte prüfe die Eingabe und versuche es erneut.",
+  "errors.VALIDATION_ERROR.name_required": "Bitte gib einen Namen ein.",
   "errors.generic": "Etwas ist schiefgelaufen.",
   "errors.httpStatus": "HTTP {status}",
   "test.aria": "Bereich schließen",
@@ -62,6 +97,13 @@ const deCatalog = {
   "test.placeholder": "Tippe <sicher>",
   "test.shell": "Shell-Text",
   "test.title": "Titel & <sicher>",
+  "todo.dialog.title.new": "Neues Todo",
+  "todo.fields.title": "Titel",
+  "todo.links.remove": "Link entfernen",
+  "todo.notes.markdown": "Markdown",
+  "todo.notes.modeLabel": "Modus für Notizeditor",
+  "todo.tags.placeholder": "Tag eingeben und Enter oder Tab drücken",
+  "todo.saveFailed": "Speicher-Fallback",
 };
 
 async function loadModule() {
@@ -251,15 +293,76 @@ describe("i18n catalog loading", () => {
     expect(i18n.formatNumber(1234.5)).toBe("1,234.5");
   });
 
-  it("keeps API error message fallback behavior available", async () => {
+  it("prefers reason-specific and code-level localized API errors before a fallback key", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.apiErrorMessage({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+          details: { reason: "name_required" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Bitte gib einen Namen ein.");
+
+    expect(i18n.apiErrorMessage({
+      data: {
+        error: {
+          code: "CONFLICT",
+          message: "raw english",
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Konflikt");
+  });
+
+  it("uses the provided localized fallback key before raw API messages", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.apiErrorMessage({
+      status: 409,
+      data: {
+        error: {
+          code: "UNMAPPED",
+          message: "server fallback",
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Speicher-Fallback");
+  });
+
+  it("uses the raw API body message before HTTP status when no localized mapping exists", async () => {
     const i18n = await loadModule();
     await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
-    const err = new Error("server fallback") as Error & { data?: unknown; status?: number };
-    err.status = 418;
-    err.data = { error: { code: "TEAPOT", message: "server fallback" } };
 
-    expect(i18n.apiErrorMessage(err)).toBe("server fallback");
+    expect(i18n.apiErrorMessage({
+      status: 418,
+      data: {
+        error: {
+          code: "TEAPOT",
+          message: "server fallback",
+        },
+      },
+    }, { fallbackKey: "missing.fallback.key" })).toBe("server fallback");
+  });
+
+  it("uses the raw top-level error message before HTTP status when no API body message exists", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    const err = new Error("top-level fallback") as Error & { status?: number; data?: unknown };
+    err.status = 503;
+    err.data = { error: { code: "UNMAPPED" } };
+
+    expect(i18n.apiErrorMessage(err)).toBe("top-level fallback");
+  });
+
+  it("falls back to HTTP status before the generic localized error only when no message exists", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+
     expect(i18n.apiErrorMessage({ status: 503 })).toBe("HTTP 503");
+    expect(i18n.apiErrorMessage({ data: { error: { code: "UNMAPPED", message: "   " } } })).toBe("Something went wrong.");
   });
 
   it("hydrates text and safe attributes within only the provided root", async () => {
@@ -296,6 +399,47 @@ describe("i18n catalog loading", () => {
     i18n.hydrateI18n(document.body);
 
     expect(document.getElementById("shell")?.textContent).toBe("[!! Shell text !!]");
+  });
+
+  it("hydrates todo dialog shell copy after switching to German", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+    document.body.innerHTML = `
+      <div id="todoDialogTitle" data-i18n-text="todo.dialog.title.new">Todo</div>
+      <div id="todoTitleLabel" data-i18n-text="todo.fields.title">Title</div>
+      <div id="todoBodyToggle" data-i18n-aria-label="todo.notes.modeLabel">
+        <button id="todoBodyWriteTab" data-i18n-text="todo.notes.markdown">markdown</button>
+      </div>
+      <input id="todoTags" data-i18n-placeholder="todo.tags.placeholder" />
+    `;
+
+    i18n.hydrateI18n(document.body);
+    await i18n.setLocale("de");
+    i18n.hydrateI18n(document.body);
+
+    expect(document.getElementById("todoDialogTitle")?.textContent).toBe("Neues Todo");
+    expect(document.getElementById("todoTitleLabel")?.textContent).toBe("Titel");
+    expect(document.getElementById("todoBodyToggle")?.getAttribute("aria-label")).toBe("Modus für Notizeditor");
+    expect(document.getElementById("todoBodyWriteTab")?.textContent).toBe("Markdown");
+    expect(document.getElementById("todoTags")?.getAttribute("placeholder")).toBe("Tag eingeben und Enter oder Tab drücken");
+  });
+
+  it("pseudo-locale updates board and todo shell labels in place after hydration", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    document.body.innerHTML = `
+      <button id="back" data-i18n-text="board.backToProjects">\u2190 Projects</button>
+      <div id="filters" data-i18n-text="board.filters.label">Tags:</div>
+      <div id="todoTitleLabel" data-i18n-text="todo.fields.title">Title</div>
+    `;
+
+    i18n.hydrateI18n(document.body);
+    await i18n.setLocale("pseudo");
+    i18n.hydrateI18n(document.body);
+
+    expect(document.getElementById("back")?.textContent).toBe("[!! \u2190 Projects !!]");
+    expect(document.getElementById("filters")?.textContent).toBe("[!! Tags: !!]");
+    expect(document.getElementById("todoTitleLabel")?.textContent).toBe("[!! Title !!]");
   });
 
   it("applies malicious-looking catalog strings as text or inert attributes", async () => {
