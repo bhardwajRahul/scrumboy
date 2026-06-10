@@ -2,6 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const enCatalog = {
+  "common.add": "Add",
+  "common.apply": "Apply",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.confirm": "Confirm",
@@ -12,10 +14,17 @@ const enCatalog = {
   "errors.NOT_FOUND": "Not found",
   "errors.generic": "Something went wrong.",
   "errors.httpStatus": "HTTP {status}",
+  "test.aria": "Close panel",
   "test.greeting": "Hello, {name}",
+  "test.malicious": "<img src=x onerror=alert(1)>",
+  "test.placeholder": "Type <safe>",
+  "test.shell": "Shell text",
+  "test.title": "Title & <safe>",
 };
 
 const pseudoCatalog = {
+  "common.add": "[!! Add !!]",
+  "common.apply": "[!! Apply !!]",
   "common.cancel": "[!! Cancel !!]",
   "common.close": "[!! Close !!]",
   "common.confirm": "[!! Confirm !!]",
@@ -26,7 +35,12 @@ const pseudoCatalog = {
   "errors.NOT_FOUND": "[!! Not found !!]",
   "errors.generic": "[!! Something went wrong. !!]",
   "errors.httpStatus": "[!! HTTP {status} !!]",
+  "test.aria": "[!! Close panel !!]",
   "test.greeting": "[!! Hello, {name} !!]",
+  "test.malicious": "[!! <img src=x onerror=alert(1)> !!]",
+  "test.placeholder": "[!! Type <safe> !!]",
+  "test.shell": "[!! Shell text !!]",
+  "test.title": "[!! Title & <safe> !!]",
 };
 
 async function loadModule() {
@@ -109,6 +123,45 @@ describe("i18n catalog loading", () => {
     expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("pseudo");
   });
 
+  it("dispatches locale-change events only after the active locale changes", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    const events: string[] = [];
+    document.addEventListener(i18n.I18N_LOCALE_CHANGED, ((event: CustomEvent<{ locale: string }>) => {
+      events.push(event.detail.locale);
+    }) as EventListener);
+
+    await i18n.setLocale("en");
+    expect(events).toEqual([]);
+
+    await i18n.setLocale("pseudo");
+
+    expect(events).toEqual(["pseudo"]);
+    expect(i18n.getLocale()).toBe("pseudo");
+  });
+
+  it("does not dispatch locale-change events when a locale switch fails back to the current locale", async () => {
+    const i18n = await loadModule();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await i18n.initI18n({
+      locale: "en",
+      loadLocale: vi.fn(async (locale: "en" | "pseudo") => {
+        if (locale === "pseudo") throw new Error("pseudo unavailable");
+        return enCatalog;
+      }),
+    });
+    const events: string[] = [];
+    document.addEventListener(i18n.I18N_LOCALE_CHANGED, ((event: CustomEvent<{ locale: string }>) => {
+      events.push(event.detail.locale);
+    }) as EventListener);
+
+    await i18n.setLocale("pseudo");
+
+    expect(i18n.getLocale()).toBe("en");
+    expect(events).toEqual([]);
+    warn.mockRestore();
+  });
+
   it("supports simple placeholder interpolation", async () => {
     const i18n = await loadModule();
     await i18n.initI18n({ locale: "pseudo", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
@@ -161,5 +214,61 @@ describe("i18n catalog loading", () => {
 
     expect(i18n.apiErrorMessage(err)).toBe("server fallback");
     expect(i18n.apiErrorMessage({ status: 503 })).toBe("HTTP 503");
+  });
+
+  it("hydrates text and safe attributes within only the provided root", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    document.body.innerHTML = `
+      <section id="target" data-i18n-title="test.title">
+        <button id="text" data-i18n-text="test.shell">Old</button>
+        <button id="aria" data-i18n-aria-label="test.aria"></button>
+        <input id="placeholder" data-i18n-placeholder="test.placeholder" value="Keep value" />
+      </section>
+      <button id="outside" data-i18n-text="test.shell">Outside</button>
+    `;
+
+    i18n.hydrateI18n(document.getElementById("target")!);
+
+    expect(document.getElementById("target")?.getAttribute("title")).toBe("Title & <safe>");
+    expect(document.getElementById("text")?.textContent).toBe("Shell text");
+    expect(document.getElementById("aria")?.getAttribute("aria-label")).toBe("Close panel");
+    expect(document.getElementById("placeholder")?.getAttribute("placeholder")).toBe("Type <safe>");
+    expect((document.getElementById("placeholder") as HTMLInputElement).value).toBe("Keep value");
+    expect(document.getElementById("outside")?.textContent).toBe("Outside");
+  });
+
+  it("updates already-hydrated shell text after pseudo locale and a hydration rerun", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    document.body.innerHTML = `<button id="shell" data-i18n-text="test.shell"></button>`;
+
+    i18n.hydrateI18n(document.body);
+    expect(document.getElementById("shell")?.textContent).toBe("Shell text");
+
+    await i18n.setLocale("pseudo");
+    i18n.hydrateI18n(document.body);
+
+    expect(document.getElementById("shell")?.textContent).toBe("[!! Shell text !!]");
+  });
+
+  it("applies malicious-looking catalog strings as text or inert attributes", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    document.body.innerHTML = `
+      <div id="text" data-i18n-text="test.malicious"><span>Old</span></div>
+      <input id="placeholder" data-i18n-placeholder="test.malicious" />
+      <div id="title" data-i18n-title="test.malicious"></div>
+    `;
+
+    i18n.hydrateI18n(document.body);
+
+    const malicious = "<img src=x onerror=alert(1)>";
+    const text = document.getElementById("text")!;
+    expect(text.textContent).toBe(malicious);
+    expect(text.querySelector("img")).toBeNull();
+    expect(text.innerHTML).not.toContain("<img");
+    expect(document.getElementById("placeholder")?.getAttribute("placeholder")).toBe(malicious);
+    expect(document.getElementById("title")?.getAttribute("title")).toBe(malicious);
   });
 });
