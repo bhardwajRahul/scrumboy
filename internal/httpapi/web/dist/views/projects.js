@@ -2,6 +2,7 @@ import { app, settingsDialog } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
 import { ingestProjectsFromApp } from '../core/notifications.js';
 import { t } from '../i18n/index.js';
+import { temporaryBoardsNavLabelKey } from '../nav-labels.js';
 import { navigate } from '../router.js';
 import { escapeHTML, showToast, renderUserAvatar, confirmDelete, showPromptDialog } from '../utils.js';
 import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
@@ -14,7 +15,6 @@ const BOUND_FLAG = Symbol('bound');
 const boardPrefetchPromises = new Map();
 const resolvedBoardBySlug = new Map();
 const PREFETCH_DELAY_MS = 250;
-const TEMPORARY_BOARDS_MOBILE_BREAKPOINT = 767;
 const DEFAULT_WORKFLOW_LANES = [
     { key: "backlog", name: "Backlog", color: "#9CA3AF", position: 0, isDone: false },
     { key: "not_started", name: "Not Started", color: "#F59E0B", position: 1, isDone: false },
@@ -96,11 +96,6 @@ function validateWorkflowLanes(lanes) {
     if (doneCount !== 1)
         return t("projects.workflow.validation.exactlyOneDone");
     return null;
-}
-function temporaryBoardsTabLabelKey() {
-    return window.innerWidth <= TEMPORARY_BOARDS_MOBILE_BREAKPOINT
-        ? "nav.temporaryBoards.short"
-        : "nav.temporaryBoards.long";
 }
 function renderWorkflowEditorBody(lanes, listId = "workflowModalLaneList", ghostId = "workflowModalGhostInput") {
     const addLaneAriaLabel = escapeHTML(t("projects.workflow.addLaneAriaLabel"));
@@ -365,7 +360,7 @@ export async function renderProjects() {
     const createButtonKey = getProjectsTab() === "temporary"
         ? "projects.actions.createTemporaryBoard"
         : "projects.actions.create";
-    const temporaryLabelKey = temporaryBoardsTabLabelKey();
+    const temporaryLabelKey = temporaryBoardsNavLabelKey();
     const tabsHTML = `
     <div class="chips" style="margin-top: 10px; margin-bottom: 12px;">
       <button class="chip" id="dashboardTabBtn" type="button" data-i18n-text="projects.tabs.dashboard">

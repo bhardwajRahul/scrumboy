@@ -51,6 +51,7 @@ vi.mock("../core/notifications.js", () => ({
 
 vi.mock("../nav-labels.js", () => ({
   temporaryBoardsNavLabel: () => "Temporary",
+  temporaryBoardsNavLabelKey: () => "nav.temporaryBoards.short",
 }));
 
 async function flushPromises(count = 6): Promise<void> {

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { temporaryBoardsNavLabelKey } from "../nav-labels.js";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
@@ -266,6 +267,9 @@ describe("projects i18n shell", () => {
       expect(document.getElementById("dashboardTabBtn")?.textContent?.trim()).toBe("Dashboard");
       expect(document.querySelector('[data-projects-tab="projects"] .projects-tab__label')?.textContent).toBe("Projects");
       expect(document.querySelector('[data-projects-tab="temporary"] .projects-tab__label')?.textContent).toBe("Temporary Boards");
+      expect(document.querySelector('[data-projects-tab="temporary"] .projects-tab__label')?.getAttribute("data-i18n-text")).toBe(
+        temporaryBoardsNavLabelKey(1024),
+      );
       expect((document.getElementById("projectName") as HTMLInputElement | null)?.getAttribute("placeholder")).toBe("New project name");
       expect(document.querySelector('#createProjectForm button[type="submit"]')?.textContent).toBe("Create");
       expect(document.getElementById("settingsBtn")?.getAttribute("aria-label")).toBe("Settings");
@@ -282,12 +286,48 @@ describe("projects i18n shell", () => {
       expect(document.getElementById("dashboardTabBtn")?.textContent?.trim()).toBe("[!! Dashboard !!]");
       expect(document.querySelector('[data-projects-tab="projects"] .projects-tab__label')?.textContent).toBe("[!! Projects !!]");
       expect(document.querySelector('[data-projects-tab="temporary"] .projects-tab__label')?.textContent).toBe("[!! Temporary Boards !!]");
+      expect(document.querySelector('[data-projects-tab="temporary"] .projects-tab__label')?.getAttribute("data-i18n-text")).toBe(
+        temporaryBoardsNavLabelKey(1024),
+      );
       expect((document.getElementById("projectName") as HTMLInputElement | null)?.getAttribute("placeholder")).toBe("[!! New project name !!]");
       expect(document.querySelector('#createProjectForm button[type="submit"]')?.textContent).toBe("[!! Create !!]");
       expect(document.getElementById("settingsBtn")?.getAttribute("aria-label")).toBe("[!! Settings !!]");
       expect(document.querySelector('[data-rename="99"]')?.textContent).toBe("[!! Rename !!]");
       expect(document.querySelector('[data-del="99"]')?.textContent).toBe("[!! Delete !!]");
       expect(document.querySelector('.view-toggle-btn[data-view="list"]')?.getAttribute("title")).toBe("[!! List view !!]");
+      expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("uses the shared temporary board label key at the mobile breakpoint", async () => {
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 767,
+    });
+    apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/projects" && !init) {
+        return [];
+      }
+      return {};
+    });
+
+    const { i18n, cleanup } = await setupI18n("en");
+    try {
+      const mod = await import("./projects.js");
+      await mod.renderProjects();
+
+      const temporaryTabLabel = document.querySelector('[data-projects-tab="temporary"] .projects-tab__label');
+      expect(temporaryTabLabel?.textContent).toBe("Temporary");
+      expect(temporaryTabLabel?.getAttribute("data-i18n-text")).toBe(temporaryBoardsNavLabelKey(767));
+      expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+      await i18n.setLocale("pseudo");
+      await flushPromises();
+
+      expect(temporaryTabLabel?.textContent).toBe("[!! Temporary !!]");
+      expect(temporaryTabLabel?.getAttribute("data-i18n-text")).toBe(temporaryBoardsNavLabelKey(767));
       expect(apiFetchMock).toHaveBeenCalledTimes(1);
     } finally {
       cleanup();
