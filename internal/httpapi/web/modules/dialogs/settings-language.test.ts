@@ -225,6 +225,7 @@ describe('settings language selector', () => {
         ['en', 'English'],
         ['de', 'Deutsch'],
         ['fr', 'Français'],
+        ['pt', 'Português (Brasil)'],
       ]);
       expect(Array.from(select?.options ?? []).some((option) => option.value === 'pseudo')).toBe(false);
       expect(document.querySelector('label[for="settingsLocaleSelect"]')?.textContent).toBe('Language');
@@ -272,7 +273,7 @@ describe('settings language selector', () => {
 
       expect(i18n.getLocale()).toBe('pseudo');
       const select = document.getElementById('settingsLocaleSelect') as HTMLSelectElement | null;
-      expect(Array.from(select?.options ?? []).map((option) => option.value)).toEqual(['en', 'de', 'fr']);
+      expect(Array.from(select?.options ?? []).map((option) => option.value)).toEqual(['en', 'de', 'fr', 'pt']);
       expect(Array.from(select?.options ?? []).some((option) => option.value === 'pseudo')).toBe(false);
     } finally {
       cleanup();
