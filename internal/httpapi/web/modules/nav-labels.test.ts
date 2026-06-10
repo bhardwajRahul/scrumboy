@@ -24,7 +24,7 @@ describe('nav-labels', () => {
   beforeEach(async () => {
     await initI18n({
       locale: 'en',
-      loadLocale: async (locale: 'en' | 'pseudo') => (locale === 'pseudo' ? pseudoCatalog : enCatalog),
+      loadLocale: async (locale: 'en' | 'de' | 'pseudo') => (locale === 'pseudo' ? pseudoCatalog : enCatalog),
     });
   });
 

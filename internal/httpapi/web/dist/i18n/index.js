@@ -1,6 +1,12 @@
-export const SUPPORTED_LOCALES = ["en", "pseudo"];
+export const SUPPORTED_LOCALES = ["en", "de", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "de"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
+export const LOCALE_LABELS = {
+    en: "English",
+    de: "Deutsch",
+    pseudo: "Pseudo",
+};
 const BOOTSTRAP_EN_CATALOG = {
     "common.add": "Add",
     "common.apply": "Apply",
@@ -27,6 +33,9 @@ const BOOTSTRAP_EN_CATALOG = {
     "shell.bulkEdit.status": "Status",
     "shell.bulkEdit.tagsPlaceholder": "Type tag and press Enter",
     "shell.contextMenu.newTodo": "New Todo",
+    "settings.language.description": "Choose the language used for Scrumboy on this browser.",
+    "settings.language.selectLabel": "Language",
+    "settings.language.title": "Language",
     "tooltips.boardSearch": "Search titles and notes. Combine with tag and sprint chips to narrow the board.",
     "tooltips.doneLane": "Exactly one lane counts as done. Stories there get a completion timestamp used for dashboard stats and burndown, even if the lane is named Shipped instead of Done.",
     "tooltips.estimationPoints": "Relative effort, not hours. Uses a modified Fibonacci scale (1\u201340). Compare to similar work on this board.",
@@ -84,9 +93,17 @@ export function normalizeLocale(value) {
     const normalized = value.trim().toLowerCase().replace("_", "-");
     if (normalized === "pseudo")
         return "pseudo";
+    if (normalized === "de" || normalized.startsWith("de-"))
+        return "de";
     if (normalized === "en" || normalized.startsWith("en-"))
         return "en";
     return null;
+}
+export function isPublicLocale(locale) {
+    return PUBLIC_LOCALES.includes(locale);
+}
+export function publicLocaleOptions() {
+    return PUBLIC_LOCALES.map((id) => ({ id, label: LOCALE_LABELS[id] }));
 }
 export function detectLocale(options = {}) {
     const storage = options.storage === undefined ? getDefaultStorage() : options.storage;

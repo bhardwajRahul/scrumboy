@@ -78,6 +78,7 @@ import {
   loadTagSettingsContent,
 } from './settings-tags.js';
 import { bindSprintsTabInteractions, renderSprintsTabContent } from './settings-sprints.js';
+import { getLocale, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
 
 export { invalidateTagsCache } from './settings-tags.js';
 
@@ -1160,7 +1161,22 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       : "Web Push is not available in anonymous mode."
     : "";
 
+  const currentLocale = getLocale();
+  const selectedPublicLocale = isPublicLocale(currentLocale) ? currentLocale : "en";
+  const languageSectionHTML = `
+      <div class="settings-section">
+        <label class="settings-section__title" for="settingsLocaleSelect">${escapeHTML(t("settings.language.title"))}</label>
+        <div class="settings-section__description muted">${escapeHTML(t("settings.language.description"))}</div>
+        <select class="select" id="settingsLocaleSelect" aria-label="${escapeHTML(t("settings.language.selectLabel"))}" style="margin-top: 10px; min-width: 180px;">
+          ${publicLocaleOptions().map((option) => `
+            <option value="${escapeHTML(option.id)}" ${option.id === selectedPublicLocale ? "selected" : ""}>${escapeHTML(option.label)}</option>
+          `).join("")}
+        </select>
+      </div>
+    `;
+
   const customizationHTML = `
+      ${languageSectionHTML}
       <div class="settings-section">
         <div class="settings-section__title">Theme</div>
         <div class="settings-section__description muted">Choose your preferred color scheme.</div>
@@ -1681,6 +1697,20 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
   }
 
   if (getSettingsActiveTab() === "customization") {
+    const localeSelect = document.getElementById("settingsLocaleSelect") as HTMLSelectElement | null;
+    if (localeSelect) {
+      localeSelect.addEventListener(
+        "change",
+        async () => {
+          const nextLocale = localeSelect.value;
+          if (!isPublicLocale(nextLocale)) return;
+          await setLocale(nextLocale);
+          await renderSettingsModal();
+        },
+        { signal }
+      );
+    }
+
     const voiceFlowEnabledToggle = document.getElementById("voiceFlowEnabledToggle") as HTMLInputElement | null;
     if (voiceFlowEnabledToggle) {
       voiceFlowEnabledToggle.addEventListener(

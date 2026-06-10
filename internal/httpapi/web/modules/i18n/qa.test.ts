@@ -17,7 +17,7 @@ async function loadModules() {
 }
 
 function loader(catalogs: Record<string, Record<string, string>>) {
-  return vi.fn(async (locale: "en" | "pseudo") => catalogs[locale]);
+  return vi.fn(async (locale: "en" | "de" | "pseudo") => catalogs[locale]);
 }
 
 describe("i18n pseudo QA helper", () => {

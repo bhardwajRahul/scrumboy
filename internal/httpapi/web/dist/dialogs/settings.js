@@ -17,6 +17,7 @@ import { getVoiceFlowEnabledPreference, setVoiceFlowEnabledPreference } from '..
 import { bindWorkflowTabInteractions, clearWorkflowDraftState, invalidateWorkflowLaneCountsCache, isWorkflowDraftDirty, loadWorkflowTabContent, resetWorkflowDraftToBaseline, } from './settings-workflow.js';
 import { bindTagTabInteractions, invalidateTagsCache as invalidateTagSettingsCache, loadTagSettingsContent, } from './settings-tags.js';
 import { bindSprintsTabInteractions, renderSprintsTabContent } from './settings-sprints.js';
+import { getLocale, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
 export { invalidateTagsCache } from './settings-tags.js';
 /** Active keybinding capture listener (settings customization); removed when starting a new capture or on abort. */
 let keybindingCaptureKeydown = null;
@@ -1033,7 +1034,21 @@ export async function renderSettingsModal(options) {
             ? "Web Push needs VAPID keys on the server (SCRUMBOY_VAPID_PUBLIC_KEY and SCRUMBOY_VAPID_PRIVATE_KEY; see docs)."
             : "Web Push is not available in anonymous mode."
         : "";
+    const currentLocale = getLocale();
+    const selectedPublicLocale = isPublicLocale(currentLocale) ? currentLocale : "en";
+    const languageSectionHTML = `
+      <div class="settings-section">
+        <label class="settings-section__title" for="settingsLocaleSelect">${escapeHTML(t("settings.language.title"))}</label>
+        <div class="settings-section__description muted">${escapeHTML(t("settings.language.description"))}</div>
+        <select class="select" id="settingsLocaleSelect" aria-label="${escapeHTML(t("settings.language.selectLabel"))}" style="margin-top: 10px; min-width: 180px;">
+          ${publicLocaleOptions().map((option) => `
+            <option value="${escapeHTML(option.id)}" ${option.id === selectedPublicLocale ? "selected" : ""}>${escapeHTML(option.label)}</option>
+          `).join("")}
+        </select>
+      </div>
+    `;
     const customizationHTML = `
+      ${languageSectionHTML}
       <div class="settings-section">
         <div class="settings-section__title">Theme</div>
         <div class="settings-section__description muted">Choose your preferred color scheme.</div>
@@ -1521,6 +1536,16 @@ export async function renderSettingsModal(options) {
         }, { signal });
     }
     if (getSettingsActiveTab() === "customization") {
+        const localeSelect = document.getElementById("settingsLocaleSelect");
+        if (localeSelect) {
+            localeSelect.addEventListener("change", async () => {
+                const nextLocale = localeSelect.value;
+                if (!isPublicLocale(nextLocale))
+                    return;
+                await setLocale(nextLocale);
+                await renderSettingsModal();
+            }, { signal });
+        }
         const voiceFlowEnabledToggle = document.getElementById("voiceFlowEnabledToggle");
         if (voiceFlowEnabledToggle) {
             voiceFlowEnabledToggle.addEventListener("change", () => {

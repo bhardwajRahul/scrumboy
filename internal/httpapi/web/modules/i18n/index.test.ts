@@ -43,13 +43,34 @@ const pseudoCatalog = {
   "test.title": "[!! Title & <safe> !!]",
 };
 
+const deCatalog = {
+  "common.add": "Hinzufügen",
+  "common.apply": "Anwenden",
+  "common.cancel": "Abbrechen",
+  "common.close": "Schließen",
+  "common.confirm": "Bestätigen",
+  "common.delete": "Löschen",
+  "common.prompt": "Eingabe",
+  "common.save": "Speichern",
+  "common.value": "Wert",
+  "errors.NOT_FOUND": "Nicht gefunden",
+  "errors.generic": "Etwas ist schiefgelaufen.",
+  "errors.httpStatus": "HTTP {status}",
+  "test.aria": "Bereich schließen",
+  "test.greeting": "Hallo, {name}",
+  "test.malicious": "<img src=x onerror=alert(1)>",
+  "test.placeholder": "Tippe <sicher>",
+  "test.shell": "Shell-Text",
+  "test.title": "Titel & <sicher>",
+};
+
 async function loadModule() {
   vi.resetModules();
   return await import("./index.js");
 }
 
 function loader(catalogs: Record<string, Record<string, string>>) {
-  return vi.fn(async (locale: "en" | "pseudo") => catalogs[locale]);
+  return vi.fn(async (locale: "en" | "de" | "pseudo") => catalogs[locale]);
 }
 
 describe("i18n locale detection", () => {
@@ -68,9 +89,12 @@ describe("i18n locale detection", () => {
   it("falls back to navigator language aliases and then English", async () => {
     const i18n = await loadModule();
 
+    expect(i18n.detectLocale({ storage: null, languages: ["fr-FR", "de-DE", "en-US"] })).toBe("de");
     expect(i18n.detectLocale({ storage: null, languages: ["fr-FR", "en-US"] })).toBe("en");
     expect(i18n.detectLocale({ storage: null, languages: ["fr-FR"] })).toBe("en");
     expect(i18n.normalizeLocale("en_GB")).toBe("en");
+    expect(i18n.normalizeLocale("de")).toBe("de");
+    expect(i18n.normalizeLocale("de-DE")).toBe("de");
   });
 });
 
@@ -99,6 +123,19 @@ describe("i18n catalog loading", () => {
     expect(document.documentElement.lang).toBe("en");
     expect(document.documentElement.getAttribute("data-locale")).toBe("pseudo");
     expect(i18n.t("common.cancel")).toBe("[!! Cancel !!]");
+  });
+
+  it("loads German from navigator language fallback", async () => {
+    const i18n = await loadModule();
+    const loadLocale = loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog });
+
+    await i18n.initI18n({ storage: null, languages: ["de-DE"], loadLocale });
+
+    expect(loadLocale.mock.calls.map(([locale]) => locale)).toEqual(["en", "de"]);
+    expect(i18n.getLocale()).toBe("de");
+    expect(document.documentElement.lang).toBe("de");
+    expect(document.documentElement.getAttribute("data-locale")).toBe("de");
+    expect(i18n.t("common.cancel")).toBe("Abbrechen");
   });
 
   it("keeps the bootstrap English fallback when a custom loader fails loading English", async () => {
@@ -176,6 +213,15 @@ describe("i18n catalog loading", () => {
     await i18n.initI18n({ locale: "pseudo", loadLocale: loader({ en: enCatalog, pseudo: incompletePseudo }) });
 
     expect(() => i18n.t("common.save")).toThrow('Missing i18n key "common.save" for locale "pseudo"');
+  });
+
+  it("fails loudly for missing German keys in tests", async () => {
+    const i18n = await loadModule();
+    const incompleteDe = { ...deCatalog };
+    delete incompleteDe["common.save"];
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: incompleteDe, pseudo: pseudoCatalog }) });
+
+    expect(() => i18n.t("common.save")).toThrow('Missing i18n key "common.save" for locale "de"');
   });
 
   it("falls back to English for missing keys in production mode", async () => {
