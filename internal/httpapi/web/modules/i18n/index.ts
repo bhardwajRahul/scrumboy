@@ -4,8 +4,11 @@ export type MessageCatalog = Record<string, string>;
 export type MessageValues = Record<string, string | number | boolean | null | undefined>;
 
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
+export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 
 const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
+  "common.add": "Add",
+  "common.apply": "Apply",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.confirm": "Confirm",
@@ -15,6 +18,37 @@ const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
   "common.value": "Value",
   "errors.generic": "Something went wrong.",
   "errors.httpStatus": "HTTP {status}",
+  "nav.temporaryBoards.long": "Temporary Boards",
+  "nav.temporaryBoards.short": "Temporary",
+  "shell.bulkEdit.addTags": "Add tags",
+  "shell.bulkEdit.assignSprint": "Assign sprint",
+  "shell.bulkEdit.assignTo": "Assign to",
+  "shell.bulkEdit.assignUser": "Assign user",
+  "shell.bulkEdit.changeStatus": "Change status",
+  "shell.bulkEdit.estimationPoints": "Estimation points",
+  "shell.bulkEdit.noEstimate": "No estimate",
+  "shell.bulkEdit.setEstimationPoints": "Set estimation points",
+  "shell.bulkEdit.sprint": "Sprint",
+  "shell.bulkEdit.status": "Status",
+  "shell.bulkEdit.tagsPlaceholder": "Type tag and press Enter",
+  "shell.contextMenu.newTodo": "New Todo",
+  "tooltips.boardSearch": "Search titles and notes. Combine with tag and sprint chips to narrow the board.",
+  "tooltips.doneLane": "Exactly one lane counts as done. Stories there get a completion timestamp used for dashboard stats and burndown, even if the lane is named Shipped instead of Done.",
+  "tooltips.estimationPoints": "Relative effort, not hours. Uses a modified Fibonacci scale (1\u201340). Compare to similar work on this board.",
+  "tooltips.linkedStories": "Link related stories (dependencies, parent/child, duplicates). Search by local ID (#12) or title. Links are informational \u2014 they do not move cards automatically.",
+  "tooltips.memberRole": "Viewer: read-only. Contributor: edit notes when assigned. Maintainer: create, move, assign, sprints, and settings.",
+  "tooltips.sprintDefaultWeeks": "When you create a sprint, the end date defaults to this many weeks after the start date.",
+  "tooltips.sprintEnd": "Planned end of this sprint. Burndown and dashboard completion stats use the sprint date range.",
+  "tooltips.sprintFilterActive": "Currently active iteration \u2014 only one sprint can be active at a time.",
+  "tooltips.sprintFilterScheduled": "Stories assigned to any sprint.",
+  "tooltips.sprintFilterUnscheduled": "Stories not in a sprint yet (often your backlog).",
+  "tooltips.sprintName": "A label for this iteration, e.g. Sprint 12 or 2026 Q1 Sprint 1.",
+  "tooltips.sprintStart": "Planned start of this sprint. Burndown and dashboard completion stats use the sprint date range.",
+  "tooltips.sprintTodo": "Which time-boxed iteration this story belongs to. Leave empty if not scheduled yet.",
+  "tooltips.status": "Which workflow lane this story is in. Done is whichever lane is marked as done in Settings \u2192 Workflow; that lane drives dashboard completion stats.",
+  "tooltips.tags": "Free-form labels for filtering and grouping. On shared boards, tag colors are the same for everyone; your personal tag colors apply across your projects.",
+  "tooltips.voiceCommand": "Story and todo mean the same thing. Use a local ID (12, #12) or a title phrase. One clear command per line \u2014 no pronouns like it or that.",
+  "tooltips.workflowAddLane": "Adds a new column before the done lane. Lane names can be renamed later; internal keys stay fixed.",
 };
 
 type LocaleLoader = (locale: LocaleId) => Promise<MessageCatalog>;
@@ -40,6 +74,13 @@ type ApiErrorBody = {
     details?: Record<string, unknown> | null;
   };
 };
+
+const HYDRATION_BINDINGS = [
+  ["data-i18n-text", "textContent"],
+  ["data-i18n-aria-label", "aria-label"],
+  ["data-i18n-placeholder", "placeholder"],
+  ["data-i18n-title", "title"],
+] as const;
 
 let activeLocale: LocaleId = "en";
 let activeCatalog: MessageCatalog = BOOTSTRAP_EN_CATALOG;
@@ -154,6 +195,12 @@ function persistLocale(locale: LocaleId, storage = getDefaultStorage()): void {
   }
 }
 
+function dispatchLocaleChanged(locale: LocaleId): void {
+  const eventTarget = globalThis.document;
+  if (!eventTarget || typeof eventTarget.dispatchEvent !== "function") return;
+  eventTarget.dispatchEvent(new CustomEvent(I18N_LOCALE_CHANGED, { detail: { locale } }));
+}
+
 export async function initI18n(options: InitI18nOptions = {}): Promise<LocaleId> {
   if (options.loadLocale) {
     loader = options.loadLocale;
@@ -194,6 +241,8 @@ export async function initI18n(options: InitI18nOptions = {}): Promise<LocaleId>
 }
 
 export async function setLocale(locale: string): Promise<LocaleId> {
+  const previousLocale = activeLocale;
+  const previousCatalog = activeCatalog;
   const nextLocale = normalizeLocale(locale) || "en";
   const en = await ensureLocaleLoaded("en");
   let nextCatalog = en;
@@ -212,6 +261,9 @@ export async function setLocale(locale: string): Promise<LocaleId> {
   activeCatalog = nextCatalog;
   persistLocale(activeLocale);
   updateDocumentLang(activeLocale);
+  if (previousLocale !== activeLocale || previousCatalog !== activeCatalog) {
+    dispatchLocaleChanged(activeLocale);
+  }
   return activeLocale;
 }
 
@@ -265,6 +317,31 @@ function interpolate(message: string, values: MessageValues): string {
 
 export function t(key: string, values: MessageValues = {}): string {
   return interpolate(resolveMessage(key), values);
+}
+
+function elementsForAttribute(root: ParentNode, attributeName: string): Element[] {
+  const elements: Element[] = [];
+  if (typeof Element !== "undefined" && root instanceof Element && root.hasAttribute(attributeName)) {
+    elements.push(root);
+  }
+  root.querySelectorAll?.(`[${attributeName}]`).forEach((element) => elements.push(element));
+  return elements;
+}
+
+export function hydrateI18n(root: ParentNode | null | undefined = globalThis.document): void {
+  if (!root) return;
+  for (const [sourceAttribute, targetAttribute] of HYDRATION_BINDINGS) {
+    for (const element of elementsForAttribute(root, sourceAttribute)) {
+      const key = element.getAttribute(sourceAttribute);
+      if (!key) continue;
+      const message = t(key);
+      if (targetAttribute === "textContent") {
+        element.textContent = message;
+      } else {
+        element.setAttribute(targetAttribute, message);
+      }
+    }
+  }
 }
 
 export function hasI18nKey(key: string): boolean {

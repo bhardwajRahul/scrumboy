@@ -40,16 +40,16 @@
       <form method="dialog" class="dialog__form" id="bulkEditForm">
         <div class="dialog__header">
           <div class="dialog__title" id="bulkEditDialogTitle">Bulk edit</div>
-          <button class="btn btn--ghost" type="button" id="closeBulkEditBtn" aria-label="Close">✕</button>
+          <button class="btn btn--ghost" type="button" id="closeBulkEditBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
         </div>
         <p class="muted bulk-edit-dialog__hint" id="bulkEditHint"></p>
 
         <div class="bulk-edit-field" id="bulkEditAssigneeRow" style="display: none;">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplyAssignee" />
-            <span>Assign user</span>
+            <span data-i18n-text="shell.bulkEdit.assignUser">Assign user</span>
           </label>
-          <select class="select" id="bulkAssignee" aria-label="Assign to">
+          <select class="select" id="bulkAssignee" aria-label="Assign to" data-i18n-aria-label="shell.bulkEdit.assignTo">
             <option value="">Unassigned</option>
           </select>
         </div>
@@ -57,9 +57,9 @@
         <div class="bulk-edit-field" id="bulkEditSprintRow" style="display: none;">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplySprint" />
-            <span>Assign sprint</span>
+            <span data-i18n-text="shell.bulkEdit.assignSprint">Assign sprint</span>
           </label>
-          <select class="select" id="bulkSprint" aria-label="Sprint">
+          <select class="select" id="bulkSprint" aria-label="Sprint" data-i18n-aria-label="shell.bulkEdit.sprint">
             <option value="">—</option>
           </select>
         </div>
@@ -67,20 +67,20 @@
         <div class="bulk-edit-field">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplyStatus" />
-            <span>Change status</span>
+            <span data-i18n-text="shell.bulkEdit.changeStatus">Change status</span>
           </label>
-          <select class="select" id="bulkStatus" aria-label="Status"></select>
+          <select class="select" id="bulkStatus" aria-label="Status" data-i18n-aria-label="shell.bulkEdit.status"></select>
         </div>
 
         <div class="bulk-edit-field" id="bulkEditTagsRow" style="display: none;">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplyTags" />
-            <span>Add tags</span>
+            <span data-i18n-text="shell.bulkEdit.addTags">Add tags</span>
           </label>
           <div class="tags-input-container">
             <div class="tags-input-row">
-              <input class="input tags-input" id="bulkTagsInput" autocomplete="off" placeholder="Type tag and press Enter" />
-              <button class="btn tags-add-btn" type="button" id="bulkAddTagBtn">Add</button>
+              <input class="input tags-input" id="bulkTagsInput" autocomplete="off" placeholder="Type tag and press Enter" data-i18n-placeholder="shell.bulkEdit.tagsPlaceholder" />
+              <button class="btn tags-add-btn" type="button" id="bulkAddTagBtn" data-i18n-text="common.add">Add</button>
             </div>
             <div class="tags-chips" id="bulkTagsChips"></div>
           </div>
@@ -89,10 +89,10 @@
         <div class="bulk-edit-field" id="bulkEditEstimationRow" style="display: none;">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplyEstimation" />
-            <span>Set estimation points</span>
+            <span data-i18n-text="shell.bulkEdit.setEstimationPoints">Set estimation points</span>
           </label>
-          <select class="select" id="bulkEstimation" aria-label="Estimation points">
-            <option value="">No estimate</option>
+          <select class="select" id="bulkEstimation" aria-label="Estimation points" data-i18n-aria-label="shell.bulkEdit.estimationPoints">
+            <option value="" data-i18n-text="shell.bulkEdit.noEstimate">No estimate</option>
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -105,8 +105,8 @@
         </div>
 
         <div class="dialog__footer">
-          <button class="btn btn--ghost" type="button" id="cancelBulkEditBtn">Cancel</button>
-          <button class="btn" type="submit" id="saveBulkEditBtn" disabled>Apply</button>
+          <button class="btn btn--ghost" type="button" id="cancelBulkEditBtn" data-i18n-text="common.cancel">Cancel</button>
+          <button class="btn" type="submit" id="saveBulkEditBtn" disabled data-i18n-text="common.apply">Apply</button>
         </div>
       </form>
     </dialog>
@@ -271,7 +271,7 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <div id="contextMenu" class="context-menu" style="display: none;">
-      <button class="context-menu__item" id="contextMenuNewTodo">New Todo</button>
+      <button class="context-menu__item" id="contextMenuNewTodo" data-i18n-text="shell.contextMenu.newTodo">New Todo</button>
     </div>
 
     <script src="/vendor/sortable.min.js"></script>
