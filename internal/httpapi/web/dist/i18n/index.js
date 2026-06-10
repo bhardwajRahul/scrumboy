@@ -1,11 +1,12 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "de", "fr"];
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
     en: "English",
     de: "Deutsch",
     fr: "Français",
+    pt: "Português (Brasil)",
     pseudo: "Pseudo",
 };
 const BOOTSTRAP_EN_CATALOG = {
@@ -317,6 +318,8 @@ export function normalizeLocale(value) {
         return "de";
     if (normalized === "fr" || normalized.startsWith("fr-"))
         return "fr";
+    if (normalized === "pt" || normalized.startsWith("pt-"))
+        return "pt";
     if (normalized === "en" || normalized.startsWith("en-"))
         return "en";
     return null;
@@ -389,7 +392,7 @@ async function ensureLocaleLoaded(locale) {
 function updateDocumentLang(locale, element = getDefaultDocumentElement()) {
     if (!element)
         return;
-    element.lang = locale === "pseudo" ? "en" : locale;
+    element.lang = locale === "pseudo" ? "en" : intlLocale(locale);
     element.setAttribute("data-locale", locale);
 }
 function persistLocale(locale, storage = getDefaultStorage()) {
@@ -541,7 +544,11 @@ export function hasI18nKey(key) {
     return hasOwnMessage(activeCatalog, key) || hasOwnMessage(englishCatalog, key);
 }
 function intlLocale(locale = activeLocale) {
-    return locale === "pseudo" ? "en" : locale;
+    if (locale === "pseudo")
+        return "en";
+    if (locale === "pt")
+        return "pt-BR";
+    return locale;
 }
 export function formatDate(value, options) {
     const date = value instanceof Date ? value : new Date(value);

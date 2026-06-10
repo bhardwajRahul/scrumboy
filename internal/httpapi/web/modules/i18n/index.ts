@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de", "fr"] as const;
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type MessageCatalog = Record<string, string>;
 export type MessageValues = Record<string, string | number | boolean | null | undefined>;
@@ -11,6 +11,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   en: "English",
   de: "Deutsch",
   fr: "Français",
+  pt: "Português (Brasil)",
   pseudo: "Pseudo",
 };
 
@@ -353,6 +354,7 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "pseudo") return "pseudo";
   if (normalized === "de" || normalized.startsWith("de-")) return "de";
   if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
+  if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
 }
@@ -427,7 +429,7 @@ async function ensureLocaleLoaded(locale: LocaleId): Promise<MessageCatalog> {
 
 function updateDocumentLang(locale: LocaleId, element = getDefaultDocumentElement()): void {
   if (!element) return;
-  element.lang = locale === "pseudo" ? "en" : locale;
+  element.lang = locale === "pseudo" ? "en" : intlLocale(locale);
   element.setAttribute("data-locale", locale);
 }
 
@@ -593,7 +595,9 @@ export function hasI18nKey(key: string): boolean {
 }
 
 function intlLocale(locale = activeLocale): string {
-  return locale === "pseudo" ? "en" : locale;
+  if (locale === "pseudo") return "en";
+  if (locale === "pt") return "pt-BR";
+  return locale;
 }
 
 export function formatDate(
