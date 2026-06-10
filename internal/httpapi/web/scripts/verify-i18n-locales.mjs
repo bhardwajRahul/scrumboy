@@ -7,6 +7,9 @@ const webDir = process.env.SCRUMBOY_WEB_DIR
   ? path.resolve(process.env.SCRUMBOY_WEB_DIR)
   : path.resolve(__dirname, "..");
 const localesDir = path.join(webDir, "modules", "i18n", "locales");
+const i18nIndexPath = path.join(webDir, "modules", "i18n", "index.ts");
+const REQUIRED_BOOTSTRAP_PREFIXES = ["errors."];
+const BOOTSTRAP_KEY_EXEMPTIONS = new Map();
 
 function flattenMessages(value, prefix = "", out = new Map()) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -30,6 +33,28 @@ function flattenMessages(value, prefix = "", out = new Map()) {
 async function readCatalog(fileName) {
   const raw = await fs.readFile(path.join(localesDir, fileName), "utf8");
   return flattenMessages(JSON.parse(raw));
+}
+
+async function readBootstrapCatalogKeys() {
+  let source;
+  try {
+    source = await fs.readFile(i18nIndexPath, "utf8");
+  } catch {
+    throw new Error(`Cannot read bootstrap i18n catalog source: ${i18nIndexPath}`);
+  }
+
+  const match = source.match(/const BOOTSTRAP_EN_CATALOG: MessageCatalog = \{([\s\S]*?)\n\};/);
+  if (!match) {
+    throw new Error(`Cannot locate BOOTSTRAP_EN_CATALOG in: ${i18nIndexPath}`);
+  }
+
+  const keys = new Set();
+  const keyPattern = /"([^"]+)":/g;
+  let keyMatch;
+  while ((keyMatch = keyPattern.exec(match[1])) !== null) {
+    keys.add(keyMatch[1]);
+  }
+  return keys;
 }
 
 function sortedDifference(left, right) {
@@ -79,7 +104,26 @@ async function main() {
     throw new Error(lines.join("\n"));
   }
 
-  console.log(`i18n locale key parity passed (${localeFiles.length} catalogs).`);
+  const bootstrapKeys = await readBootstrapCatalogKeys();
+  const missingBootstrapKeys = [...en.keys()]
+    .filter((key) => REQUIRED_BOOTSTRAP_PREFIXES.some((prefix) => key.startsWith(prefix)))
+    .filter((key) => !bootstrapKeys.has(key) && !BOOTSTRAP_KEY_EXEMPTIONS.has(key))
+    .sort();
+
+  if (missingBootstrapKeys.length > 0) {
+    const lines = [
+      "i18n bootstrap catalog coverage failed:",
+      `- Missing bootstrap keys in modules/i18n/index.ts: ${missingBootstrapKeys.join(", ")}`,
+    ];
+    const exemptions = [...BOOTSTRAP_KEY_EXEMPTIONS.entries()]
+      .map(([key, reason]) => `${key} (${reason})`);
+    if (exemptions.length > 0) {
+      lines.push(`- Documented exemptions: ${exemptions.join(", ")}`);
+    }
+    throw new Error(lines.join("\n"));
+  }
+
+  console.log(`i18n locale key parity passed (${localeFiles.length} catalogs, bootstrap coverage ok).`);
 }
 
 main().catch((err) => {

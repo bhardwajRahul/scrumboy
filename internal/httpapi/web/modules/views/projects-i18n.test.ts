@@ -366,6 +366,37 @@ describe("projects i18n shell", () => {
     }
   });
 
+  it("keeps the persisted Untitled lane fallback in English under a non-English locale", async () => {
+    apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/projects" && !init) {
+        return [];
+      }
+      return {};
+    });
+
+    const { cleanup } = await setupI18n("de");
+    try {
+      const mod = await import("./projects.js");
+      await mod.renderProjects();
+
+      const input = document.getElementById("projectName") as HTMLInputElement | null;
+      if (!input) throw new Error("missing project name input");
+      input.value = "Neue Sache";
+      document.getElementById("createProjectForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await flushPromises();
+
+      const firstLaneInput = document.querySelector<HTMLInputElement>("[data-lane-name]");
+      if (!firstLaneInput) throw new Error("missing workflow lane input");
+      firstLaneInput.value = "";
+      firstLaneInput.dispatchEvent(new Event("input", { bubbles: true }));
+      firstLaneInput.dispatchEvent(new Event("blur", { bubbles: true }));
+
+      expect(firstLaneInput.value).toBe("Untitled");
+    } finally {
+      cleanup();
+    }
+  });
+
   it("keeps raw create failure messages when project creation fails", async () => {
     apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === "/api/projects" && !init) {
