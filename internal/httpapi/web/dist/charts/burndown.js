@@ -1,3 +1,4 @@
+import { formatDate } from '../i18n/index.js';
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 function toNumeric(value) {
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -14,7 +15,7 @@ function toTimestampMs(value) {
     return Number.isFinite(ts) ? ts : null;
 }
 function formatShortDate(tsMs) {
-    return new Date(tsMs).toLocaleDateString('en-US', {
+    return formatDate(tsMs, {
         month: 'short',
         day: 'numeric',
         timeZone: 'UTC',
@@ -385,8 +386,7 @@ export function mountBurndownChart(container, data, currentSprint, dataIsSprintS
                 ticks: { show: true },
                 font: '12px system-ui, sans-serif',
                 values: (_u, vals) => vals.map((v) => {
-                    const d = new Date(v * 1000); // scale values are in seconds
-                    return d.toLocaleDateString('en-US', {
+                    return formatDate(v * 1000, {
                         month: 'short',
                         day: 'numeric',
                         timeZone: 'UTC',

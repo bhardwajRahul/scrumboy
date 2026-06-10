@@ -1,4 +1,5 @@
 import { toast } from './dom/elements.js';
+import { t } from './i18n/index.js';
 import { User, Board } from './types.js';
 
 /**
@@ -251,7 +252,11 @@ export interface PromptDialogOptions {
  * @param title - Dialog title (default "Confirm")
  * @param confirmLabel - Label for confirm button (default "Confirm")
  */
-export function showConfirmDialog(message: string, title: string = "Confirm", confirmLabel: string = "Confirm"): Promise<boolean> {
+export function showConfirmDialog(
+  message: string,
+  title: string = t("common.confirm"),
+  confirmLabel: string = t("common.confirm"),
+): Promise<boolean> {
   return new Promise((resolve, reject) => {
     const dialog = document.createElement('dialog');
     dialog.className = 'dialog';
@@ -260,14 +265,14 @@ export function showConfirmDialog(message: string, title: string = "Confirm", co
       <div class="dialog__form" data-dialog-content-root>
         <div class="dialog__header">
           <div class="dialog__title">${escapeHTML(title)}</div>
-          <button class="btn btn--ghost" type="button" id="confirmDialogClose" aria-label="Close">✕</button>
+          <button class="btn btn--ghost" type="button" id="confirmDialogClose" aria-label="${escapeHTML(t("common.close"))}">✕</button>
         </div>
         <div class="dialog__content">
           <p>${escapeHTML(message)}</p>
         </div>
         <div class="dialog__footer">
           <div class="spacer"></div>
-          <button class="btn btn--ghost" type="button" id="confirmDialogCancel">Cancel</button>
+          <button class="btn btn--ghost" type="button" id="confirmDialogCancel">${escapeHTML(t("common.cancel"))}</button>
           <button class="btn btn--danger" type="button" id="confirmDialogConfirm">${escapeHTML(confirmLabel)}</button>
         </div>
       </div>
@@ -329,10 +334,10 @@ export function showConfirmDialog(message: string, title: string = "Confirm", co
  */
 export function showPromptDialog(options: PromptDialogOptions = {}): Promise<string | null> {
   const {
-    title = "Prompt",
-    label = "Value",
+    title = t("common.prompt"),
+    label = t("common.value"),
     initialValue = "",
-    confirmLabel = "Save",
+    confirmLabel = t("common.save"),
     placeholder = "",
     maxLength,
   } = options;
@@ -349,7 +354,7 @@ export function showPromptDialog(options: PromptDialogOptions = {}): Promise<str
       <form method="dialog" class="dialog__form" data-dialog-content-root id="promptDialogForm">
         <div class="dialog__header">
           <div class="dialog__title">${escapeHTML(title)}</div>
-          <button class="btn btn--ghost" type="button" id="promptDialogClose" aria-label="Close">✕</button>
+          <button class="btn btn--ghost" type="button" id="promptDialogClose" aria-label="${escapeHTML(t("common.close"))}">✕</button>
         </div>
         <div class="dialog__content">
           <label class="field">
@@ -366,7 +371,7 @@ export function showPromptDialog(options: PromptDialogOptions = {}): Promise<str
         </div>
         <div class="dialog__footer">
           <div class="spacer"></div>
-          <button class="btn btn--ghost" type="button" id="promptDialogCancel">Cancel</button>
+          <button class="btn btn--ghost" type="button" id="promptDialogCancel">${escapeHTML(t("common.cancel"))}</button>
           <button class="btn" type="submit" id="promptDialogConfirm">${escapeHTML(confirmLabel)}</button>
         </div>
       </form>
@@ -439,8 +444,8 @@ export function confirmDelete(options: ConfirmDeleteOptions | string): Promise<b
       : options;
   return showConfirmDialog(
     normalized.message,
-    normalized.title ?? "Delete",
-    normalized.confirmLabel ?? "Delete"
+    normalized.title ?? t("common.delete"),
+    normalized.confirmLabel ?? t("common.delete")
   );
 }
 

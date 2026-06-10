@@ -1,0 +1,22 @@
+{
+  "common.cancel": "Cancel",
+  "common.close": "Close",
+  "common.confirm": "Confirm",
+  "common.delete": "Delete",
+  "common.prompt": "Prompt",
+  "common.save": "Save",
+  "common.value": "Value",
+  "errors.BAD_REQUEST": "Bad request",
+  "errors.CONFLICT": "Conflict",
+  "errors.FORBIDDEN": "Forbidden",
+  "errors.INTERNAL": "Something went wrong.",
+  "errors.METHOD_NOT_ALLOWED": "Method not allowed",
+  "errors.NOT_FOUND": "Not found",
+  "errors.PAYLOAD_TOO_LARGE": "Upload is too large.",
+  "errors.RATE_LIMITED": "Too many attempts. Try again later.",
+  "errors.SERVICE_UNAVAILABLE": "Service unavailable.",
+  "errors.UNAUTHORIZED": "Unauthorized",
+  "errors.VALIDATION_ERROR": "Please check the request and try again.",
+  "errors.generic": "Something went wrong.",
+  "errors.httpStatus": "HTTP {status}"
+}

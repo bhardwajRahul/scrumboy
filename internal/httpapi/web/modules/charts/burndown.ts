@@ -1,4 +1,5 @@
 import { RealBurndownPoint } from '../types.js';
+import { formatDate } from '../i18n/index.js';
 
 /** uPlot is loaded via script tag and exposed globally */
 declare global {
@@ -41,7 +42,7 @@ function toTimestampMs(value: string | number): number | null {
 }
 
 function formatShortDate(tsMs: number): string {
-  return new Date(tsMs).toLocaleDateString('en-US', {
+  return formatDate(tsMs, {
     month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
@@ -530,8 +531,7 @@ export function mountBurndownChart(
         font: '12px system-ui, sans-serif',
         values: (_u: any, vals: number[]) =>
           vals.map((v) => {
-            const d = new Date(v * 1000); // scale values are in seconds
-            return d.toLocaleDateString('en-US', {
+            return formatDate(v * 1000, {
               month: 'short',
               day: 'numeric',
               timeZone: 'UTC',

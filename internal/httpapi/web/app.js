@@ -24,6 +24,7 @@ import { recordLocalMutation } from './dist/realtime/guard.js';
 import { registerPwaGlobals } from './dist/pwaUpdate.js';
 import { initKeybindings } from './dist/core/keybindings.js';
 import { initModalOutsideClickClose } from './dist/core/modal-outside-click.js';
+import { initI18n } from './dist/i18n/index.js';
 
 let tagInputHandlersSetup = false;
 
@@ -205,7 +206,11 @@ todoForm.addEventListener("submit", async (e) => {
   }
 });
 
-router().catch((err) => showToast(err.message));
+initI18n()
+  .catch((err) => {
+    console.warn("i18n initialization failed; continuing with English fallbacks.", err);
+  })
+  .then(() => router().catch((err) => showToast(err.message)));
 
 // Export render functions for views/index.js to re-export (breaking circular dependency)
 // All render functions moved to modules/views/
