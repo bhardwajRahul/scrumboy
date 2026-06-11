@@ -11,13 +11,13 @@ import { renderRealBurndownChart, destroyBurndownChart, mountBurndownChart } fro
 import { emit } from '../events.js';
 import { normalizeSprints } from '../sprints.js';
 import { KEY_ACTION_LIST, chordFromKeyboardEvent, formatChordForDisplay, getResolvedChordForAction, isTypingInTextField, reloadKeybindingsFromStorage, saveKeybindingOverride, setKeybindingsCaptureListening, } from '../core/keybindings.js';
-import { requestDesktopNotificationPermission, getDesktopNotificationStatusDescription, } from '../core/assignmentNotify.js';
+import { requestDesktopNotificationPermission, getDesktopNotificationStatusDescription, getDesktopNotificationStatusKind, } from '../core/assignmentNotify.js';
 import { isPushSubscribed, subscribeToPush, unsubscribeFromPush } from '../core/push.js';
 import { getVoiceFlowEnabledPreference, setVoiceFlowEnabledPreference } from '../core/voiceflow-preferences.js';
 import { bindWorkflowTabInteractions, clearWorkflowDraftState, invalidateWorkflowLaneCountsCache, isWorkflowDraftDirty, loadWorkflowTabContent, resetWorkflowDraftToBaseline, } from './settings-workflow.js';
 import { bindTagTabInteractions, invalidateTagsCache as invalidateTagSettingsCache, loadTagSettingsContent, } from './settings-tags.js';
 import { bindSprintsTabInteractions, renderSprintsTabContent } from './settings-sprints.js';
-import { getLocale, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
+import { getLocale, hydrateI18n, I18N_LOCALE_CHANGED, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
 export { invalidateTagsCache } from './settings-tags.js';
 /** Active keybinding capture listener (settings customization); removed when starting a new capture or on abort. */
 let keybindingCaptureKeydown = null;
@@ -49,6 +49,7 @@ installSettingsDialogCloseForKeybindingCaptureOnce();
 let settingsAbortController = null;
 let settingsProfileRefetchController = null;
 let settingsProfileRefetchVersion = 0;
+let settingsLocaleListenerBound = false;
 // Only one sprint row in edit mode at a time
 let burndownSprintIndex = 0;
 // Cache for settings modal API calls
@@ -132,6 +133,156 @@ function invalidateSprintsForChartsCache() {
 // Helper function for tag color
 function getTagColor(tagName) {
     return getTagColors()[tagName] || null;
+}
+function getSelectedSettingsLocale() {
+    const currentLocale = getLocale();
+    return isPublicLocale(currentLocale) ? currentLocale : "en";
+}
+function getWallpaperSummaryMessageKey(mode) {
+    switch (mode) {
+        case "off":
+            return "settings.customization.wallpaper.summary.off";
+        case "color":
+            return "settings.customization.wallpaper.summary.color";
+        case "builtin":
+            return "settings.customization.wallpaper.summary.builtin";
+        default:
+            return "settings.customization.wallpaper.summary.image";
+    }
+}
+function getDesktopNotificationStatusMessageKey(kind) {
+    switch (kind) {
+        case "unsupported":
+            return "settings.customization.notifications.status.unsupported";
+        case "granted":
+            return "settings.customization.notifications.status.granted";
+        case "denied":
+            return "settings.customization.notifications.status.denied";
+        default:
+            return "settings.customization.notifications.status.default";
+    }
+}
+function getDesktopNotificationButtonMessageKey(kind) {
+    return kind === "granted"
+        ? "settings.customization.notifications.actions.enabled"
+        : "settings.customization.notifications.actions.enable";
+}
+function getKeybindingActionLabel(meta) {
+    return t(meta.labelKey, meta.labelValues);
+}
+function getKeybindingActionMeta(actionId) {
+    return KEY_ACTION_LIST.find((meta) => meta.id === actionId);
+}
+function getKeybindingCapturePrompt(actionId) {
+    const meta = getKeybindingActionMeta(actionId);
+    return t("settings.customization.keybindings.capturePrompt", {
+        action: meta ? getKeybindingActionLabel(meta) : actionId,
+    });
+}
+function syncSettingsDialogVersionText() {
+    const versionEl = document.getElementById("settingsDialogVersion");
+    if (!versionEl)
+        return;
+    const versionText = getAppVersion();
+    versionEl.textContent = versionText ? ` v${versionText}` : "";
+}
+function syncSettingsLocaleSelectOptions() {
+    const select = document.getElementById("settingsLocaleSelect");
+    if (!select)
+        return;
+    const options = publicLocaleOptions();
+    const needsRebuild = select.options.length !== options.length ||
+        options.some((option, index) => {
+            const existing = select.options[index];
+            return !existing || existing.value !== option.id || existing.textContent !== option.label;
+        });
+    if (needsRebuild) {
+        select.innerHTML = options
+            .map((option) => `<option value="${escapeHTML(option.id)}">${escapeHTML(option.label)}</option>`)
+            .join("");
+    }
+    select.value = getSelectedSettingsLocale();
+}
+function syncWallpaperLocaleState() {
+    const wallpaperState = getStoredWallpaperState();
+    const summaryEl = document.getElementById("wallpaperSummary");
+    if (summaryEl) {
+        summaryEl.setAttribute("data-i18n-text", getWallpaperSummaryMessageKey(wallpaperState.mode));
+    }
+    const uploadBtn = document.getElementById("wallpaperUploadBtn");
+    if (uploadBtn) {
+        uploadBtn.setAttribute("data-i18n-text", wallpaperState.mode === "image"
+            ? "settings.customization.wallpaper.actions.replace"
+            : "settings.customization.wallpaper.actions.upload");
+    }
+}
+function syncDesktopNotificationLocaleState() {
+    const statusKind = getDesktopNotificationStatusKind();
+    const statusEl = document.getElementById("desktopNotifyStatus");
+    if (statusEl) {
+        statusEl.setAttribute("data-i18n-text", getDesktopNotificationStatusMessageKey(statusKind));
+    }
+    const buttonEl = document.getElementById("desktopNotifyEnableBtn");
+    if (buttonEl) {
+        buttonEl.setAttribute("data-i18n-text", getDesktopNotificationButtonMessageKey(statusKind));
+    }
+}
+function syncKeybindingLabelTexts() {
+    document.querySelectorAll(".keybinding-row__label").forEach((labelEl) => {
+        const actionId = labelEl.getAttribute("data-keybinding-action-id");
+        if (!actionId)
+            return;
+        const meta = getKeybindingActionMeta(actionId);
+        if (!meta)
+            return;
+        labelEl.textContent = getKeybindingActionLabel(meta);
+    });
+}
+function syncKeybindingCapturePrompt() {
+    const captureBtn = document.querySelector(".keybinding-capture--listening[data-keybinding-action]");
+    if (!captureBtn)
+        return;
+    const actionId = captureBtn.getAttribute("data-keybinding-action");
+    if (!actionId)
+        return;
+    captureBtn.textContent = getKeybindingCapturePrompt(actionId);
+}
+function applySettingsLocaleToOpenDialog() {
+    const headerEl = settingsDialog.querySelector(".dialog__header");
+    if (headerEl) {
+        hydrateI18n(headerEl);
+    }
+    const tabsEl = settingsDialog.querySelector(".settings-tabs");
+    if (tabsEl) {
+        hydrateI18n(tabsEl);
+    }
+    syncSettingsDialogVersionText();
+    if (getSettingsActiveTab() !== "customization") {
+        return;
+    }
+    const customizationEl = document.getElementById("settingsCustomizationContent");
+    if (!customizationEl)
+        return;
+    syncSettingsLocaleSelectOptions();
+    syncWallpaperLocaleState();
+    syncDesktopNotificationLocaleState();
+    hydrateI18n(customizationEl);
+    syncKeybindingLabelTexts();
+    syncKeybindingCapturePrompt();
+}
+function ensureSettingsLocaleListener() {
+    if (settingsLocaleListenerBound)
+        return;
+    settingsLocaleListenerBound = true;
+    const settingsGlobal = globalThis;
+    if (settingsGlobal.__scrumboySettingsLocaleListener) {
+        document.removeEventListener(I18N_LOCALE_CHANGED, settingsGlobal.__scrumboySettingsLocaleListener);
+    }
+    const listener = () => {
+        applySettingsLocaleToOpenDialog();
+    };
+    settingsGlobal.__scrumboySettingsLocaleListener = listener;
+    document.addEventListener(I18N_LOCALE_CHANGED, listener);
 }
 // Render backup tab HTML
 export function renderBackupTabHTML() {
@@ -721,6 +872,7 @@ async function setupBackupTab(signal) {
     }, 0);
 }
 export async function renderSettingsModal(options) {
+    ensureSettingsLocaleListener();
     const contentEl = document.querySelector("#settingsDialog .dialog__content");
     if (!contentEl) {
         console.error("Settings dialog content element not found");
@@ -907,16 +1059,7 @@ export async function renderSettingsModal(options) {
         cachedRealBurndownData = null;
         cachedRealBurndownURL = null;
     }
-    // Get version from meta tag (embedded at build time)
-    const versionText = getAppVersion();
-    // Update the Settings title to include version number
-    const titleEl = document.querySelector("#settingsDialog .dialog__title");
-    if (titleEl && versionText) {
-        titleEl.innerHTML = `Settings <span style="font-size: 0.75em; color: var(--muted); opacity: 0.6; font-weight: normal;">v${escapeHTML(versionText)}</span>`;
-    }
-    else if (titleEl) {
-        titleEl.textContent = "Settings";
-    }
+    syncSettingsDialogVersionText();
     const profileHTML = (() => {
         if (!showProfileTab)
             return "";
@@ -974,58 +1117,60 @@ export async function renderSettingsModal(options) {
         const chord = getResolvedChordForAction(meta.id);
         return `
       <div class="keybinding-row" data-keybinding-row="${meta.id}">
-        <span class="keybinding-row__label">${escapeHTML(meta.label)}</span>
+        <span class="keybinding-row__label" data-keybinding-action-id="${meta.id}">${escapeHTML(meta.label)}</span>
         <button type="button" class="btn btn--ghost keybinding-capture" data-keybinding-capture data-keybinding-action="${meta.id}">
           ${escapeHTML(formatChordForDisplay(chord))}
         </button>
       </div>`;
     }).join("");
-    const desktopNotifyGranted = typeof Notification !== "undefined" && Notification.permission === "granted";
+    const desktopNotifyStatusKind = getDesktopNotificationStatusKind();
+    const desktopNotifyGranted = desktopNotifyStatusKind === "granted";
     const pushVapidServerReady = showProfileTab && getPushConfigured();
+    const activeSettingsTab = getSettingsActiveTab();
     const showWallpaperSettings = getAuthStatusAvailable();
     const wallpaperState = showWallpaperSettings ? getStoredWallpaperState() : { v: 1, mode: "off" };
     const wallpaperPickerHex = showWallpaperSettings && wallpaperState.mode === "color" && wallpaperState.hex ? wallpaperState.hex : "#8b919a";
-    const wallpaperSummaryLabel = wallpaperState.mode === "off"
-        ? "Off"
+    const wallpaperSummaryText = wallpaperState.mode === "off"
+        ? "Off: default appearance"
         : wallpaperState.mode === "color"
-            ? "Solid color"
+            ? "Solid color: active"
             : wallpaperState.mode === "builtin"
-                ? "Default image"
-                : "Custom image";
+                ? "Default image: active"
+                : "Custom image: active";
     const wallpaperImageModeSelected = wallpaperState.mode === "image" || wallpaperState.mode === "builtin";
     const wallpaperSectionHTML = showWallpaperSettings
         ? `
       <div class="settings-section">
-        <div class="settings-section__title">Wallpaper</div>
-        <div class="settings-section__description muted">Optional background behind the app. A scrim keeps text readable. Boards and cards stay solid; Settings can show the wallpaper when it is active.</div>
-        <p class="muted" style="margin:8px 0 0 0;font-size:13px;">
-          ${wallpaperSummaryLabel}: ${wallpaperState.mode === "off" ? "default appearance" : "active"}
+        <div class="settings-section__title" data-i18n-text="settings.customization.wallpaper.title">Wallpaper</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.wallpaper.description">Optional background behind the app. A scrim keeps text readable. Boards and cards stay solid; Settings can show the wallpaper when it is active.</div>
+        <p class="muted" id="wallpaperSummary" style="margin:8px 0 0 0;font-size:13px;" data-i18n-text="${getWallpaperSummaryMessageKey(wallpaperState.mode)}">
+          ${escapeHTML(wallpaperSummaryText)}
         </p>
         <div class="theme-selector theme-selector--inline" style="margin-top:10px;">
           <label class="theme-option theme-option--inline">
             <input type="radio" name="wallpaperMode" value="off" ${wallpaperState.mode === "off" ? "checked" : ""}>
-            <span>Off</span>
+            <span data-i18n-text="settings.customization.wallpaper.mode.off">Off</span>
           </label>
           <label class="theme-option theme-option--inline">
             <input type="radio" name="wallpaperMode" value="color" ${wallpaperState.mode === "color" ? "checked" : ""}>
-            <span>Solid color</span>
+            <span data-i18n-text="settings.customization.wallpaper.mode.color">Solid color</span>
           </label>
           <label class="theme-option theme-option--inline">
             <input type="radio" name="wallpaperMode" value="image" ${wallpaperImageModeSelected ? "checked" : ""} ${getUser() || wallpaperState.mode === "builtin" ? "" : "disabled"}>
-            <span>Custom image</span>
+            <span data-i18n-text="settings.customization.wallpaper.mode.image">Custom image</span>
           </label>
         </div>
         <div id="wallpaperColorRow" class="wallpaper-settings-color-row" style="margin-top:12px;${wallpaperState.mode === "color" ? "" : "display:none;"}">
           <label class="row" style="align-items:center;gap:10px;">
-            <span class="muted">Color</span>
+            <span class="muted" data-i18n-text="settings.customization.wallpaper.colorLabel">Color</span>
             <input type="color" id="wallpaperColorPicker" value="${escapeHTML(wallpaperPickerHex)}" ${wallpaperState.mode === "color" ? "" : "disabled"} />
           </label>
         </div>
         <div class="wallpaper-settings-wallpaper-actions" style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn" id="wallpaperUploadBtn" ${getUser() ? "" : "disabled"} style="${wallpaperImageModeSelected && getUser() ? "" : "display:none;"}">${wallpaperState.mode === "image" ? "Replace image…" : "Upload image…"}</button>
-          <button type="button" class="btn btn--ghost" id="wallpaperRemoveBtn" ${wallpaperState.mode === "off" ? "disabled" : ""}>Remove wallpaper</button>
+          <button type="button" class="btn" id="wallpaperUploadBtn" ${getUser() ? "" : "disabled"} style="${wallpaperImageModeSelected && getUser() ? "" : "display:none;"}" data-i18n-text="${wallpaperState.mode === "image" ? "settings.customization.wallpaper.actions.replace" : "settings.customization.wallpaper.actions.upload"}">${wallpaperState.mode === "image" ? "Replace image…" : "Upload image…"}</button>
+          <button type="button" class="btn btn--ghost" id="wallpaperRemoveBtn" ${wallpaperState.mode === "off" ? "disabled" : ""} data-i18n-text="settings.customization.wallpaper.actions.remove">Remove wallpaper</button>
         </div>
-        ${!getUser() ? `<p class="muted" style="margin-top:10px;font-size:13px;">Sign in to use a custom image. Solid color and Off work without signing in.</p>` : ""}
+        ${!getUser() ? `<p class="muted" style="margin-top:10px;font-size:13px;" data-i18n-text="settings.customization.wallpaper.signInHint">Sign in to use a custom image. Solid color and Off work without signing in.</p>` : ""}
       </div>
     `
         : "";
@@ -1034,46 +1179,46 @@ export async function renderSettingsModal(options) {
             ? "Web Push needs VAPID keys on the server (SCRUMBOY_VAPID_PUBLIC_KEY and SCRUMBOY_VAPID_PRIVATE_KEY; see docs)."
             : "Web Push is not available in anonymous mode."
         : "";
-    const currentLocale = getLocale();
-    const selectedPublicLocale = isPublicLocale(currentLocale) ? currentLocale : "en";
+    const selectedPublicLocale = getSelectedSettingsLocale();
     const languageSectionHTML = `
       <div class="settings-section">
-        <label class="settings-section__title" for="settingsLocaleSelect">${escapeHTML(t("settings.language.title"))}</label>
-        <div class="settings-section__description muted">${escapeHTML(t("settings.language.description"))}</div>
-        <select class="select" id="settingsLocaleSelect" aria-label="${escapeHTML(t("settings.language.selectLabel"))}" style="margin-top: 10px; min-width: 180px;">
+        <label class="settings-section__title" for="settingsLocaleSelect" data-i18n-text="settings.language.title">Language</label>
+        <div class="settings-section__description muted" data-i18n-text="settings.language.description">Choose the language used for Scrumboy on this browser.</div>
+        <select class="select" id="settingsLocaleSelect" aria-label="Language" data-i18n-aria-label="settings.language.selectLabel" style="margin-top: 10px; min-width: 180px;">
           ${publicLocaleOptions().map((option) => `
             <option value="${escapeHTML(option.id)}" ${option.id === selectedPublicLocale ? "selected" : ""}>${escapeHTML(option.label)}</option>
           `).join("")}
         </select>
       </div>
     `;
-    const customizationHTML = `
+    const customizationHTML = activeSettingsTab === "customization" ? `
+    <div id="settingsCustomizationContent">
       ${languageSectionHTML}
       <div class="settings-section">
-        <div class="settings-section__title">Theme</div>
-        <div class="settings-section__description muted">Choose your preferred color scheme.</div>
+        <div class="settings-section__title" data-i18n-text="settings.customization.theme.title">Theme</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.theme.description">Choose your preferred color scheme.</div>
         <div class="theme-selector theme-selector--inline">
           <label class="theme-option theme-option--inline">
             <input type="radio" name="theme" value="system" ${getStoredTheme() === THEME_SYSTEM ? "checked" : ""}>
-            <span>System</span>
+            <span data-i18n-text="settings.customization.theme.option.system">System</span>
           </label>
           <label class="theme-option theme-option--inline">
             <input type="radio" name="theme" value="dark" ${getStoredTheme() === THEME_DARK ? "checked" : ""}>
-            <span>Dark</span>
+            <span data-i18n-text="settings.customization.theme.option.dark">Dark</span>
           </label>
           <label class="theme-option theme-option--inline">
             <input type="radio" name="theme" value="light" ${getStoredTheme() === THEME_LIGHT ? "checked" : ""}>
-            <span>Light</span>
+            <span data-i18n-text="settings.customization.theme.option.light">Light</span>
           </label>
         </div>
       </div>
       ${wallpaperSectionHTML}
       ${getAuthStatusAvailable() ? renderVoiceFlowCustomizationHTML() : ""}
       <div class="settings-section">
-        <div class="settings-section__title">Desktop notifications</div>
-        <div class="settings-section__description muted">OS-level alerts when someone assigns you a todo (works when this tab is in the background).</div>
-        <p class="muted" style="margin: 8px 0;">${escapeHTML(getDesktopNotificationStatusDescription())}</p>
-        <button type="button" class="btn" id="desktopNotifyEnableBtn" ${desktopNotifyGranted ? "disabled" : ""}>${desktopNotifyGranted ? "Notifications enabled" : "Enable notifications"}</button>
+        <div class="settings-section__title" data-i18n-text="settings.customization.notifications.title">Desktop notifications</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.notifications.description">OS-level alerts when someone assigns you a todo (works when this tab is in the background).</div>
+        <p class="muted" id="desktopNotifyStatus" style="margin: 8px 0;" data-i18n-text="${getDesktopNotificationStatusMessageKey(desktopNotifyStatusKind)}">${escapeHTML(getDesktopNotificationStatusDescription())}</p>
+        <button type="button" class="btn" id="desktopNotifyEnableBtn" ${desktopNotifyGranted ? "disabled" : ""} data-i18n-text="${getDesktopNotificationButtonMessageKey(desktopNotifyStatusKind)}">${desktopNotifyGranted ? "Notifications enabled" : "Enable notifications"}</button>
       </div>
       ${pushPwaDisabledNotice ? `<p class="settings-push-vapid-notice" role="status">${escapeHTML(pushPwaDisabledNotice)}</p>` : ""}
       <div class="settings-section settings-section--push-pwa${!pushVapidServerReady ? " settings-section--push-pwa-disabled" : ""}">
@@ -1086,13 +1231,14 @@ export async function renderSettingsModal(options) {
         <p class="muted" id="pushNotifyHint" style="margin:8px 0 0 0;font-size:13px;"></p>
       </div>
       <div class="settings-section settings-section--keybindings">
-        <div class="settings-section__title">Keybindings</div>
-        <div class="settings-section__description muted">Click a key to record a new shortcut. Press Esc to cancel while listening.</div>
+        <div class="settings-section__title" data-i18n-text="settings.customization.keybindings.title">Keybindings</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.keybindings.description">Click a key to record a new shortcut. Press Esc to cancel while listening.</div>
         <div class="keybinding-list">
           ${keybindingRowsHTML}
         </div>
       </div>
-    `;
+    </div>
+    ` : "";
     // Determine content for each tab
     const tagColorsContent = hasProjectAccess
         ? `
@@ -1153,19 +1299,22 @@ export async function renderSettingsModal(options) {
     destroyBurndownChart();
     contentEl.innerHTML = `
     <div class="settings-tabs">
-      ${showProfileTab ? `<button class="settings-tab ${getSettingsActiveTab() === "profile" ? "settings-tab--active" : ""}" data-tab="profile">Profile</button>` : ``}
-      ${showUsersTab ? `<button class="settings-tab ${getSettingsActiveTab() === "users" ? "settings-tab--active" : ""}" data-tab="users">Users</button>` : ``}
-      ${showSprintsTab ? `<button class="settings-tab ${getSettingsActiveTab() === "sprints" ? "settings-tab--active" : ""}" data-tab="sprints">Sprints</button>` : ``}
-      ${showWorkflowTab ? `<button class="settings-tab ${getSettingsActiveTab() === "workflow" ? "settings-tab--active" : ""}" data-tab="workflow">Workflow</button>` : ``}
-      <button class="settings-tab ${getSettingsActiveTab() === "customization" ? "settings-tab--active" : ""}" data-tab="customization">Customization</button>
-      <button class="settings-tab ${getSettingsActiveTab() === "tag-colors" ? "settings-tab--active" : ""}" data-tab="tag-colors">Tag Colors</button>
-      ${showChartsTab ? `<button class="settings-tab ${getSettingsActiveTab() === "charts" ? "settings-tab--active" : ""}" data-tab="charts">Charts</button>` : ``}
-      <button class="settings-tab ${getSettingsActiveTab() === "backup" ? "settings-tab--active" : ""}" data-tab="backup">Backup</button>
+      ${showProfileTab ? `<button class="settings-tab ${activeSettingsTab === "profile" ? "settings-tab--active" : ""}" data-tab="profile" data-i18n-text="settings.tabs.profile">Profile</button>` : ``}
+      ${showUsersTab ? `<button class="settings-tab ${activeSettingsTab === "users" ? "settings-tab--active" : ""}" data-tab="users" data-i18n-text="settings.tabs.users">Users</button>` : ``}
+      ${showSprintsTab ? `<button class="settings-tab ${activeSettingsTab === "sprints" ? "settings-tab--active" : ""}" data-tab="sprints" data-i18n-text="settings.tabs.sprints">Sprints</button>` : ``}
+      ${showWorkflowTab ? `<button class="settings-tab ${activeSettingsTab === "workflow" ? "settings-tab--active" : ""}" data-tab="workflow" data-i18n-text="settings.tabs.workflow">Workflow</button>` : ``}
+      <button class="settings-tab ${activeSettingsTab === "customization" ? "settings-tab--active" : ""}" data-tab="customization" data-i18n-text="settings.tabs.customization">Customization</button>
+      <button class="settings-tab ${activeSettingsTab === "tag-colors" ? "settings-tab--active" : ""}" data-tab="tag-colors" data-i18n-text="settings.tabs.tagColors">Tag Colors</button>
+      ${showChartsTab ? `<button class="settings-tab ${activeSettingsTab === "charts" ? "settings-tab--active" : ""}" data-tab="charts" data-i18n-text="settings.tabs.charts">Charts</button>` : ``}
+      <button class="settings-tab ${activeSettingsTab === "backup" ? "settings-tab--active" : ""}" data-tab="backup" data-i18n-text="settings.tabs.backup">Backup</button>
     </div>
     <div class="settings-tab-content" id="settingsTabContent">
-      ${getSettingsActiveTab() === "profile" ? profileHTML : getSettingsActiveTab() === "users" ? usersHTML : getSettingsActiveTab() === "sprints" ? sprintsHTML : getSettingsActiveTab() === "workflow" ? workflowHTML : getSettingsActiveTab() === "customization" ? customizationHTML : getSettingsActiveTab() === "tag-colors" ? tagColorsContent : getSettingsActiveTab() === "charts" ? chartsContent : getSettingsActiveTab() === "backup" ? renderBackupTabHTML() : ""}
+      ${activeSettingsTab === "profile" ? profileHTML : activeSettingsTab === "users" ? usersHTML : activeSettingsTab === "sprints" ? sprintsHTML : activeSettingsTab === "workflow" ? workflowHTML : activeSettingsTab === "customization" ? customizationHTML : activeSettingsTab === "tag-colors" ? tagColorsContent : activeSettingsTab === "charts" ? chartsContent : activeSettingsTab === "backup" ? renderBackupTabHTML() : ""}
     </div>
   `;
+    if (getLocale() !== "en") {
+        applySettingsLocaleToOpenDialog();
+    }
     // Abort previous listeners before attaching new ones
     if (keybindingCaptureKeydown) {
         window.removeEventListener("keydown", keybindingCaptureKeydown, true);
@@ -1474,10 +1623,10 @@ export async function renderSettingsModal(options) {
             try {
                 const blob = await processWallpaperFileForUpload(file);
                 await uploadWallpaperImage(blob);
-                showToast("Wallpaper updated");
+                showToast(t("settings.customization.wallpaper.toast.updated"));
             }
             catch (err) {
-                showToast(err?.message ?? String(err) ?? "Upload failed");
+                showToast(err?.message ?? String(err) ?? t("settings.customization.wallpaper.toast.uploadFailed"));
             }
             await renderSettingsModal();
         };
@@ -1501,7 +1650,7 @@ export async function renderSettingsModal(options) {
                 el.checked = false;
                 syncWallpaperRadiosFromState();
                 if (!getUser()) {
-                    showToast("Sign in to use a custom image");
+                    showToast(t("settings.customization.wallpaper.toast.signInRequired"));
                     return;
                 }
                 openWallpaperFileDialog();
@@ -1521,7 +1670,7 @@ export async function renderSettingsModal(options) {
     if (wallpaperUploadBtn) {
         wallpaperUploadBtn.addEventListener("click", () => {
             if (!getUser()) {
-                showToast("Sign in to use a custom image");
+                showToast(t("settings.customization.wallpaper.toast.signInRequired"));
                 return;
             }
             openWallpaperFileDialog();
@@ -1531,7 +1680,7 @@ export async function renderSettingsModal(options) {
     if (wallpaperRemoveBtn) {
         wallpaperRemoveBtn.addEventListener("click", async () => {
             await setWallpaperOff();
-            showToast("Wallpaper removed");
+            showToast(t("settings.customization.wallpaper.toast.removed"));
             await renderSettingsModal();
         }, { signal });
     }
@@ -1543,7 +1692,6 @@ export async function renderSettingsModal(options) {
                 if (!isPublicLocale(nextLocale))
                     return;
                 await setLocale(nextLocale);
-                await renderSettingsModal();
             }, { signal });
         }
         const voiceFlowEnabledToggle = document.getElementById("voiceFlowEnabledToggle");
@@ -1558,13 +1706,13 @@ export async function renderSettingsModal(options) {
             desktopNotifyBtn.addEventListener("click", async () => {
                 const r = await requestDesktopNotificationPermission();
                 if (r === "granted") {
-                    showToast("Desktop notifications enabled");
+                    showToast(t("settings.customization.notifications.toast.enabled"));
                 }
                 else if (r === "denied") {
-                    showToast("Notifications blocked. You can allow them in your browser settings for this site.");
+                    showToast(t("settings.customization.notifications.toast.blocked"));
                 }
                 else {
-                    showToast("Notification permission not granted");
+                    showToast(t("settings.customization.notifications.toast.notGranted"));
                 }
                 await renderSettingsModal();
             }, { signal });
@@ -1617,7 +1765,7 @@ export async function renderSettingsModal(options) {
                 if (!actionId)
                     return;
                 btn.classList.add("keybinding-capture--listening");
-                btn.textContent = "Press a key…";
+                btn.textContent = getKeybindingCapturePrompt(actionId);
                 setKeybindingsCaptureListening(true);
                 const onKey = (e) => {
                     if (e.key === "Escape") {

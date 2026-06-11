@@ -258,8 +258,11 @@
     <dialog id="settingsDialog" class="dialog">
       <div class="dialog__form">
         <div class="dialog__header">
-          <div class="dialog__title">Settings</div>
-          <button class="btn btn--ghost" type="button" id="closeSettingsBtn" aria-label="Close">✕</button>
+          <div class="dialog__title">
+            <span id="settingsDialogTitleLabel" data-i18n-text="settings.shell.title">Settings</span>
+            <span id="settingsDialogVersion" style="font-size: 0.75em; color: var(--muted); opacity: 0.6; font-weight: normal;"></span>
+          </div>
+          <button class="btn btn--ghost" type="button" id="closeSettingsBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
         </div>
         <div class="dialog__content">
           <!-- Settings content will go here -->

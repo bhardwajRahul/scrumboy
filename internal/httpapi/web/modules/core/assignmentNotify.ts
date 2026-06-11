@@ -4,6 +4,8 @@ const MUTE_KEY = "scrumboy_assignment_notify_muted";
 
 let audio: HTMLAudioElement | null = null;
 
+export type DesktopNotificationStatusKind = "unsupported" | "granted" | "denied" | "default";
+
 function getNotifyAudio(): HTMLAudioElement {
   if (!audio) {
     // iOS Safari does not decode Ogg/Vorbis; MP3 first so mobile gets a playable source. Desktop keeps Ogg as fallback.
@@ -61,11 +63,24 @@ export async function requestDesktopNotificationPermission(): Promise<Notificati
   }
 }
 
-export function getDesktopNotificationStatusDescription(): string {
+export function getDesktopNotificationStatusKind(): DesktopNotificationStatusKind {
   if (typeof Notification === "undefined") {
-    return "Not supported in this browser.";
+    return "unsupported";
   }
   switch (Notification.permission) {
+    case "granted":
+      return "granted";
+    case "denied":
+      return "denied";
+    default:
+      return "default";
+  }
+}
+
+export function getDesktopNotificationStatusDescription(): string {
+  switch (getDesktopNotificationStatusKind()) {
+    case "unsupported":
+      return "Not supported in this browser.";
     case "granted":
       return "Enabled - you will receive OS notifications for new assignments.";
     case "denied":
