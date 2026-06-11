@@ -294,13 +294,15 @@ async function setupSettingsView(options: {
   slug?: string | null;
   board?: Record<string, unknown> | null;
   pushConfigured?: boolean;
+  user?: Record<string, unknown> | null;
+  open?: boolean;
 } = {}) {
   const i18n = await initSettingsI18n(options.locale ?? 'en');
   const settings = await loadSettingsModule();
   const mutations = await loadStateMutations();
   mutations.setAuthStatusAvailable(options.authStatusAvailable ?? true);
   mutations.setPushConfigured(options.pushConfigured ?? false);
-  mutations.setUser(null);
+  mutations.setUser((options.user as any) ?? null);
   mutations.setSlug(options.slug ?? null);
   mutations.setBoard((options.board as any) ?? null);
   mutations.setProjects(null);
@@ -309,6 +311,16 @@ async function setupSettingsView(options: {
   mutations.setSettingsActiveTab(options.activeTab ?? 'customization');
   mutations.setBoardMembers([]);
   await settings.renderSettingsModal();
+  const dialog = document.getElementById('settingsDialog') as HTMLDialogElement | null;
+  if (dialog) {
+    if (options.open === false) {
+      dialog.removeAttribute('open');
+      dialog.open = false;
+    } else {
+      dialog.setAttribute('open', '');
+      dialog.open = true;
+    }
+  }
   return { i18n, settings };
 }
 
@@ -335,6 +347,8 @@ describe('settings customization i18n', () => {
   });
 
   afterEach(async () => {
+    const dialog = document.getElementById('settingsDialog') as HTMLDialogElement | null;
+    dialog?.dispatchEvent(new Event('close'));
     const i18n = await import('../i18n/index.js');
     const settingsGlobal = globalThis as { __scrumboySettingsLocaleListener?: EventListener };
     if (settingsGlobal.__scrumboySettingsLocaleListener) {
@@ -368,6 +382,35 @@ describe('settings customization i18n', () => {
     expect(document.getElementById('settingsDialogTitleLabel')?.textContent).toBe('[!! Settings !!]');
     expect(document.querySelector('.settings-tab[data-tab="customization"]')?.textContent).toBe('[!! Customization !!]');
     expect(document.querySelector('.settings-section--keybindings .settings-section__title')?.textContent).toBe('[!! Keybindings !!]');
+  });
+
+  it('renders scoped dynamic customization labels in a non-English locale on first render', async () => {
+    state.wallpaperState = { v: 1, mode: 'image', hex: '#8b919a' };
+    state.desktopNotificationKind = 'granted';
+
+    await setupSettingsView({
+      locale: 'de',
+      user: { id: 1, name: 'Alex' },
+    });
+
+    const captureBtn = document.querySelector<HTMLElement>('[data-keybinding-capture][data-keybinding-action="openSettings"]');
+    if (!captureBtn) {
+      throw new Error('missing keybinding capture button');
+    }
+
+    expect(document.getElementById('settingsDialogTitleLabel')?.textContent).toBe('DE Settings');
+    expect(document.getElementById('settingsDialogVersion')?.textContent).toBe(' vtest-version');
+    expect(document.querySelector('.settings-tab[data-tab="customization"]')?.textContent).toBe('DE Customization');
+    expect(document.querySelector('.settings-tab[data-tab="profile"]')?.textContent).toBe('DE Profile');
+    expect(document.getElementById('wallpaperSummary')?.textContent).toBe('DE Custom image: active');
+    expect(document.getElementById('wallpaperUploadBtn')?.textContent).toBe('DE Replace image…');
+    expect(document.getElementById('wallpaperRemoveBtn')?.textContent).toBe('DE Remove wallpaper');
+    expect(document.getElementById('desktopNotifyStatus')?.textContent).toBe('DE Enabled - you will receive OS notifications for new assignments.');
+    expect(document.getElementById('desktopNotifyEnableBtn')?.textContent).toBe('DE Notifications enabled');
+    expect(document.querySelector('.keybinding-row__label')?.textContent).toBe('DE Open Settings');
+
+    captureBtn.click();
+    expect(captureBtn.textContent).toBe('DE Press a shortcut for DE Open Settings');
   });
 
   it('updates visible customization copy in place on locale change while preserving version, options, and unsaved state', async () => {
@@ -495,5 +538,33 @@ describe('settings customization i18n', () => {
     expect(document.querySelector('.settings-tab[data-tab="charts"]')?.textContent).toBe('DE Charts');
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(mountBurndownChartMock).not.toHaveBeenCalled();
+  });
+
+  it('does not mutate hidden settings content on locale change while the dialog is closed', async () => {
+    const { i18n } = await setupSettingsView({ open: false });
+
+    const titleBefore = document.getElementById('settingsDialogTitleLabel')?.textContent;
+    const tabBefore = document.querySelector('.settings-tab[data-tab="customization"]')?.textContent;
+    const statusBefore = document.getElementById('desktopNotifyStatus')?.textContent;
+
+    await i18n.setLocale('de');
+    await flushPromises();
+
+    expect(document.getElementById('settingsDialogTitleLabel')?.textContent).toBe(titleBefore);
+    expect(document.querySelector('.settings-tab[data-tab="customization"]')?.textContent).toBe(tabBefore);
+    expect(document.getElementById('desktopNotifyStatus')?.textContent).toBe(statusBefore);
+  });
+
+  it('registers only one settings locale listener across repeated renders', async () => {
+    const addEventListenerSpy = vi.spyOn(document, 'addEventListener');
+    const { settings } = await setupSettingsView();
+
+    await settings.renderSettingsModal();
+    await settings.renderSettingsModal();
+
+    const localeListenerAdds = addEventListenerSpy.mock.calls.filter(
+      ([type]) => type === 'scrumboy:i18n-locale-changed',
+    );
+    expect(localeListenerAdds).toHaveLength(1);
   });
 });

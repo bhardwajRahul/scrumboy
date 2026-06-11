@@ -279,6 +279,9 @@ function ensureSettingsLocaleListener() {
         document.removeEventListener(I18N_LOCALE_CHANGED, settingsGlobal.__scrumboySettingsLocaleListener);
     }
     const listener = () => {
+        if (!settingsDialog?.open) {
+            return;
+        }
         applySettingsLocaleToOpenDialog();
     };
     settingsGlobal.__scrumboySettingsLocaleListener = listener;

@@ -380,6 +380,9 @@ function ensureSettingsLocaleListener(): void {
     document.removeEventListener(I18N_LOCALE_CHANGED, settingsGlobal.__scrumboySettingsLocaleListener);
   }
   const listener: EventListener = () => {
+    if (!(settingsDialog as HTMLDialogElement | null)?.open) {
+      return;
+    }
     applySettingsLocaleToOpenDialog();
   };
   settingsGlobal.__scrumboySettingsLocaleListener = listener;
