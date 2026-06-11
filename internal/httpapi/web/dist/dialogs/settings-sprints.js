@@ -7,7 +7,7 @@ import { setBoard } from '../state/mutations.js';
 import { normalizeSprints } from '../sprints.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
-import { formatDate } from '../i18n/index.js';
+import { formatDate, t } from '../i18n/index.js';
 let editingSprintId = null;
 const SPRINT_DATE_OPTS = {
     month: 'short',
@@ -65,7 +65,7 @@ function computeDefaultSprintEnd(start, weeks) {
 export async function renderSprintsTabContent() {
     const slug = getSlug();
     if (!slug)
-        return "<div class='muted'>No project in context.</div>";
+        return `<div class='muted'>${escapeHTML(t('settings.sprints.error.noProject'))}</div>`;
     try {
         const res = await apiFetch(`/api/board/${slug}/sprints`);
         const sprints = normalizeSprints(res);
@@ -143,13 +143,15 @@ export async function renderSprintsTabContent() {
         return `
       <div class="settings-section">
         <div class="settings-section__title" data-i18n-text="settings.sprints.create.title">Create Sprint</div>
-        <div class="settings-section__description muted">
-          <span data-i18n-text="settings.sprints.create.durationPrefix">Default duration is</span>
-          <select id="sprintDefaultWeeksSelect" class="input" style="display: inline-block; width: auto; min-width: 64px; margin: 0 4px;"${titleAttr(FIELD_TOOLTIPS.sprintDefaultWeeks)}>
-            <option value="1" ${defaultWeeks === 1 ? 'selected' : ''}>1</option>
-            <option value="2" ${defaultWeeks === 2 ? 'selected' : ''}>2</option>
-          </select>
-          <span data-i18n-text="settings.sprints.create.durationSuffix">weeks. You can customize start and end dates.</span>
+        <div class="settings-section__description muted settings-sprint-duration">
+          <label class="field settings-sprint-duration__field" style="display: inline-flex; align-items: center; gap: 8px; margin: 0;">
+            <span class="field__label" style="margin-bottom: 0;" data-i18n-text="settings.sprints.create.durationLabel">Default duration (weeks)</span>
+            <select id="sprintDefaultWeeksSelect" class="input" style="display: inline-block; width: auto; min-width: 64px;"${titleAttr(FIELD_TOOLTIPS.sprintDefaultWeeks)}>
+              <option value="1" ${defaultWeeks === 1 ? 'selected' : ''}>1</option>
+              <option value="2" ${defaultWeeks === 2 ? 'selected' : ''}>2</option>
+            </select>
+          </label>
+          <span data-i18n-text="settings.sprints.create.durationHint">You can customize start and end dates.</span>
         </div>
         <div class="settings-create-sprint-form" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
           <label class="field settings-create-sprint-form__name" style="flex: 1; min-width: 120px;">
@@ -178,7 +180,8 @@ export async function renderSprintsTabContent() {
       </div>`;
     }
     catch (err) {
-        return `<div class='muted'>Error loading sprints: ${escapeHTML(err.message)}</div>`;
+        const detail = err?.message ? String(err.message) : '';
+        return `<div class='muted'>${escapeHTML(t('settings.sprints.error.loadFailed', { message: detail }))}</div>`;
     }
 }
 export function bindSprintsTabInteractions(options) {
@@ -217,21 +220,21 @@ export function bindSprintsTabInteractions(options) {
             const startStr = startEl?.value;
             const endStr = endEl?.value;
             if (!name) {
-                showToast('Name is required');
+                showToast(t('settings.sprints.validation.nameRequired'));
                 return;
             }
             if (!startStr || !endStr) {
-                showToast('Start and end dates are required');
+                showToast(t('settings.sprints.validation.datesRequired'));
                 return;
             }
             const plannedStartAt = new Date(startStr).getTime();
             const plannedEndAt = new Date(endStr).getTime();
             if (!Number.isFinite(plannedStartAt) || !Number.isFinite(plannedEndAt)) {
-                showToast('Invalid start or end date');
+                showToast(t('settings.sprints.validation.invalidDates'));
                 return;
             }
             if (plannedEndAt < plannedStartAt) {
-                showToast('End date must be after start date');
+                showToast(t('settings.sprints.validation.endBeforeStart'));
                 return;
             }
             try {
@@ -264,13 +267,13 @@ export function bindSprintsTabInteractions(options) {
                         // Best-effort settings persistence; ignore failures.
                     });
                 }
-                showToast('Sprint created');
+                showToast(t('settings.sprints.toast.created'));
                 invalidateSprintChartsCache();
                 refreshSprintsAndChips(getSlug() ?? '').catch(() => { });
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || 'Failed to create sprint');
+                showToast(err.message || t('settings.sprints.toast.createFailed'));
             }
         }, { signal });
     }
@@ -283,24 +286,24 @@ export function bindSprintsTabInteractions(options) {
                 return;
             const row = target.closest('[data-sprint-id]');
             const plannedStartRaw = row?.getAttribute('data-sprint-planned-start-at') ?? '';
-            const sprintName = row?.getAttribute('data-sprint-name') ?? 'Sprint';
+            const sprintName = row?.getAttribute('data-sprint-name') ?? t('settings.sprints.fallbackName');
             const plannedMs = parseInt(plannedStartRaw, 10);
             if (Number.isFinite(plannedMs) && Math.abs(plannedMs - Date.now()) > 60000) {
                 const plannedLabel = formatSprintDate(plannedMs);
-                const confirmed = await showConfirmDialog(`${sprintName} will start now (activation time). Work completed after this moment will count. Planned start was ${plannedLabel}. Continue?`, 'Start sprint now?', 'Start Sprint');
+                const confirmed = await showConfirmDialog(t('settings.sprints.activateConfirm.message', { name: sprintName, plannedDate: plannedLabel }), t('settings.sprints.activateConfirm.title'), t('settings.sprints.activateConfirm.confirm'));
                 if (!confirmed)
                     return;
             }
             try {
                 recordLocalMutation();
                 await apiFetch(`/api/board/${slug}/sprints/${sprintId}/activate`, { method: 'POST' });
-                showToast('Sprint activated');
+                showToast(t('settings.sprints.toast.activated'));
                 invalidateSprintChartsCache();
                 emit('sprint-updated', { sprintId: parseInt(sprintId, 10), state: 'ACTIVE' });
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || 'Failed to activate sprint');
+                showToast(err.message || t('settings.sprints.toast.activateFailed'));
             }
         }, { signal });
     });
@@ -313,13 +316,13 @@ export function bindSprintsTabInteractions(options) {
             try {
                 recordLocalMutation();
                 await apiFetch(`/api/board/${slug}/sprints/${sprintId}/close`, { method: 'POST' });
-                showToast('Sprint closed');
+                showToast(t('settings.sprints.toast.closed'));
                 invalidateSprintChartsCache();
                 emit('sprint-updated', { sprintId: parseInt(sprintId, 10), state: 'CLOSED' });
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || 'Failed to close sprint');
+                showToast(err.message || t('settings.sprints.toast.closeFailed'));
             }
         }, { signal });
     });
@@ -374,14 +377,14 @@ export function bindSprintsTabInteractions(options) {
                     method: 'PATCH',
                     body: JSON.stringify(body),
                 });
-                showToast('Sprint updated');
+                showToast(t('settings.sprints.toast.updated'));
                 invalidateSprintChartsCache();
                 editingSprintId = null;
                 refreshSprintsAndChips(getSlug() ?? '').catch(() => { });
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || 'Failed to update sprint');
+                showToast(err.message || t('settings.sprints.toast.updateFailed'));
             }
         }, { signal });
     });
@@ -396,34 +399,34 @@ export function bindSprintsTabInteractions(options) {
                 return;
             const state = row.getAttribute('data-sprint-state') ?? '';
             const nameEl = row.querySelector('strong');
-            const name = nameEl?.textContent ?? 'Sprint';
+            const name = nameEl?.textContent ?? t('settings.sprints.fallbackName');
             const todoCount = parseInt(row.getAttribute('data-sprint-todo-count') ?? '0', 10) || 0;
-            const storyWord = todoCount === 1 ? 'story' : 'stories';
+            const stories = todoCount === 1 ? t('settings.sprints.words.story') : t('settings.sprints.words.stories');
             let message;
-            const title = 'Delete sprint?';
+            const title = t('settings.sprints.deleteConfirm.title');
             if (state === 'ACTIVE') {
-                message = `This sprint is currently active. Deleting it will immediately end the sprint and move ${todoCount} ${storyWord} back to backlog.`;
+                message = t('settings.sprints.deleteConfirm.active', { count: todoCount, stories });
             }
             else if (todoCount === 0) {
-                message = `Sprint '${name}' will be permanently deleted.`;
+                message = t('settings.sprints.deleteConfirm.empty', { name });
             }
             else {
-                message = `Sprint '${name}' has ${todoCount} ${storyWord}. They will be moved to backlog (unassigned from this sprint). The sprint will be permanently deleted.`;
+                message = t('settings.sprints.deleteConfirm.withTodos', { name, count: todoCount, stories });
             }
-            const confirmed = await showConfirmDialog(message, title, 'Delete');
+            const confirmed = await showConfirmDialog(message, title, t('settings.sprints.deleteConfirm.confirm'));
             if (!confirmed)
                 return;
             try {
                 recordLocalMutation();
                 await apiFetch(`/api/board/${slug}/sprints/${sprintId}`, { method: 'DELETE' });
-                showToast('Sprint deleted');
+                showToast(t('settings.sprints.toast.deleted'));
                 invalidateSprintChartsCache();
                 editingSprintId = null;
                 refreshSprintsAndChips(getSlug() ?? '').catch(() => { });
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || 'Failed to delete sprint');
+                showToast(err.message || t('settings.sprints.toast.deleteFailed'));
             }
         }, { signal });
     });

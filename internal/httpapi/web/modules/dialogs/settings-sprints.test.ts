@@ -1,6 +1,31 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import deCatalog from '../i18n/locales/de.json';
+import enCatalog from '../i18n/locales/en.json';
+
+const sprintLocales: Record<string, Record<string, string>> = {
+  en: enCatalog as Record<string, string>,
+  de: deCatalog as Record<string, string>,
+};
+
+async function initSprintI18n(locale: 'en' | 'de' = 'en'): Promise<typeof import('../i18n/index.js')> {
+  const i18n = await import('../i18n/index.js');
+  await i18n.initI18n({
+    locale,
+    loadLocale: async (code) => sprintLocales[code] ?? sprintLocales.en,
+  });
+  return i18n;
+}
+
+const SPRINT_DATE_OPTS: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+};
+
 type SprintShape = {
   id: number;
   name: string;
@@ -79,9 +104,9 @@ async function flushPromises(count = 8): Promise<void> {
   }
 }
 
-async function loadSprintsModule() {
-  const mod = await import('./settings-sprints.js');
-  return mod;
+async function loadSprintsModule(locale: 'en' | 'de' = 'en') {
+  await initSprintI18n(locale);
+  return import('./settings-sprints.js');
 }
 
 function makeSprint(id: number, state: string, overrides?: Partial<SprintShape>): SprintShape {
@@ -99,6 +124,7 @@ function makeSprint(id: number, state: string, overrides?: Partial<SprintShape>)
 
 describe('settings-sprints', () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-16T15:30:00Z'));
     window.history.replaceState({}, '', '/alpha');
@@ -114,10 +140,11 @@ describe('settings-sprints', () => {
     showToastMock.mockClear();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const i18n = await import('../i18n/index.js');
+    i18n.resetI18nForTests();
     vi.useRealTimers();
     vi.restoreAllMocks();
-    vi.resetModules();
     document.body.innerHTML = '';
     window.history.replaceState({}, '', '/');
     selectorState.board = null;
@@ -266,6 +293,46 @@ describe('settings-sprints', () => {
     expect(refreshSprintsAndChipsMock).toHaveBeenCalledWith('alpha');
     expect(rerender).toHaveBeenCalledTimes(1);
     expect(emitMock).not.toHaveBeenCalled();
+  });
+
+  it('shows localized activation confirm with raw sprint name and locale-formatted planned date', async () => {
+    const plannedStartAt = new Date('2026-06-01T09:00:00').getTime();
+    apiFetchMock.mockResolvedValue({
+      sprints: [makeSprint(1, 'PLANNED', { name: 'Release Train', plannedStartAt })],
+    });
+    const i18n = await initSprintI18n('de');
+    const mod = await loadSprintsModule('de');
+    const rerender = vi.fn().mockResolvedValue(undefined);
+    const invalidateSprintChartsCache = vi.fn();
+
+    render(await mod.renderSprintsTabContent());
+    mod.bindSprintsTabInteractions({
+      signal: new AbortController().signal,
+      rerender,
+      invalidateSprintChartsCache,
+    });
+
+    apiFetchMock.mockClear();
+
+    const activateBtn = document.querySelector('[data-sprint-activate="1"]');
+    if (!(activateBtn instanceof HTMLElement)) throw new Error('missing sprint activate button');
+    activateBtn.click();
+    await flushPromises();
+
+    const plannedLabel = i18n.formatDate(plannedStartAt, SPRINT_DATE_OPTS);
+    const expectedMessage = i18n.t('settings.sprints.activateConfirm.message', {
+      name: 'Release Train',
+      plannedDate: plannedLabel,
+    });
+    expect(showConfirmDialogMock).toHaveBeenCalledWith(
+      expectedMessage,
+      deCatalog['settings.sprints.activateConfirm.title'],
+      deCatalog['settings.sprints.activateConfirm.confirm']
+    );
+    expect(expectedMessage).toContain('Release Train');
+    expect(expectedMessage).toContain(plannedLabel);
+    expect(expectedMessage).not.toContain('will start now');
+    expect(apiFetchMock).not.toHaveBeenCalled();
   });
 
   it('activates planned sprints and emits sprint-updated without refreshing sprint chips', async () => {
