@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { initWallTestI18n } from "./wall-test-harness.js";
+import enCatalog from "../i18n/locales/en.json";
 
 const wallDialogEl = vi.hoisted(() => document.createElement("dialog") as HTMLDialogElement);
 
@@ -22,8 +24,9 @@ async function flushPromises(count = 4): Promise<void> {
 }
 
 describe("openWallNoteContextMenu", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
+    await initWallTestI18n({ en: enCatalog as Record<string, string> });
     setupDom();
   });
 
@@ -148,12 +151,12 @@ describe("openWallNoteContextMenu", () => {
     ac.abort();
   });
 
-  it("uses the overridden deleteLabel for the Delete button", async () => {
+  it("renders the localized group delete label from deleteCount", async () => {
     const { openWallNoteContextMenu } = await import("./wall-note-context-menu.js");
     const ac = new AbortController();
     void openWallNoteContextMenu(100, 100, ac.signal, {
       showCreateTodo: false,
-      deleteLabel: "Delete 3 notes",
+      deleteCount: 3,
     });
     await flushPromises();
 
@@ -162,6 +165,7 @@ describe("openWallNoteContextMenu", () => {
     );
     expect(deleteBtn).toBeTruthy();
     expect(deleteBtn!.textContent).toBe("Delete 3 notes");
+    expect(deleteBtn!.dataset.i18nCount).toBe("3");
     ac.abort();
   });
 
@@ -170,7 +174,7 @@ describe("openWallNoteContextMenu", () => {
     const ac = new AbortController();
     const p = openWallNoteContextMenu(100, 100, ac.signal, {
       showCreateTodo: false,
-      deleteLabel: "Delete 2 notes",
+      deleteCount: 2,
     });
     await flushPromises();
 

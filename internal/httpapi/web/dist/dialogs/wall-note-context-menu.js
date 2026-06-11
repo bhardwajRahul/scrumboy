@@ -7,11 +7,13 @@
 // never leaks listeners. The promise always resolves exactly once and the
 // DOM is torn down on every exit path.
 import { wallDialog } from "../dom/elements.js";
+import { t } from "../i18n/index.js";
 export function openWallNoteContextMenu(clientX, clientY, signal, options) {
     return new Promise((resolve) => {
         const host = wallDialog ?? document.body;
         const showCreateTodo = options?.showCreateTodo !== false;
-        const deleteLabel = options?.deleteLabel ?? "Delete";
+        const deleteCount = options?.deleteCount;
+        const isGroupDelete = typeof deleteCount === "number" && deleteCount > 1;
         const menu = document.createElement("div");
         menu.className = "context-menu wall-note-context-menu";
         menu.setAttribute("role", "menu");
@@ -23,7 +25,8 @@ export function openWallNoteContextMenu(clientX, clientY, signal, options) {
             createBtn.className = "context-menu__item";
             createBtn.setAttribute("role", "menuitem");
             createBtn.dataset.action = "create-todo";
-            createBtn.textContent = "Create Todo from Note";
+            createBtn.textContent = t("wall.menu.createTodoFromNote");
+            createBtn.setAttribute("data-i18n-text", "wall.menu.createTodoFromNote");
             menu.appendChild(createBtn);
         }
         const deleteBtn = document.createElement("button");
@@ -31,7 +34,16 @@ export function openWallNoteContextMenu(clientX, clientY, signal, options) {
         deleteBtn.className = "context-menu__item";
         deleteBtn.setAttribute("role", "menuitem");
         deleteBtn.dataset.action = "delete";
-        deleteBtn.textContent = deleteLabel;
+        if (isGroupDelete) {
+            // Count-interpolated label cannot be hydrated by data-i18n-text; stamp
+            // the raw count so the wall locale-sync helper can re-resolve it in place.
+            deleteBtn.textContent = t("wall.menu.deleteCount", { count: deleteCount });
+            deleteBtn.dataset.i18nCount = String(deleteCount);
+        }
+        else {
+            deleteBtn.textContent = t("common.delete");
+            deleteBtn.setAttribute("data-i18n-text", "common.delete");
+        }
         menu.appendChild(deleteBtn);
         // Position off-screen first so we can measure, then clamp to viewport.
         menu.style.left = "0px";

@@ -223,28 +223,28 @@
         />
         <div class="wall-shortcuts" aria-hidden="true">
           <br>
-          create note: <i>right-click on canvas</i>
+          <span data-i18n-text="wall.shortcuts.createNote.label">create note:</span> <i data-i18n-text="wall.shortcuts.createNote.hint">right-click on canvas</i>
           <br>
-          change color: <i>single-click note</i>
+          <span data-i18n-text="wall.shortcuts.changeColor.label">change color:</span> <i data-i18n-text="wall.shortcuts.changeColor.hint">single-click note</i>
           <br>
-          edit note: <i>double-click note</i>
+          <span data-i18n-text="wall.shortcuts.editNote.label">edit note:</span> <i data-i18n-text="wall.shortcuts.editNote.hint">double-click note</i>
           <br>
-          delete note: <i>right-click note or drag to trash</i>
+          <span data-i18n-text="wall.shortcuts.deleteNote.label">delete note:</span> <i data-i18n-text="wall.shortcuts.deleteNote.hint">right-click note or drag to trash</i>
           <br>
-          draw lines: <i>shift + drag from note to note</i>
+          <span data-i18n-text="wall.shortcuts.drawLines.label">draw lines:</span> <i data-i18n-text="wall.shortcuts.drawLines.hint">shift + drag from note to note</i>
           <br>
-          multiple select: <i>ctrl/cmd + left-click note or click-drag on canvas to box-select notes</i>
+          <span data-i18n-text="wall.shortcuts.multiSelect.label">multiple select:</span> <i data-i18n-text="wall.shortcuts.multiSelect.hint">ctrl/cmd + left-click note or click-drag on canvas to box-select notes</i>
           <br>
-          canvas mode: <i>dashed square = select; hand = pan / swipe / pinch</i>
+          <span data-i18n-text="wall.shortcuts.canvasMode.label">canvas mode:</span> <i data-i18n-text="wall.shortcuts.canvasMode.hint">dashed square = select; hand = pan / swipe / pinch</i>
           <br>
-          pan canvas: <i>scroll wheel, middle-drag, Pan mode drag, or space + drag</i>
+          <span data-i18n-text="wall.shortcuts.panCanvas.label">pan canvas:</span> <i data-i18n-text="wall.shortcuts.panCanvas.hint">scroll wheel, middle-drag, Pan mode drag, or space + drag</i>
           <br>
-          zoom: <i>ctrl/cmd + scroll; Pan mode also supports two-finger pinch; fit view: F or ⊡ button</i>
+          <span data-i18n-text="wall.shortcuts.zoom.label">zoom:</span> <i data-i18n-text="wall.shortcuts.zoom.hint">ctrl/cmd + scroll; Pan mode also supports two-finger pinch; fit view: F or ⊡ button</i>
         </div>
-        <div id="wallSurface" class="wall-surface" aria-label="Sticky note wall"></div>
-        <button class="wall-mode-toggle-btn" type="button" id="wallModeToggleBtn" aria-label="Canvas mode: Select" aria-pressed="false" title="Canvas mode: Select — drag empty canvas to select notes"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-dashed-icon lucide-square-dashed"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg></button>
-        <button class="wall-fit-btn" type="button" id="wallFitViewBtn" aria-label="Fit view to notes" title="Fit view (F)">⊡</button>
-        <button class="wall-close-btn" type="button" id="closeWallBtn" aria-label="Close">✕</button>
+        <div id="wallSurface" class="wall-surface" aria-label="Sticky note wall" data-i18n-aria-label="wall.shell.surfaceLabel"></div>
+        <button class="wall-mode-toggle-btn" type="button" id="wallModeToggleBtn" aria-label="Canvas mode: Select" aria-pressed="false" title="Canvas mode: Select — drag empty canvas to select notes" data-i18n-aria-label="wall.mode.select.label" data-i18n-title="wall.mode.select.title"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-dashed-icon lucide-square-dashed"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg></button>
+        <button class="wall-fit-btn" type="button" id="wallFitViewBtn" aria-label="Fit view to notes" title="Fit view (F)" data-i18n-aria-label="wall.shell.fitView.label" data-i18n-title="wall.shell.fitView.title">⊡</button>
+        <button class="wall-close-btn" type="button" id="closeWallBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
         <img
           id="wallTrash"
           class="wall-trash"

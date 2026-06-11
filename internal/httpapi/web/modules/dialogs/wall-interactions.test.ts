@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { initWallTestI18n } from "./wall-test-harness.js";
+import enCatalog from "../i18n/locales/en.json";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const confirmDeleteMock = vi.hoisted(() => vi.fn());
@@ -123,8 +125,9 @@ async function flushPromises(count = 8): Promise<void> {
 }
 
 describe("wall interactions", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
+    await initWallTestI18n({ en: enCatalog as Record<string, string> });
     installDialogPolyfill();
     setupDom();
     apiFetchMock.mockReset();

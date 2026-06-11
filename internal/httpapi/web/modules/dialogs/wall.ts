@@ -37,6 +37,7 @@ import {
   patchNoteRemote,
 } from "./wall-api.js";
 import { confirmDelete, showToast } from "../utils.js";
+import { hydrateI18n, I18N_LOCALE_CHANGED, t } from "../i18n/index.js";
 import { getUser } from "../state/selectors.js";
 import { canEditWall, type WallRole } from "./wall-permissions.js";
 import {
@@ -126,15 +127,15 @@ function wallModeButtonState(mode: WallCanvasMode): {
   if (mode === "pan") {
     return {
       pressed: "true",
-      label: "Canvas mode: Pan",
-      title: "Canvas mode: Pan — drag empty canvas to move around",
+      label: t("wall.mode.pan.label"),
+      title: t("wall.mode.pan.title"),
       svg: PAN_MODE_SVG,
     };
   }
   return {
     pressed: "false",
-    label: "Canvas mode: Select",
-    title: "Canvas mode: Select — drag empty canvas to select notes",
+    label: t("wall.mode.select.label"),
+    title: t("wall.mode.select.title"),
     svg: SELECT_MODE_SVG,
   };
 }
@@ -155,10 +156,65 @@ function syncWallCanvasModeUi(): void {
   btn.innerHTML = next.svg;
 }
 
+// Locale-change handler for the open wall. Relocalizes static shell chrome via
+// hydrateI18n plus stateful text hydration cannot reach (mode button, trash
+// alt, empty-state copy, per-note ARIA, open context-menu count label). Must
+// never refetch, reopen, rebuild the note DOM, or reset viewport/selection/
+// edit/context-menu state.
+function onWallLocaleChange(): void {
+  if (!getMounted()) return;
+  if (wallDialog) hydrateI18n(wallDialog);
+  syncWallLocaleState();
+}
+
+function syncWallLocaleState(): void {
+  const state = getMounted();
+  if (!state) return;
+
+  // Mode button label/title/aria are state-derived; re-resolve via t() so the
+  // current Pan/Select mode is preserved (hydrateI18n would otherwise stamp
+  // the static Select-mode fallback).
+  syncWallCanvasModeUi();
+
+  // Trash alt is not covered by the hydrator's supported attributes.
+  if (wallTrash) wallTrash.setAttribute("alt", t("wall.shell.trashAlt"));
+
+  if (!wallSurface) return;
+
+  // Empty-state placeholder: re-render its copy in place (no notes exist, so
+  // no note DOM is touched). Skipped entirely when notes are present.
+  const empty = wallSurface.querySelector(".wall-empty");
+  if (empty) {
+    empty.remove();
+    wallSurface.insertAdjacentHTML("beforeend", renderEmptyWallHtml(state.canEdit));
+  }
+
+  // Existing note ARIA labels (resize handle + any open editor). Attribute-only
+  // updates: the textarea node and its typed value/caret are never replaced.
+  wallSurface.querySelectorAll(".wall-note__resize-handle").forEach((el) => {
+    el.setAttribute("aria-label", t("wall.note.resize"));
+  });
+  wallSurface.querySelectorAll(".wall-note__editor").forEach((el) => {
+    el.setAttribute("aria-label", t("wall.note.edit"));
+  });
+
+  // An open note context menu hosted in #wallDialog: hydrateI18n already
+  // handled the create item and the single-note delete label. Re-resolve the
+  // count-based group delete label without moving the menu or changing IDs.
+  if (wallDialog) {
+    wallDialog.querySelectorAll<HTMLElement>(".wall-note-context-menu [data-i18n-count]").forEach((el) => {
+      const count = Number(el.dataset.i18nCount);
+      if (Number.isFinite(count)) {
+        el.textContent = t("wall.menu.deleteCount", { count });
+      }
+    });
+  }
+}
+
 // Public entry: open the wall dialog and boot its full lifecycle.
 export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void> {
   if (!wallDialog || !wallSurface) {
-    showToast("Wall is not available here.");
+    showToast(t("wall.toast.unavailable"));
     return;
   }
   const dialog = wallDialog as HTMLDialogElement;
@@ -235,6 +291,12 @@ export async function openWallDialog(opts: OpenWallDialogOptions): Promise<void>
     onTransient: state.onTransient,
   });
   state.abort.signal.addEventListener("abort", stopRealtime, { once: true });
+
+  // Relocalize the open wall in place on locale change. Scoped to the wall's
+  // AbortController so it is bound exactly once per open and removed on
+  // teardown (no stacking across repeated open/close cycles). Never refetches
+  // the wall doc or rebuilds note DOM wholesale.
+  document.addEventListener(I18N_LOCALE_CHANGED, onWallLocaleChange, { signal: state.abort.signal });
 
   bindSurfaceHandlers(state);
 
@@ -502,7 +564,7 @@ async function createNoteAt(x: number, y: number): Promise<void> {
     if (el) beginEdit(el, created);
   } catch (err) {
     console.warn("wall create note failed", err);
-    showToast("Could not add note");
+    showToast(t("wall.toast.addNoteFailed"));
   }
 }
 
@@ -518,12 +580,12 @@ async function patchNote(id: string, patch: Partial<Pick<WallNote, "x" | "y" | "
     updateNoteElement(updated);
   } catch (err: any) {
     if (err?.status === 409) {
-      showToast("Another editor changed this note \u2014 reloading wall.");
+      showToast(t("wall.toast.staleReload"));
       await refetchDoc();
       return;
     }
     console.warn("wall patch failed", err);
-    showToast("Could not update note");
+    showToast(t("wall.toast.updateNoteFailed"));
   }
 }
 
@@ -543,7 +605,7 @@ async function deleteNote(id: string): Promise<void> {
     renderSurface();
   } catch (err) {
     console.warn("wall delete failed", err);
-    showToast("Could not delete note");
+    showToast(t("wall.toast.deleteNoteFailed"));
   }
 }
 
@@ -569,7 +631,7 @@ async function createEdge(fromId: string, toId: string): Promise<void> {
     if (content) renderEdges(content, state.doc.edges);
   } catch (err) {
     console.warn("wall edge create failed", err);
-    showToast("Could not draw connection");
+    showToast(t("wall.toast.drawEdgeFailed"));
   }
 }
 
@@ -586,7 +648,7 @@ async function deleteEdge(edgeId: string): Promise<void> {
     if (content) renderEdges(content, state.doc.edges ?? []);
   } catch (err) {
     console.warn("wall edge delete failed", err);
-    showToast("Could not delete connection");
+    showToast(t("wall.toast.deleteEdgeFailed"));
   }
 }
 
@@ -712,7 +774,7 @@ function bindSurfaceHandlers(state: Mounted): void {
           ? groupNode.dataset?.edgeId || ""
           : "";
       if (edgeId) {
-        void confirmDelete("Delete this connection?").then((confirmed) => {
+        void confirmDelete(t("wall.confirm.deleteConnection")).then((confirmed) => {
           if (confirmed) {
             void deleteEdge(edgeId);
           }
@@ -734,14 +796,13 @@ function bindSurfaceHandlers(state: Mounted): void {
       // notes are selected) deletes only that note and leaves selection alone.
       const isGroup = state.selected.has(noteId) && state.selected.size > 1;
       const groupIds = isGroup ? Array.from(state.selected) : [noteId];
-      const deleteLabel = isGroup ? `Delete ${groupIds.length} notes` : "Delete";
       const confirmPrompt = isGroup
-        ? `Delete ${groupIds.length} notes?`
-        : "Delete this note?";
+        ? t("wall.confirm.deleteNotesCount", { count: groupIds.length })
+        : t("wall.confirm.deleteNote");
 
       void openWallNoteContextMenu(ev.clientX, ev.clientY, state.abort.signal, {
         showCreateTodo: !isGroup,
-        deleteLabel,
+        deleteCount: isGroup ? groupIds.length : undefined,
       }).then(async (choice) => {
         if (choice === "create-todo") {
           // Defensive: the Create-Todo item is hidden in the group case, so
@@ -936,7 +997,9 @@ function armNoteInteraction(state: Mounted, ev: PointerEvent, noteEl: HTMLElemen
         },
         onDropOnTrash: (participantIds, isGroup) => {
           const n = participantIds.length;
-          const prompt = n === 1 ? "Delete this note?" : `Delete ${n} notes?`;
+          const prompt = n === 1
+            ? t("wall.confirm.deleteNote")
+            : t("wall.confirm.deleteNotesCount", { count: n });
           void confirmDelete(prompt).then((ok) => {
             if (ok) {
               for (const id of participantIds) void deleteNote(id);

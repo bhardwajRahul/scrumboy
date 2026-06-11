@@ -21,6 +21,7 @@ import { wallDialog, wallSurface } from "../dom/elements.js";
 import { getWallContent } from "./wall-viewport.js";
 import { on, off } from "../events.js";
 import { showToast } from "../utils.js";
+import { t } from "../i18n/index.js";
 import { updateEdgesForNote, type WallDocument } from "./wall-rendering.js";
 import { fetchWall } from "./wall-api.js";
 import {
@@ -94,7 +95,7 @@ export async function refetchDoc(opts: RefetchDocOptions): Promise<void> {
     }
   } catch (err: any) {
     if (err?.status === 404) {
-      showToast("This board does not have a wall.");
+      showToast(t("wall.toast.missingWall"));
       (wallDialog as HTMLDialogElement | null)?.close();
       return;
     }

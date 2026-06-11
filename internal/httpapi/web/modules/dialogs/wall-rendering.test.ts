@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { initWallTestI18n } from './wall-test-harness.js';
+import enCatalog from '../i18n/locales/en.json';
 import {
   beginEdgePreview,
   buildNoteElement,
@@ -31,6 +33,10 @@ function note(overrides: Partial<WallNote> = {}): WallNote {
     ...overrides,
   };
 }
+
+beforeAll(async () => {
+  await initWallTestI18n({ en: enCatalog as Record<string, string> });
+});
 
 describe('wall-rendering helpers', () => {
   it('clamps dimensions inside the plan-defined bounds', () => {
