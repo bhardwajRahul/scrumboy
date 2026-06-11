@@ -8,7 +8,7 @@ const webDir = process.env.SCRUMBOY_WEB_DIR
   : path.resolve(__dirname, "..");
 const localesDir = path.join(webDir, "modules", "i18n", "locales");
 const i18nIndexPath = path.join(webDir, "modules", "i18n", "index.ts");
-const REQUIRED_BOOTSTRAP_PREFIXES = ["errors."];
+const REQUIRED_BOOTSTRAP_PREFIXES = ["errors.", "auth."];
 const BOOTSTRAP_KEY_EXEMPTIONS = new Map();
 
 function flattenMessages(value, prefix = "", out = new Map()) {
