@@ -2,6 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { destroyBurndownChart, mountBurndownChart, renderRealBurndownChart } from './burndown.js';
+import { initI18n, resetI18nForTests, setLocale } from '../i18n/index.js';
+import enCatalog from '../i18n/locales/en.json';
+import deCatalog from '../i18n/locales/de.json';
+
+const burndownLocales: Record<string, Record<string, string>> = {
+  en: enCatalog as Record<string, string>,
+  de: deCatalog as Record<string, string>,
+};
 
 type BurndownSprint = {
   name: string;
@@ -39,7 +47,8 @@ function mountMarkup(
 }
 
 describe('charts/burndown', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await initI18n({ locale: 'en', loadLocale: async (locale: string) => burndownLocales[locale] });
     uplotCalls.length = 0;
     installFakeUPlot();
     vi.stubGlobal('requestAnimationFrame', ((cb: FrameRequestCallback) => {
@@ -58,6 +67,7 @@ describe('charts/burndown', () => {
 
   afterEach(() => {
     destroyBurndownChart();
+    resetI18nForTests();
     document.body.innerHTML = '';
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -159,5 +169,45 @@ describe('charts/burndown', () => {
 
     expect(uplotCalls).toHaveLength(1);
     expect(uplotCalls[0].data[1].filter((value: number | null) => value != null)).toEqual([3, 1, 0]);
+  });
+
+  it('renders localized chart copy from the active catalog (title, nav labels, footer)', () => {
+    const sprint: BurndownSprint = {
+      name: 'Sprint 1',
+      plannedStartAt: Date.parse('2026-04-13T12:00:00Z'),
+      plannedEndAt: Date.parse('2026-04-20T12:00:00Z'),
+    };
+    const data = [
+      { date: '2026-04-13T00:00:00Z', remainingWork: 8, initialScope: 8 },
+      { date: '2026-04-14T00:00:00Z', remainingWork: 5, initialScope: 8 },
+      { date: '2026-04-15T00:00:00Z', remainingWork: 2, initialScope: 8 },
+    ];
+
+    const mount = mountMarkup(data, sprint);
+    mountBurndownChart(mount, data, sprint, true);
+
+    expect(document.querySelector('.burndown-chart__title')?.textContent).toBe('Real Burndown');
+    expect(document.getElementById('burndown-prev')?.getAttribute('aria-label')).toBe('Previous sprint');
+    expect(document.getElementById('burndown-next')?.getAttribute('aria-label')).toBe('Next sprint');
+    const footerText = document.querySelector('.burndown-chart__footer')?.textContent ?? '';
+    expect(footerText).toContain('Days:');
+    expect(footerText).toContain('Remaining:');
+    expect(footerText).toContain('Ideal Pace:');
+  });
+
+  it('localizes chart copy and no-data fallbacks for a non-English locale', async () => {
+    await setLocale('de');
+
+    const sprint: BurndownSprint = {
+      name: 'Sprint 1',
+      plannedStartAt: Date.parse('2026-04-13T12:00:00Z'),
+      plannedEndAt: Date.parse('2026-04-20T12:00:00Z'),
+    };
+    const oneSample = [{ date: '2026-04-13T00:00:00Z', remainingWork: 5, initialScope: 5 }];
+
+    const mount = mountMarkup(oneSample, sprint);
+    expect(document.querySelector('.burndown-chart__title')?.textContent).toBe(deCatalog['settings.charts.title']);
+    expect(document.getElementById('burndown-prev')?.getAttribute('aria-label')).toBe(deCatalog['settings.charts.nav.previous']);
+    expect(mount.textContent ?? '').toContain(deCatalog['settings.charts.noData.insufficient']);
   });
 });

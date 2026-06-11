@@ -7,7 +7,38 @@ import { setBoard } from '../state/mutations.js';
 import { normalizeSprints } from '../sprints.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
+import { formatDate } from '../i18n/index.js';
 let editingSprintId = null;
+const SPRINT_DATE_OPTS = {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+};
+function formatSprintDate(ms) {
+    return formatDate(ms, SPRINT_DATE_OPTS);
+}
+/**
+ * Re-localizes already-rendered sprint date labels in place using the active locale.
+ * Reads the raw millisecond timestamps stored in DOM data attributes so no refetch
+ * or sprint-list re-render is needed on locale change.
+ */
+export function refreshSprintDateLabels(root) {
+    root.querySelectorAll('[data-sprint-ms]').forEach((el) => {
+        const ms = Number(el.getAttribute('data-sprint-ms'));
+        if (Number.isFinite(ms)) {
+            el.textContent = formatSprintDate(ms);
+        }
+    });
+    root.querySelectorAll('[data-sprint-range-start]').forEach((el) => {
+        const start = Number(el.getAttribute('data-sprint-range-start'));
+        const end = Number(el.getAttribute('data-sprint-range-end'));
+        if (Number.isFinite(start) && Number.isFinite(end)) {
+            el.textContent = `${formatSprintDate(start)} - ${formatSprintDate(end)}`;
+        }
+    });
+}
 function msToDateTimeLocalStr(ms) {
     const d = new Date(ms);
     const y = d.getFullYear();
@@ -38,50 +69,43 @@ export async function renderSprintsTabContent() {
     try {
         const res = await apiFetch(`/api/board/${slug}/sprints`);
         const sprints = normalizeSprints(res);
-        const formatDate = (ms) => new Date(ms).toLocaleString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-        });
         const listHTML = sprints.length === 0
-            ? "<div class='muted'>No sprints yet. Create one above.</div>"
+            ? "<div class='muted' data-i18n-text=\"settings.sprints.list.empty\">No sprints yet. Create one above.</div>"
             : sprints
                 .map((sp) => {
                 const isEditing = editingSprintId === sp.id;
-                const dateRange = `${formatDate(sp.plannedStartAt)} - ${formatDate(sp.plannedEndAt)}`;
+                const dateRange = `${formatSprintDate(sp.plannedStartAt)} - ${formatSprintDate(sp.plannedEndAt)}`;
                 const stateBadge = `<span class="status-pill status-pill--${sp.state.toLowerCase()}">${sp.state}</span>`;
                 const activateBtn = sp.state === 'PLANNED'
-                    ? `<button class="btn btn--ghost btn--sm" data-sprint-activate="${sp.id}">Activate</button>`
+                    ? `<button class="btn btn--ghost btn--sm" data-sprint-activate="${sp.id}" data-i18n-text="settings.sprints.actions.activate">Activate</button>`
                     : '';
                 const closeBtn = sp.state === 'ACTIVE'
-                    ? `<button class="btn btn--ghost btn--sm" data-sprint-close="${sp.id}">Close</button>`
+                    ? `<button class="btn btn--ghost btn--sm" data-sprint-close="${sp.id}" data-i18n-text="settings.sprints.actions.close">Close</button>`
                     : sp.state === 'CLOSED'
-                        ? `<button type="button" class="btn btn--ghost btn--sm settings-sprint-row__action-placeholder" aria-hidden="true" tabindex="-1">Close</button>`
+                        ? `<button type="button" class="btn btn--ghost btn--sm settings-sprint-row__action-placeholder" aria-hidden="true" tabindex="-1" data-i18n-text="settings.sprints.actions.close">Close</button>`
                         : '';
-                const editBtn = `<button class="btn btn--ghost btn--sm" data-sprint-edit="${sp.id}">Edit</button>`;
-                const deleteBtn = `<button class="btn btn--danger btn--sm" data-sprint-delete="${sp.id}">Delete</button>`;
+                const editBtn = `<button class="btn btn--ghost btn--sm" data-sprint-edit="${sp.id}" data-i18n-text="settings.sprints.actions.edit">Edit</button>`;
+                const deleteBtn = `<button class="btn btn--danger btn--sm" data-sprint-delete="${sp.id}" data-i18n-text="settings.sprints.actions.delete">Delete</button>`;
                 if (isEditing) {
                     const editingClass = ' settings-sprint-row--editing';
                     const todoCount = sp.todoCount ?? 0;
                     const nameInput = sp.state === 'PLANNED' || sp.state === 'CLOSED'
                         ? `<input class="input" data-sprint-edit-name value="${escapeHTML(sp.name)}" style="min-width: 120px;" />`
                         : `<strong>${escapeHTML(sp.name)}</strong>`;
-                    const startDisplay = `<span class="muted">${formatDate(sp.plannedStartAt)}</span>`;
+                    const startDisplay = `<span class="muted settings-sprint-date" data-sprint-ms="${sp.plannedStartAt}">${formatSprintDate(sp.plannedStartAt)}</span>`;
                     const startInput = sp.state === 'PLANNED'
                         ? `<input class="input" type="datetime-local" data-sprint-edit-start value="${msToDateTimeLocalStr(sp.plannedStartAt)}" style="min-width: 180px;" />`
                         : startDisplay;
-                    const endDisplay = `<span class="muted">${formatDate(sp.plannedEndAt)}</span>`;
+                    const endDisplay = `<span class="muted settings-sprint-date" data-sprint-ms="${sp.plannedEndAt}">${formatSprintDate(sp.plannedEndAt)}</span>`;
                     const endInput = sp.state === 'PLANNED' || sp.state === 'ACTIVE'
                         ? `<input class="input" type="datetime-local" data-sprint-edit-end value="${msToDateTimeLocalStr(sp.plannedEndAt)}" style="min-width: 180px;" />`
                         : endDisplay;
                     const endBlock = sp.state === 'ACTIVE'
-                        ? `<div class="settings-sprint-edit-end-block" style="display: inline-flex; align-items: center; gap: 6px;"><div class="field__label" style="margin-bottom: 0;">End</div>${endInput}</div>`
+                        ? `<div class="settings-sprint-edit-end-block" style="display: inline-flex; align-items: center; gap: 6px;"><div class="field__label" style="margin-bottom: 0;" data-i18n-text="settings.sprints.fields.end">End</div>${endInput}</div>`
                         : endInput;
-                    const saveCancelBlock = `<div class="settings-sprint-edit-save-cancel" style="display: inline-flex; align-items: center; gap: 8px;"><button class="btn btn--sm" data-sprint-save="${sp.id}">Save</button><button class="btn btn--ghost btn--sm" data-sprint-cancel="${sp.id}">Cancel</button></div>`;
+                    const saveCancelBlock = `<div class="settings-sprint-edit-save-cancel" style="display: inline-flex; align-items: center; gap: 8px;"><button class="btn btn--sm" data-sprint-save="${sp.id}" data-i18n-text="settings.sprints.actions.save">Save</button><button class="btn btn--ghost btn--sm" data-sprint-cancel="${sp.id}" data-i18n-text="settings.sprints.actions.cancel">Cancel</button></div>`;
                     return `
-            <div class="settings-sprint-row${editingClass}" data-sprint-id="${sp.id}" data-sprint-state="${sp.state}" data-sprint-todo-count="${todoCount}" data-sprint-planned-start-at="${sp.plannedStartAt}" data-sprint-name="${escapeHTML(sp.name)}">
+            <div class="settings-sprint-row${editingClass}" data-sprint-id="${sp.id}" data-sprint-state="${sp.state}" data-sprint-todo-count="${todoCount}" data-sprint-planned-start-at="${sp.plannedStartAt}" data-sprint-planned-end-at="${sp.plannedEndAt}" data-sprint-name="${escapeHTML(sp.name)}">
               <div class="settings-sprint-row__info" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex: 1;">
                 ${nameInput}
                 ${startInput}
@@ -95,10 +119,10 @@ export async function renderSprintsTabContent() {
                 }
                 const todoCount = sp.todoCount ?? 0;
                 return `
-            <div class="settings-sprint-row" data-sprint-id="${sp.id}" data-sprint-state="${sp.state}" data-sprint-todo-count="${todoCount}" data-sprint-planned-start-at="${sp.plannedStartAt}" data-sprint-name="${escapeHTML(sp.name)}">
+            <div class="settings-sprint-row" data-sprint-id="${sp.id}" data-sprint-state="${sp.state}" data-sprint-todo-count="${todoCount}" data-sprint-planned-start-at="${sp.plannedStartAt}" data-sprint-planned-end-at="${sp.plannedEndAt}" data-sprint-name="${escapeHTML(sp.name)}">
               <div class="settings-sprint-row__info">
                 <strong>${escapeHTML(sp.name)}</strong>
-                <span class="muted" style="margin-left: 8px;">${escapeHTML(dateRange)}</span>
+                <span class="muted settings-sprint-date-range" style="margin-left: 8px;" data-sprint-range-start="${sp.plannedStartAt}" data-sprint-range-end="${sp.plannedEndAt}">${escapeHTML(dateRange)}</span>
               </div>
               <div class="settings-sprint-row__actions" style="display: flex; align-items: center; gap: 8px;">
                 ${stateBadge}
@@ -118,36 +142,36 @@ export async function renderSprintsTabContent() {
         const defaultEndStr = msToDateTimeLocalStr(defaultEnd.getTime());
         return `
       <div class="settings-section">
-        <div class="settings-section__title">Create Sprint</div>
+        <div class="settings-section__title" data-i18n-text="settings.sprints.create.title">Create Sprint</div>
         <div class="settings-section__description muted">
-          Default duration is
+          <span data-i18n-text="settings.sprints.create.durationPrefix">Default duration is</span>
           <select id="sprintDefaultWeeksSelect" class="input" style="display: inline-block; width: auto; min-width: 64px; margin: 0 4px;"${titleAttr(FIELD_TOOLTIPS.sprintDefaultWeeks)}>
             <option value="1" ${defaultWeeks === 1 ? 'selected' : ''}>1</option>
             <option value="2" ${defaultWeeks === 2 ? 'selected' : ''}>2</option>
           </select>
-          weeks. You can customize start and end dates.
+          <span data-i18n-text="settings.sprints.create.durationSuffix">weeks. You can customize start and end dates.</span>
         </div>
         <div class="settings-create-sprint-form" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
           <label class="field settings-create-sprint-form__name" style="flex: 1; min-width: 120px;">
-            ${fieldLabelHTML('Name', FIELD_TOOLTIPS.sprintName)}
-            <input class="input" id="sprintNameInput" placeholder="e.g. Sprint 1 or 2026 Q1 Sprint 1"${titleAttr(FIELD_TOOLTIPS.sprintName)} />
+            ${fieldLabelHTML('Name', FIELD_TOOLTIPS.sprintName, 'settings.sprints.fields.name')}
+            <input class="input" id="sprintNameInput" placeholder="e.g. Sprint 1 or 2026 Q1 Sprint 1" data-i18n-placeholder="settings.sprints.fields.namePlaceholder"${titleAttr(FIELD_TOOLTIPS.sprintName)} />
           </label>
           <div class="settings-create-sprint-form__dates" style="display: flex; gap: 12px; align-items: flex-end;">
             <label class="field" style="min-width: 140px;">
-              ${fieldLabelHTML('Start', FIELD_TOOLTIPS.sprintStart)}
+              ${fieldLabelHTML('Start', FIELD_TOOLTIPS.sprintStart, 'settings.sprints.fields.start')}
               <input class="input" type="datetime-local" id="sprintStartInput" value="${defaultStartStr}"${titleAttr(FIELD_TOOLTIPS.sprintStart)} />
             </label>
             <label class="field" style="min-width: 140px;">
-              ${fieldLabelHTML('End', FIELD_TOOLTIPS.sprintEnd)}
+              ${fieldLabelHTML('End', FIELD_TOOLTIPS.sprintEnd, 'settings.sprints.fields.end')}
               <input class="input" type="datetime-local" id="sprintEndInput" value="${defaultEndStr}"${titleAttr(FIELD_TOOLTIPS.sprintEnd)} />
             </label>
           </div>
           <div class="settings-create-sprint-form__submit">
-            <button class="btn" id="createSprintBtn">Create Sprint</button>
+            <button class="btn" id="createSprintBtn" data-i18n-text="settings.sprints.create.submit">Create Sprint</button>
           </div>
         </div>
-        <div class="settings-section__title" style="margin-top: 24px;">Sprints</div>
-        <div class="settings-section__description muted">Create and manage sprints for this project. Only one sprint can be active at a time.</div>
+        <div class="settings-section__title" style="margin-top: 24px;" data-i18n-text="settings.sprints.list.title">Sprints</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.sprints.list.description">Create and manage sprints for this project. Only one sprint can be active at a time.</div>
         <div class="settings-sprints-list" style="margin-bottom: 24px;">
           ${listHTML}
         </div>
@@ -262,13 +286,7 @@ export function bindSprintsTabInteractions(options) {
             const sprintName = row?.getAttribute('data-sprint-name') ?? 'Sprint';
             const plannedMs = parseInt(plannedStartRaw, 10);
             if (Number.isFinite(plannedMs) && Math.abs(plannedMs - Date.now()) > 60000) {
-                const plannedLabel = new Date(plannedMs).toLocaleString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                });
+                const plannedLabel = formatSprintDate(plannedMs);
                 const confirmed = await showConfirmDialog(`${sprintName} will start now (activation time). Work completed after this moment will count. Planned start was ${plannedLabel}. Continue?`, 'Start sprint now?', 'Start Sprint');
                 if (!confirmed)
                     return;

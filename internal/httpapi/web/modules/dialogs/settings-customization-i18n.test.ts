@@ -498,44 +498,28 @@ describe('settings customization i18n', () => {
     expect(requestDesktopNotificationPermissionMock).not.toHaveBeenCalled();
   });
 
-  it('keeps a non-customization tab active and leaves its content untouched on locale change', async () => {
-    apiFetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/board/alpha/sprints') {
-        return {
-          sprints: [
-            { id: 1, name: 'Sprint 1', state: 'ACTIVE', plannedStartAt: 1000, plannedEndAt: 2000 },
-          ],
-        };
-      }
-      if (url === '/api/board/alpha/sprints/1/burndown') {
-        return [{ date: '2026-04-13T00:00:00Z', remainingWork: 5, initialScope: 5 }];
-      }
-      throw new Error(`unexpected apiFetch url: ${url}`);
-    });
+  it('keeps a non-goal tab active and leaves its body untouched except tab labels on locale change', async () => {
+    // Charts now intentionally re-renders from cache on locale change, so the
+    // "untouched body" guarantee is asserted here against a non-goal tab (backup).
+    const { i18n } = await setupSettingsView({ activeTab: 'backup' });
 
-    const { i18n } = await setupSettingsView({
-      activeTab: 'charts',
-      slug: 'alpha',
-      board: { project: {} },
-    });
-
-    const activeTab = document.querySelector('.settings-tab--active[data-tab="charts"]');
-    const sprintEl = document.getElementById('burndown-current-sprint');
-    if (!(activeTab instanceof HTMLElement) || !(sprintEl instanceof HTMLElement)) {
-      throw new Error('missing charts tab content');
+    const activeTab = document.querySelector('.settings-tab--active[data-tab="backup"]');
+    const tabContent = document.getElementById('settingsTabContent');
+    if (!(activeTab instanceof HTMLElement) || !(tabContent instanceof HTMLElement)) {
+      throw new Error('missing backup tab content');
     }
 
-    const sprintNodeBefore = sprintEl;
+    const bodyBefore = tabContent.innerHTML;
     apiFetchMock.mockClear();
     mountBurndownChartMock.mockClear();
 
     await i18n.setLocale('de');
     await flushPromises();
 
-    expect(document.querySelector('.settings-tab--active[data-tab="charts"]')).toBe(activeTab);
-    expect(document.getElementById('burndown-current-sprint')).toBe(sprintNodeBefore);
+    expect(document.querySelector('.settings-tab--active[data-tab="backup"]')).toBe(activeTab);
     expect(document.getElementById('settingsDialogTitleLabel')?.textContent).toBe('DE Settings');
-    expect(document.querySelector('.settings-tab[data-tab="charts"]')?.textContent).toBe('DE Charts');
+    expect(document.querySelector('.settings-tab[data-tab="backup"]')?.textContent).toBe('DE Backup');
+    expect(document.getElementById('settingsTabContent')?.innerHTML).toBe(bodyBefore);
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(mountBurndownChartMock).not.toHaveBeenCalled();
   });

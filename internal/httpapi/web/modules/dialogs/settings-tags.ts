@@ -196,7 +196,7 @@ export async function loadTagSettingsContent(tagsURL: string): Promise<string> {
     const isDurableProject = !!getSettingsProjectId();
     const tagsHTML =
       tags.length === 0
-        ? "<div class='muted'>No tags yet. Create todos with tags to see them here.</div>"
+        ? "<div class='muted' data-i18n-text=\"settings.tagColors.empty\">No tags yet. Create todos with tags to see them here.</div>"
         : tags
             .map((tag: any) => {
               const colorValue = sanitizeHexColor(tag.color, '#9CA3AF') || '#9CA3AF';
@@ -214,12 +214,15 @@ export async function loadTagSettingsContent(tagsURL: string): Promise<string> {
                       data-tag="${escapeHTML(tag.name)}"${tagIdAttr}
                       value="${colorValue}"
                       title="${colorDisabled ? 'Tag ID missing; cannot update color' : 'Tag color'}"
+                      data-i18n-title="${colorDisabled ? 'settings.tagColors.colorDisabledTitle' : 'settings.tagColors.colorTitle'}"
                       ${colorDisabled ? 'disabled' : ''}
                     />
                     <button
                       class="btn btn--ghost btn--small settings-color-clear"
                       data-tag="${escapeHTML(tag.name)}"${tagIdAttr}
                       title="Clear color"
+                      data-i18n-title="settings.tagColors.clearTitle"
+                      data-i18n-text="settings.tagColors.clear"
                       ${!tag.color ? 'style="display: none;"' : ''}
                       ${colorDisabled ? 'disabled' : ''}
                     >Clear</button>
@@ -231,6 +234,8 @@ export async function loadTagSettingsContent(tagsURL: string): Promise<string> {
                       data-tag-id="${String(tag.tagId)}"
                       title="Delete tag"
                       aria-label="Delete tag"
+                      data-i18n-title="settings.tagColors.deleteTitle"
+                      data-i18n-aria-label="settings.tagColors.deleteAriaLabel"
                     >✕</button>`
                         : ''
                     }

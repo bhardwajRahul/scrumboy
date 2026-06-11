@@ -52,8 +52,9 @@ export function titleAttr(tip: string): string {
   return ` title="${escapeHTML(tip)}"`;
 }
 
-export function fieldLabelHTML(label: string, tip: string): string {
-  return `<div class="field__label"${titleAttr(tip)}>${escapeHTML(label)}</div>`;
+export function fieldLabelHTML(label: string, tip: string, i18nKey?: string): string {
+  const i18nAttr = i18nKey ? ` data-i18n-text="${escapeHTML(i18nKey)}"` : '';
+  return `<div class="field__label"${titleAttr(tip)}${i18nAttr}>${escapeHTML(label)}</div>`;
 }
 
 /** Apply native title tooltips to elements matching selectors within root (defaults to document). */

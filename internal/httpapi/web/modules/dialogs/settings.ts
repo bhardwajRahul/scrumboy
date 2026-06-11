@@ -80,7 +80,7 @@ import {
   invalidateTagsCache as invalidateTagSettingsCache,
   loadTagSettingsContent,
 } from './settings-tags.js';
-import { bindSprintsTabInteractions, renderSprintsTabContent } from './settings-sprints.js';
+import { bindSprintsTabInteractions, refreshSprintDateLabels, renderSprintsTabContent } from './settings-sprints.js';
 import { getLocale, hydrateI18n, I18N_LOCALE_CHANGED, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
 
 export { invalidateTagsCache } from './settings-tags.js';
@@ -347,6 +347,60 @@ function syncKeybindingCapturePrompt(): void {
   captureBtn.textContent = getKeybindingCapturePrompt(actionId);
 }
 
+function bindBurndownNav(signal: AbortSignal | undefined): void {
+  const opts = signal ? { signal } : undefined;
+  const prevBtn = document.getElementById("burndown-prev");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", async () => {
+      if (burndownSprintIndex > 0) {
+        burndownSprintIndex--;
+        await renderSettingsModal();
+      }
+    }, opts);
+  }
+  const nextBtn = document.getElementById("burndown-next");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", async () => {
+      const sprints = cachedSprintsForCharts ?? [];
+      if (burndownSprintIndex < sprints.length - 1) {
+        burndownSprintIndex++;
+        await renderSettingsModal();
+      }
+    }, opts);
+  }
+}
+
+function relocalizeChartsFromCache(): void {
+  const contentEl = document.querySelector("#settingsDialog .dialog__content");
+  if (!contentEl) return;
+  const chartBlock = contentEl.querySelector(".chart-block");
+  if (!chartBlock) return;
+
+  const slug = getSlug();
+  const sprints = cachedSprintsForCharts ?? [];
+  if (sprints.length > 0 && burndownSprintIndex >= sprints.length) {
+    burndownSprintIndex = Math.max(0, sprints.length - 1);
+  }
+  const currentSprint = sprints.length > 0 ? sprints[burndownSprintIndex] : null;
+  const canPrev = sprints.length > 0 && burndownSprintIndex > 0;
+  const canNext = sprints.length > 0 && burndownSprintIndex < sprints.length - 1;
+  const dataIsSprintScoped = !!slug && !!currentSprint;
+  const realBurndownData = cachedRealBurndownData ?? [];
+
+  chartBlock.innerHTML = currentSprint
+    ? renderRealBurndownChart(realBurndownData, currentSprint, { canPrev, canNext }, dataIsSprintScoped)
+    : renderRealBurndownChart(realBurndownData, undefined, undefined, dataIsSprintScoped);
+
+  // Re-bind nav buttons (innerHTML replacement dropped the previous listeners) and
+  // re-mount the chart from cached data only - never refetch on locale change.
+  bindBurndownNav(settingsAbortController?.signal);
+  const mount = chartBlock.querySelector("#burndown-uplot-mount");
+  if (mount) {
+    destroyBurndownChart();
+    mountBurndownChart(mount as HTMLElement, realBurndownData, currentSprint ?? null, dataIsSprintScoped);
+  }
+}
+
 function applySettingsLocaleToOpenDialog(): void {
   const headerEl = settingsDialog.querySelector(".dialog__header");
   if (headerEl) {
@@ -358,18 +412,38 @@ function applySettingsLocaleToOpenDialog(): void {
   }
   syncSettingsDialogVersionText();
 
-  if (getSettingsActiveTab() !== "customization") {
+  const activeTab = getSettingsActiveTab();
+
+  if (activeTab === "customization") {
+    const customizationEl = document.getElementById("settingsCustomizationContent");
+    if (!customizationEl) return;
+    syncSettingsLocaleSelectOptions();
+    syncWallpaperLocaleState();
+    syncDesktopNotificationLocaleState();
+    hydrateI18n(customizationEl);
+    syncKeybindingLabelTexts();
+    syncKeybindingCapturePrompt();
     return;
   }
 
-  const customizationEl = document.getElementById("settingsCustomizationContent");
-  if (!customizationEl) return;
-  syncSettingsLocaleSelectOptions();
-  syncWallpaperLocaleState();
-  syncDesktopNotificationLocaleState();
-  hydrateI18n(customizationEl);
-  syncKeybindingLabelTexts();
-  syncKeybindingCapturePrompt();
+  if (activeTab === "charts") {
+    relocalizeChartsFromCache();
+    return;
+  }
+
+  const tabContentEl = document.getElementById("settingsTabContent");
+  if (!tabContentEl) return;
+
+  if (activeTab === "tag-colors" || activeTab === "workflow") {
+    hydrateI18n(tabContentEl);
+    return;
+  }
+
+  if (activeTab === "sprints") {
+    hydrateI18n(tabContentEl);
+    refreshSprintDateLabels(tabContentEl);
+    return;
+  }
 }
 
 function ensureSettingsLocaleListener(): void {
@@ -1395,8 +1469,8 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
   const tagColorsContent = hasProjectAccess 
     ? `
       <div class="settings-section">
-        <div class="settings-section__title">Tag Colors</div>
-        <div class="settings-section__description muted">Assign custom colors to tags. Colors will appear in filter chips and todo cards.</div>
+        <div class="settings-section__title" data-i18n-text="settings.tagColors.title">Tag Colors</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.tagColors.description">Assign custom colors to tags. Colors will appear in filter chips and todo cards.</div>
         <div class="settings-tags-list">
           ${tagsHTML}
         </div>
@@ -1404,9 +1478,9 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
     `
     : `
       <div class="settings-section">
-        <div class="settings-section__title">Tag Colors</div>
-        <div class="settings-section__description muted">Assign custom colors to tags. Colors will appear in filter chips and todo cards.</div>
-        <div class="muted">No projects available. Create a project to manage tag colors.</div>
+        <div class="settings-section__title" data-i18n-text="settings.tagColors.title">Tag Colors</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.tagColors.description">Assign custom colors to tags. Colors will appear in filter chips and todo cards.</div>
+        <div class="muted" data-i18n-text="settings.tagColors.noProjects">No projects available. Create a project to manage tag colors.</div>
       </div>
     `;
 
@@ -1485,25 +1559,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
 
   // Charts tab: burndown sprint navigation, mount uPlot chart, scrollbar behavior
   if (getSettingsActiveTab() === "charts") {
-    const prevBtn = document.getElementById("burndown-prev");
-    const nextBtn = document.getElementById("burndown-next");
-    if (prevBtn) {
-      prevBtn.addEventListener("click", async () => {
-        if (burndownSprintIndex > 0) {
-          burndownSprintIndex--;
-          await renderSettingsModal();
-        }
-      }, { signal });
-    }
-    if (nextBtn) {
-      nextBtn.addEventListener("click", async () => {
-        const sprints = cachedSprintsForCharts ?? [];
-        if (burndownSprintIndex < sprints.length - 1) {
-          burndownSprintIndex++;
-          await renderSettingsModal();
-        }
-      }, { signal });
-    }
+    bindBurndownNav(signal);
     const mount = contentEl.querySelector("#burndown-uplot-mount");
     if (mount) {
       destroyBurndownChart();

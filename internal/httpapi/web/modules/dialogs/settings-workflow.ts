@@ -141,41 +141,41 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
 
   const loadingBanner =
     countsState.status === 'loading'
-      ? `<div class="muted settings-workflow-counts-banner" style="margin-bottom:10px;">Checking lane occupancy…</div>`
+      ? `<div class="muted settings-workflow-counts-banner" style="margin-bottom:10px;" data-i18n-text="settings.workflow.counts.loading">Checking lane occupancy…</div>`
       : '';
   const errorBanner =
     countsState.status === 'error'
       ? `<div class="settings-workflow-counts-banner settings-workflow-counts-banner--error muted" style="margin-bottom:10px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-          Could not load lane occupancy. Delete stays disabled until this succeeds.
-          <button type="button" class="btn btn--ghost btn--small" data-workflow-counts-retry>Retry</button>
+          <span data-i18n-text="settings.workflow.counts.error">Could not load lane occupancy. Delete stays disabled until this succeeds.</span>
+          <button type="button" class="btn btn--ghost btn--small" data-workflow-counts-retry data-i18n-text="settings.workflow.counts.retry">Retry</button>
         </div>`
       : '';
 
   const deleteCell = (lane: { key: string; name: string; isDone: boolean; color?: string }) => {
     if (lane.isDone) {
-      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Done lane cannot be deleted">Delete</button>`;
+      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Done lane cannot be deleted" data-i18n-title="settings.workflow.deleteTitle.done" data-i18n-text="settings.workflow.deleteAction">Delete</button>`;
     }
     if (!canDeleteAnyLane) {
-      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Workflow must keep at least 2 lanes">Delete</button>`;
+      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Workflow must keep at least 2 lanes" data-i18n-title="settings.workflow.deleteTitle.minLanes" data-i18n-text="settings.workflow.deleteAction">Delete</button>`;
     }
     if (countsState.status === 'loading') {
-      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Checking lane occupancy…">Delete</button>`;
+      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Checking lane occupancy…" data-i18n-title="settings.workflow.deleteTitle.checking" data-i18n-text="settings.workflow.deleteAction">Delete</button>`;
     }
     if (countsState.status === 'error') {
-      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Could not verify lane is empty">Delete</button>`;
+      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Could not verify lane is empty" data-i18n-title="settings.workflow.deleteTitle.countsError" data-i18n-text="settings.workflow.deleteAction">Delete</button>`;
     }
     const n = countsState.counts[lane.key] ?? 0;
     if (n > 0) {
-      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Lane must be empty to delete" aria-label="Lane must be empty to delete">Delete</button>`;
+      return `<button class="btn btn--ghost btn--small" type="button" disabled aria-disabled="true" title="Lane must be empty to delete" aria-label="Lane must be empty to delete" data-i18n-title="settings.workflow.deleteTitle.notEmpty" data-i18n-aria-label="settings.workflow.deleteAriaLabel.notEmpty" data-i18n-text="settings.workflow.deleteAction">Delete</button>`;
     }
-    return `<button class="btn btn--danger btn--small" type="button" data-workflow-delete="${escapeHTML(lane.key)}">Delete</button>`;
+    return `<button class="btn btn--danger btn--small" type="button" data-workflow-delete="${escapeHTML(lane.key)}" data-i18n-text="settings.workflow.deleteAction">Delete</button>`;
   };
 
   const saveDisabled = !isWorkflowDraftDirty();
   return `
     <div class="settings-section">
-      <div class="settings-section__title">Workflow</div>
-      <div class="settings-section__description muted">Edit lane labels and colors, then save. New lanes are inserted before the done lane. Keys stay immutable.</div>
+      <div class="settings-section__title" data-i18n-text="settings.workflow.title">Workflow</div>
+      <div class="settings-section__description muted" data-i18n-text="settings.workflow.description">Edit lane labels and colors, then save. New lanes are inserted before the done lane. Keys stay immutable.</div>
       ${loadingBanner}
       ${errorBanner}
       <div class="settings-workflow-list">
@@ -199,6 +199,7 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
               value="${escapeHTML(inputColor)}"
               aria-label="Lane color for ${escapeHTML(lane.key)}"
               title="Lane color"
+              data-i18n-title="settings.workflow.laneColorTitle"
             />
             ${deleteCell(lane)}
           </div>
@@ -213,15 +214,16 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
           data-workflow-ghost-input
           maxlength="200"
           placeholder="Add lane..."
+          data-i18n-placeholder="settings.workflow.addPlaceholder"
           aria-label="Add lane"
           style="flex:1; min-width:0;"
           ${titleAttr(FIELD_TOOLTIPS.workflowAddLane)}
         />
-        <button type="button" class="btn btn--small" data-workflow-add>Add</button>
+        <button type="button" class="btn btn--small" data-workflow-add data-i18n-text="settings.workflow.add">Add</button>
       </div>
       <div class="settings-workflow-footer">
-        <button type="button" class="btn btn--ghost" data-workflow-draft-cancel>Cancel</button>
-        <button type="button" class="btn" data-workflow-save-changes ${saveDisabled ? 'disabled' : ''}>Save Changes</button>
+        <button type="button" class="btn btn--ghost" data-workflow-draft-cancel data-i18n-text="settings.workflow.cancel">Cancel</button>
+        <button type="button" class="btn" data-workflow-save-changes ${saveDisabled ? 'disabled' : ''} data-i18n-text="settings.workflow.save">Save Changes</button>
       </div>
     </div>
   `;
