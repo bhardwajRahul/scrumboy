@@ -60,6 +60,17 @@ function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
+function stripOidcErrorFromNext(next: string): string {
+  const qIndex = next.indexOf("?");
+  if (qIndex === -1) return next;
+  const pathname = next.slice(0, qIndex);
+  const params = new URLSearchParams(next.slice(qIndex + 1));
+  if (!params.has("oidc_error")) return next;
+  params.delete("oidc_error");
+  const search = params.toString();
+  return search ? `${pathname}?${search}` : pathname;
+}
+
 function isAuthViewVisible(): boolean {
   return !!app.querySelector(".page--auth");
 }
@@ -213,10 +224,10 @@ function authShellHTML(content: string, version: string): string {
   `;
 }
 
-function renderOidcErrorToast(): void {
+function renderOidcErrorToast(): boolean {
   const params = new URLSearchParams(window.location.search);
   const oidcError = params.get("oidc_error");
-  if (!oidcError) return;
+  if (!oidcError) return false;
 
   const key = `auth.oidc.error.${oidcError}`;
   const knownKeys = new Set([
@@ -226,7 +237,14 @@ function renderOidcErrorToast(): void {
     "auth.oidc.error.email",
   ]);
   showToast(t(knownKeys.has(key) ? key : "auth.oidc.error.generic"));
-  window.history.replaceState({}, "", window.location.pathname);
+  params.delete("oidc_error");
+  const remaining = params.toString();
+  window.history.replaceState(
+    {},
+    "",
+    remaining ? `${window.location.pathname}?${remaining}` : window.location.pathname,
+  );
+  return true;
 }
 
 function renderAuthView(state: AuthBaseState, options: { handleOidcError: boolean }): void {
@@ -305,8 +323,15 @@ function renderAuthView(state: AuthBaseState, options: { handleOidcError: boolea
     });
   }
 
-  if (options.handleOidcError) {
-    renderOidcErrorToast();
+  if (options.handleOidcError && renderOidcErrorToast()) {
+    state.options.next = stripOidcErrorFromNext(state.options.next);
+    const ssoBtn = document.getElementById("authSsoBtn");
+    if (ssoBtn) {
+      ssoBtn.setAttribute(
+        "href",
+        `/api/auth/oidc/login?return_to=${encodeURIComponent(state.options.next)}`,
+      );
+    }
   }
 
   if (bootstrap) {
@@ -363,7 +388,7 @@ function renderAuthView(state: AuthBaseState, options: { handleOidcError: boolea
 }
 
 export function renderAuth(opts: { next?: string; bootstrap?: boolean; oidcEnabled?: boolean; localAuthEnabled?: boolean } = {}): void {
-  const next = opts.next || (window.location.pathname + window.location.search);
+  const next = opts.next ?? stripOidcErrorFromNext(window.location.pathname + window.location.search);
   const state: AuthBaseState = {
     mode: "auth",
     options: {

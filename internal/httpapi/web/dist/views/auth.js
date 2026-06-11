@@ -9,6 +9,18 @@ let authLocaleListenerBound = false;
 function nonEmptyString(value) {
     return typeof value === "string" && value.trim() ? value : null;
 }
+function stripOidcErrorFromNext(next) {
+    const qIndex = next.indexOf("?");
+    if (qIndex === -1)
+        return next;
+    const pathname = next.slice(0, qIndex);
+    const params = new URLSearchParams(next.slice(qIndex + 1));
+    if (!params.has("oidc_error"))
+        return next;
+    params.delete("oidc_error");
+    const search = params.toString();
+    return search ? `${pathname}?${search}` : pathname;
+}
 function isAuthViewVisible() {
     return !!app.querySelector(".page--auth");
 }
@@ -159,7 +171,7 @@ function renderOidcErrorToast() {
     const params = new URLSearchParams(window.location.search);
     const oidcError = params.get("oidc_error");
     if (!oidcError)
-        return;
+        return false;
     const key = `auth.oidc.error.${oidcError}`;
     const knownKeys = new Set([
         "auth.oidc.error.state_invalid",
@@ -168,7 +180,10 @@ function renderOidcErrorToast() {
         "auth.oidc.error.email",
     ]);
     showToast(t(knownKeys.has(key) ? key : "auth.oidc.error.generic"));
-    window.history.replaceState({}, "", window.location.pathname);
+    params.delete("oidc_error");
+    const remaining = params.toString();
+    window.history.replaceState({}, "", remaining ? `${window.location.pathname}?${remaining}` : window.location.pathname);
+    return true;
 }
 function renderAuthView(state, options) {
     ensureAuthLocaleListener();
@@ -240,8 +255,12 @@ function renderAuthView(state, options) {
             setPasswordToggleState([pwEl], pwToggle, pwIcon, state.passwordVisible);
         });
     }
-    if (options.handleOidcError) {
-        renderOidcErrorToast();
+    if (options.handleOidcError && renderOidcErrorToast()) {
+        state.options.next = stripOidcErrorFromNext(state.options.next);
+        const ssoBtn = document.getElementById("authSsoBtn");
+        if (ssoBtn) {
+            ssoBtn.setAttribute("href", `/api/auth/oidc/login?return_to=${encodeURIComponent(state.options.next)}`);
+        }
     }
     if (bootstrap) {
         const bootstrapBtn = document.getElementById("bootstrapBtn");
@@ -294,7 +313,7 @@ function renderAuthView(state, options) {
     }
 }
 export function renderAuth(opts = {}) {
-    const next = opts.next || (window.location.pathname + window.location.search);
+    const next = opts.next ?? stripOidcErrorFromNext(window.location.pathname + window.location.search);
     const state = {
         mode: "auth",
         options: {

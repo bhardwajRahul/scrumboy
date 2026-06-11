@@ -578,6 +578,138 @@ describe("auth view i18n", () => {
     expect(showToastMock).not.toHaveBeenCalled();
   });
 
+  it("preserves explicit next exactly and strips oidc_error from derived SSO return_to", async () => {
+    await setupI18n("en");
+    const auth = await import("./auth.js");
+    window.history.replaceState({}, "", "/dashboard?tab=mine&oidc_error=state_invalid");
+
+    auth.renderAuth({ next: "/dashboard?tab=mine", oidcEnabled: true, localAuthEnabled: true });
+
+    expect(showToastMock).toHaveBeenCalledWith("Login session expired or invalid. Please try again.");
+    expect(window.location.search).toBe("?tab=mine");
+    expect(document.getElementById("authSsoBtn")?.getAttribute("href")).toContain(
+      "return_to=%2Fdashboard%3Ftab%3Dmine",
+    );
+    expect(document.getElementById("authSsoBtn")?.getAttribute("href")).not.toContain("oidc_error");
+
+    showToastMock.mockClear();
+    document.body.innerHTML = "";
+    vi.resetModules();
+    await setupI18n("en");
+    const authDerived = await import("./auth.js");
+    window.history.replaceState({}, "", "/projects?oidc_error=provider");
+
+    authDerived.renderAuth({ oidcEnabled: true, localAuthEnabled: true });
+
+    expect(showToastMock).toHaveBeenCalledWith("The identity provider returned an error.");
+    expect(window.location.search).toBe("");
+    expect(document.getElementById("authSsoBtn")?.getAttribute("href")).toContain("return_to=%2Fprojects");
+    expect(document.getElementById("authSsoBtn")?.getAttribute("href")).not.toContain("oidc_error");
+  });
+
+  it("strips oidc_error from explicit router-style next for SSO return_to after cleanup", async () => {
+    await setupI18n("en");
+    const auth = await import("./auth.js");
+    window.history.replaceState({}, "", "/dashboard?oidc_error=token");
+
+    auth.renderAuth({
+      next: "/dashboard?oidc_error=token",
+      oidcEnabled: true,
+      localAuthEnabled: true,
+    });
+
+    expect(showToastMock).toHaveBeenCalledOnce();
+    expect(window.location.search).toBe("");
+    expect(document.getElementById("authSsoBtn")?.getAttribute("href")).toContain("return_to=%2Fdashboard");
+    expect(document.getElementById("authSsoBtn")?.getAttribute("href")).not.toContain("oidc_error");
+  });
+
+  it("binds one auth locale listener across repeated auth renders and transitions", async () => {
+    const i18n = await import("../i18n/index.js");
+    await i18n.initI18n({ locale: "en", loadLocale: loader() });
+    const addListenerSpy = vi.spyOn(document, "addEventListener");
+    const auth = await import("./auth.js");
+    apiFetchMock.mockResolvedValueOnce({
+      requires2fa: true,
+      tempToken: "temp-token",
+      user: { id: 7, email: "user@example.com" },
+    });
+
+    auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
+    auth.renderAuth({ next: "/projects", oidcEnabled: true, localAuthEnabled: true });
+
+    (document.getElementById("authEmail") as HTMLInputElement).value = "user@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "password";
+    document.getElementById("authForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+
+    auth.renderResetPassword("reset-token");
+
+    const localeListenerAdds = addListenerSpy.mock.calls.filter(
+      ([eventName]) => eventName === i18n.I18N_LOCALE_CHANGED,
+    );
+    expect(localeListenerAdds).toHaveLength(1);
+    addListenerSpy.mockRestore();
+  });
+
+  it("does not apply auth translations after navigating away from the auth page", async () => {
+    const i18n = await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard", localAuthEnabled: true });
+    document.body.innerHTML = `<div class="page page--projects"><h1 class="panel__title">Projects</h1></div>`;
+
+    await i18n.setLocale("de");
+    await flushPromises();
+
+    expect(document.querySelector(".panel__title")?.textContent).toBe("Projects");
+  });
+
+  it("keeps login submission payload unchanged after locale change", async () => {
+    const i18n = await setupI18n("en");
+    const auth = await import("./auth.js");
+    apiFetchMock.mockResolvedValueOnce({});
+
+    auth.renderAuth({ next: "/projects?from=auth", localAuthEnabled: true });
+    (document.getElementById("authEmail") as HTMLInputElement).value = "user@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "password";
+    (document.getElementById("authEmail") as HTMLInputElement).dispatchEvent(new Event("input", { bubbles: true }));
+    (document.getElementById("authPassword") as HTMLInputElement).dispatchEvent(new Event("input", { bubbles: true }));
+
+    await i18n.setLocale("fr");
+    await flushPromises();
+
+    document.getElementById("authForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: "user@example.com", password: "password" }),
+    });
+    expect(redirectAfterAuthMock).toHaveBeenCalledWith("/projects?from=auth");
+  });
+
+  it("localizes 429 auth failures through errors.RATE_LIMITED and uses fallback keys only without useful detail", async () => {
+    await setupI18n("de");
+    const auth = await import("./auth.js");
+
+    apiFetchMock.mockRejectedValueOnce({ status: 429, message: "HTTP 429" });
+    auth.renderAuth({ next: "/dashboard", localAuthEnabled: true });
+    (document.getElementById("authEmail") as HTMLInputElement).value = "user@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "password";
+    document.getElementById("authForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+    expect(showToastMock).toHaveBeenLastCalledWith("Zu viele Versuche. Bitte später erneut versuchen.");
+
+    apiFetchMock.mockRejectedValueOnce({ status: 500, message: "HTTP 500" });
+    auth.renderAuth({ next: "/dashboard", localAuthEnabled: true });
+    (document.getElementById("authEmail") as HTMLInputElement).value = "user@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "password";
+    document.getElementById("authForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+    expect(showToastMock).toHaveBeenLastCalledWith("Anmeldung fehlgeschlagen.");
+  });
+
   it("shows the localized reset-password mismatch message", async () => {
     await setupI18n("pt");
     const auth = await import("./auth.js");
