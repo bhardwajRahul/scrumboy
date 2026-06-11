@@ -1,4 +1,5 @@
 import { on } from '../events.js';
+import { apiErrorMessage, t } from '../i18n/index.js';
 import {
   getBoard,
   getSearch,
@@ -63,7 +64,7 @@ function reloadBoardWithCurrentFilters(): void {
     getSearch(),
     getSprintIdFromUrl(),
   ).catch((err: any) => {
-    showErrorFn?.(err?.message || String(err));
+    showErrorFn?.(apiErrorMessage(err, { fallbackKey: "board.refreshFailed" }));
   });
 }
 
@@ -115,7 +116,7 @@ function bindSearchInput(): void {
     setSearchParam("");
     if (!reloadBoardFn) return;
     reloadBoardFn(getSlug(), getTag(), null, getSprintIdFromUrl()).catch((err: any) => {
-      showErrorFn?.(err?.message || String(err));
+      showErrorFn?.(apiErrorMessage(err, { fallbackKey: "board.refreshFailed" }));
     });
     updateClearButton();
   };
@@ -126,11 +127,14 @@ function bindSearchInput(): void {
     if (!wrapper) return;
     const hasValue = searchInput.value.trim() !== "";
     if (hasValue && !clearBtn) {
+      const clearSearchLabel = t("board.actions.clearSearch");
       const btn = document.createElement("button");
       btn.className = "search-clear";
       btn.id = "searchClear";
-      btn.setAttribute("aria-label", "Clear search");
-      btn.setAttribute("title", "Clear search");
+      btn.setAttribute("aria-label", clearSearchLabel);
+      btn.setAttribute("data-i18n-aria-label", "board.actions.clearSearch");
+      btn.setAttribute("title", clearSearchLabel);
+      btn.setAttribute("data-i18n-title", "board.actions.clearSearch");
       btn.textContent = "✕";
       btn.addEventListener("click", handleClearClick);
       wrapper.appendChild(btn);
@@ -149,7 +153,7 @@ function bindSearchInput(): void {
       setSearchParam(trimmedValue);
       if (!reloadBoardFn) return;
       reloadBoardFn(getSlug(), getTag(), trimmedValue || null, getSprintIdFromUrl()).catch((err: any) => {
-        showErrorFn?.(err?.message || String(err));
+        showErrorFn?.(apiErrorMessage(err, { fallbackKey: "board.refreshFailed" }));
       });
     }, 300);
   });

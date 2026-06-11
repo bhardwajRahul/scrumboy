@@ -77,12 +77,15 @@ const enCatalog = {
   "projects.actions.rename": "Rename",
   "projects.actions.renameProject": "Rename project",
   "projects.actions.settings": "Settings",
+  "projects.create.failed": "Failed to create project",
   "projects.empty.projects": "No projects yet.",
   "projects.empty.temporary": "No temporary boards yet.",
   "projects.fields.namePlaceholder": "New project name",
   "projects.tabs.dashboard": "Dashboard",
   "projects.tabs.projects": "Projects",
   "projects.title": "Projects",
+  "projects.delete.failed": "Failed to delete project",
+  "projects.rename.failed": "Failed to rename project",
   "projects.view.grid": "Grid view",
   "projects.view.list": "List view",
   "projects.workflow.addLaneAction": "Add",
@@ -116,12 +119,15 @@ const deCatalog = {
   "projects.actions.rename": "Umbenennen",
   "projects.actions.renameProject": "Projekt umbenennen",
   "projects.actions.settings": "Einstellungen",
+  "projects.create.failed": "Projekt konnte nicht erstellt werden",
   "projects.empty.projects": "Noch keine Projekte.",
   "projects.empty.temporary": "Noch keine temporären Boards.",
   "projects.fields.namePlaceholder": "Neuer Projektname",
   "projects.tabs.dashboard": "Dashboard",
   "projects.tabs.projects": "Projekte",
   "projects.title": "Projekte",
+  "projects.delete.failed": "Projekt konnte nicht gelöscht werden",
+  "projects.rename.failed": "Projekt konnte nicht umbenannt werden",
   "projects.view.grid": "Rasteransicht",
   "projects.view.list": "Listenansicht",
   "projects.workflow.addLaneAction": "Hinzufügen",
@@ -155,12 +161,15 @@ const pseudoCatalog = {
   "projects.actions.rename": "[!! Rename !!]",
   "projects.actions.renameProject": "[!! Rename project !!]",
   "projects.actions.settings": "[!! Settings !!]",
+  "projects.create.failed": "[!! Failed to create project !!]",
   "projects.empty.projects": "[!! No projects yet. !!]",
   "projects.empty.temporary": "[!! No temporary boards yet. !!]",
   "projects.fields.namePlaceholder": "[!! New project name !!]",
   "projects.tabs.dashboard": "[!! Dashboard !!]",
   "projects.tabs.projects": "[!! Projects !!]",
   "projects.title": "[!! Projects !!]",
+  "projects.delete.failed": "[!! Failed to delete project !!]",
+  "projects.rename.failed": "[!! Failed to rename project !!]",
   "projects.view.grid": "[!! Grid view !!]",
   "projects.view.list": "[!! List view !!]",
   "projects.workflow.addLaneAction": "[!! Add !!]",
@@ -326,8 +335,9 @@ describe("projects i18n shell", () => {
       await i18n.setLocale("pseudo");
       await flushPromises();
 
-      expect(temporaryTabLabel?.textContent).toBe("[!! Temporary !!]");
-      expect(temporaryTabLabel?.getAttribute("data-i18n-text")).toBe(temporaryBoardsNavLabelKey(767));
+      const updatedTemporaryTabLabel = document.querySelector('[data-projects-tab="temporary"] .projects-tab__label');
+      expect(updatedTemporaryTabLabel?.textContent).toBe("[!! Temporary !!]");
+      expect(updatedTemporaryTabLabel?.getAttribute("data-i18n-text")).toBe(temporaryBoardsNavLabelKey(767));
       expect(apiFetchMock).toHaveBeenCalledTimes(1);
     } finally {
       cleanup();
@@ -397,7 +407,7 @@ describe("projects i18n shell", () => {
     }
   });
 
-  it("keeps raw create failure messages when project creation fails", async () => {
+  it("uses localized create failure fallback messages when project creation fails", async () => {
     apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === "/api/projects" && !init) {
         return [];
@@ -424,7 +434,7 @@ describe("projects i18n shell", () => {
       confirmBtn.click();
       await flushPromises(10);
 
-      expect(showToastMock).toHaveBeenCalledWith("create raw failure");
+      expect(showToastMock).toHaveBeenCalledWith("Failed to create project");
       expect(confirmBtn.textContent).toBe("Confirm");
       expect(confirmBtn.disabled).toBe(false);
       expect(navigateMock).not.toHaveBeenCalled();

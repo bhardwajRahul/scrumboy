@@ -104,7 +104,7 @@ describe("projects delete confirmation", () => {
     expect(apiFetchMock).toHaveBeenCalledWith("/api/projects/99", { method: "DELETE" });
   });
 
-  it("keeps raw delete failure messages when the delete request fails", async () => {
+  it("uses the localized delete fallback when the delete request fails", async () => {
     confirmDeleteMock.mockResolvedValue(true);
     apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === "/api/projects" && !init) {
@@ -124,6 +124,6 @@ describe("projects delete confirmation", () => {
     deleteBtn.click();
     await flushPromises(10);
 
-    expect(showToastMock).toHaveBeenCalledWith("delete raw failure");
+    expect(showToastMock).toHaveBeenCalledWith("Failed to delete project");
   });
 });

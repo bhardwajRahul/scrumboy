@@ -1,12 +1,12 @@
 import { app, settingsDialog } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
 import { ingestProjectsFromApp } from '../core/notifications.js';
-import { t } from '../i18n/index.js';
+import { apiErrorMessage, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 import { temporaryBoardsNavLabelKey } from '../nav-labels.js';
 import { navigate } from '../router.js';
 import { escapeHTML, showToast, renderUserAvatar, confirmDelete, showPromptDialog } from '../utils.js';
 import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
-import { getProjectsTab, getProjectView, getUser, } from '../state/selectors.js';
+import { getProjectsTab, getProjectView, getProjects, getUser, } from '../state/selectors.js';
 import { setProjects, setProjectsTab, setProjectView, setSettingsActiveTab, } from '../state/mutations.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
 // Symbol for idempotent listener attachment
@@ -15,6 +15,7 @@ const BOUND_FLAG = Symbol('bound');
 const boardPrefetchPromises = new Map();
 const resolvedBoardBySlug = new Map();
 const PREFETCH_DELAY_MS = 250;
+let projectsI18nBound = false;
 const DEFAULT_WORKFLOW_LANES = [
     { key: "backlog", name: "Backlog", color: "#9CA3AF", position: 0, isDone: false },
     { key: "not_started", name: "Not Started", color: "#F59E0B", position: 1, isDone: false },
@@ -312,7 +313,7 @@ function openWorkflowSetupModal(projectName) {
             navigate(`/${p.slug}`);
         }
         catch (err) {
-            showToast(err.message);
+            showToast(apiErrorMessage(err, { fallbackKey: "projects.create.failed" }));
             confirmBtn.textContent = t("projects.workflow.confirmAction");
             confirmBtn.setAttribute("data-i18n-text", "projects.workflow.confirmAction");
             confirmBtn.disabled = false;
@@ -334,22 +335,20 @@ async function getRenderAuth() {
         return window.renderAuth || renderAuth;
     }
 }
-export async function renderProjects() {
-    let projects;
-    try {
-        projects = await apiFetch("/api/projects");
-    }
-    catch (err) {
-        if (err && err.status === 401) {
-            const renderAuth = await getRenderAuth();
-            renderAuth({ next: "/" });
+function ensureProjectsI18nBinding() {
+    if (projectsI18nBound)
+        return;
+    projectsI18nBound = true;
+    document.addEventListener(I18N_LOCALE_CHANGED, () => {
+        if (!document.querySelector(".page--projects"))
             return;
-        }
-        throw err;
-    }
-    // Cache for settings modal: in full mode tags are global but the legacy tag APIs require a project id.
-    setProjects(projects);
-    ingestProjectsFromApp(projects);
+        const projects = getProjects();
+        if (!Array.isArray(projects))
+            return;
+        renderProjectsContent(projects);
+    });
+}
+function renderProjectsContent(projects) {
     if (!getProjectsTab()) {
         setProjectsTab(localStorage.getItem("projectsTab") || "projects");
     }
@@ -570,7 +569,7 @@ export async function renderProjects() {
                     showToast(t("projects.rename.success"));
                 }
                 catch (err) {
-                    showToast(err.message);
+                    showToast(apiErrorMessage(err, { fallbackKey: "projects.rename.failed" }));
                 }
             });
             el[BOUND_FLAG] = true;
@@ -588,7 +587,7 @@ export async function renderProjects() {
                     await renderProjects();
                 }
                 catch (err) {
-                    showToast(err.message);
+                    showToast(apiErrorMessage(err, { fallbackKey: "projects.delete.failed" }));
                 }
             });
             el[BOUND_FLAG] = true;
@@ -634,4 +633,23 @@ export async function renderProjects() {
         });
         userAvatarBtn[BOUND_FLAG] = true;
     }
+}
+export async function renderProjects() {
+    ensureProjectsI18nBinding();
+    let projects;
+    try {
+        projects = await apiFetch("/api/projects");
+    }
+    catch (err) {
+        if (err && err.status === 401) {
+            const renderAuth = await getRenderAuth();
+            renderAuth({ next: "/" });
+            return;
+        }
+        throw err;
+    }
+    // Cache for settings modal: in full mode tags are global but the legacy tag APIs require a project id.
+    setProjects(projects);
+    ingestProjectsFromApp(projects);
+    renderProjectsContent(projects);
 }

@@ -5,7 +5,7 @@ import { fetchProjectMembers, invalidateMembersCache } from '../members-cache.js
 import { navigate } from '../router.js';
 import { escapeHTML, showToast, renderAvatarContent, processImageFile, confirmDelete, showConfirmDialog, showPromptDialog } from '../utils.js';
 import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
-import { apiErrorMessage, t } from '../i18n/index.js';
+import { apiErrorMessage, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 import {
   getBoard,
   getMobileTab,
@@ -289,6 +289,17 @@ let lastUpdateBoardContentTag = "";
 let lastUpdateBoardContentSearch = "";
 let lastUpdateBoardContentSprintId: string | null = null;
 
+type BoardRenderOptions = {
+  backLabel?: string;
+  backHref?: string;
+  minimalTopbar?: boolean;
+  forceFullRender?: boolean;
+};
+
+let lastBoardRenderProjectId: number | null = null;
+let lastBoardRenderOptions: BoardRenderOptions = {};
+let boardI18nBound = false;
+
 // Declare renderProjects function (will be available after Step 2)
 declare function renderProjects(): Promise<void>;
 
@@ -302,6 +313,28 @@ async function getRenderProjects(): Promise<() => Promise<void>> {
   } catch {
     return (window as any).renderProjects || renderProjects;
   }
+}
+
+function ensureBoardI18nBinding(): void {
+  if (boardI18nBound) return;
+  boardI18nBound = true;
+  document.addEventListener(I18N_LOCALE_CHANGED, () => {
+    rerenderBoardForLocaleChange();
+  });
+}
+
+function rerenderBoardForLocaleChange(): void {
+  if (!document.querySelector(".board")) return;
+  const board = getBoard();
+  const projectId = getProjectId() ?? lastBoardRenderProjectId;
+  if (!board || projectId == null) return;
+
+  resetBoardFilterUiState();
+  lastUpdateBoardContentBoard = null;
+  renderBoardFromData(board, projectId, getTag(), getSearch(), getSprintIdFromUrl(), {
+    ...lastBoardRenderOptions,
+    forceFullRender: true,
+  });
 }
 
 export function stopBoardEvents(): void {
@@ -879,15 +912,22 @@ function updateBoardContent(board: Board, tag: string, search: string, sprintId:
   lastUpdateBoardContentSprintId = sprintId;
 }
 
-function renderBoardFromData(board: Board, projectId: number, tag: string, search: string, sprintId: string | null, opts: { backLabel?: string; backHref?: string; minimalTopbar?: boolean } = {}): void {
+function renderBoardFromData(board: Board, projectId: number, tag: string, search: string, sprintId: string | null, opts: BoardRenderOptions = {}): void {
+  lastBoardRenderProjectId = projectId;
+  lastBoardRenderOptions = {
+    backLabel: opts.backLabel,
+    backHref: opts.backHref,
+    minimalTopbar: opts.minimalTopbar,
+  };
   const boardCols = getBoardColumns(board);
   setDnDColumns(boardCols.map((c) => ({ key: c.key, title: c.title, color: c.color })));
   // Detect mobile view for placeholder text
   const isMobile = window.innerWidth <= 620;
   const searchPlaceholderKey = isMobile ? "board.search.placeholder.mobile" : "board.search.placeholder.desktop";
   const searchPlaceholder = t(searchPlaceholderKey);
-  const backLabel = opts.backLabel || t("board.backToProjects");
-  const backLabelKey = opts.backLabel ? null : "board.backToProjects";
+  const customBackLabel = opts.backLabel && !opts.backLabel.includes("Projects") ? opts.backLabel : "";
+  const backLabel = customBackLabel || t("board.backToProjects");
+  const backLabelKey = customBackLabel ? null : "board.backToProjects";
   const backHref = opts.backHref || "";
   const minimalTopbar = !!opts.minimalTopbar;
   setProjectId(projectId);
@@ -917,7 +957,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
   // Check if we're already on a board page - if so, only update board content
   // We check for the board container, not just the topbar, because projects page also has a topbar
   const existingBoardContainer = document.querySelector(".board");
-  if (existingBoardContainer) {
+  if (existingBoardContainer && !opts.forceFullRender) {
     updateBoardContent(board, tag, search, sprintId);
     syncTopbarFromBoard(board);
     return;
@@ -1446,13 +1486,13 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
   const deleteProjectBtn = document.getElementById("deleteProjectBtn");
   if (deleteProjectBtn && !(deleteProjectBtn as any)[BOUND_FLAG]) {
     deleteProjectBtn.addEventListener("click", async () => {
-      if (!await confirmDelete("Delete this project and all its todos?")) return;
+      if (!await confirmDelete(t("projects.delete.confirmMessage"))) return;
       try {
         recordLocalMutation();
         await apiFetch(`/api/projects/${projectId}`, { method: "DELETE" });
         navigate("/");
       } catch (err: any) {
-        showToast(apiErrorMessage(err));
+        showToast(apiErrorMessage(err, { fallbackKey: "board.project.deleteFailed" }));
       }
     });
     (deleteProjectBtn as any)[BOUND_FLAG] = true;
@@ -1522,6 +1562,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
 
 // Load board by slug
 export async function loadBoardBySlug(slug: string | null, tag: string | null, search: string | null, sprintId: string | null = null): Promise<void> {
+  ensureBoardI18nBinding();
   if (!slug) {
     throw new Error("Slug is required");
   }
@@ -1707,6 +1748,7 @@ export async function renderBoard(
   openTodoSegment: string | null = null,
   opts: { skipLoad?: boolean; prefetchedBoard?: Board } = {}
 ): Promise<void> {
+  ensureBoardI18nBinding();
   if (!slug) throw new Error("Slug is required");
   debugLog("renderBoard start", slug);
   if (opts.skipLoad) {

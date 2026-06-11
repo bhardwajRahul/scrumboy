@@ -1,7 +1,7 @@
 import { app, settingsDialog } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
 import { ingestProjectsFromApp } from '../core/notifications.js';
-import { t } from '../i18n/index.js';
+import { apiErrorMessage, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 import { temporaryBoardsNavLabelKey } from '../nav-labels.js';
 import { navigate } from '../router.js';
 import type { Board } from '../types.js';
@@ -30,6 +30,7 @@ declare const Sortable: any;
 const boardPrefetchPromises = new Map<string, Promise<Board>>();
 const resolvedBoardBySlug = new Map<string, Board>();
 const PREFETCH_DELAY_MS = 250;
+let projectsI18nBound = false;
 
 const DEFAULT_WORKFLOW_LANES: WorkflowLaneDraft[] = [
   { key: "backlog", name: "Backlog", color: "#9CA3AF", position: 0, isDone: false },
@@ -333,7 +334,7 @@ function openWorkflowSetupModal(projectName: string): void {
       cleanup();
       navigate(`/${p.slug}`);
     } catch (err: any) {
-      showToast(err.message);
+      showToast(apiErrorMessage(err, { fallbackKey: "projects.create.failed" }));
       confirmBtn.textContent = t("projects.workflow.confirmAction");
       confirmBtn.setAttribute("data-i18n-text", "projects.workflow.confirmAction");
       confirmBtn.disabled = false;
@@ -361,21 +362,18 @@ async function getRenderAuth(): Promise<(opts: { next: string; bootstrap?: boole
   }
 }
 
-export async function renderProjects(): Promise<void> {
-  let projects: Project[];
-  try {
-    projects = await apiFetch<Project[]>("/api/projects");
-  } catch (err: any) {
-    if (err && err.status === 401) {
-      const renderAuth = await getRenderAuth();
-      renderAuth({ next: "/" });
-      return;
-    }
-    throw err;
-  }
-  // Cache for settings modal: in full mode tags are global but the legacy tag APIs require a project id.
-  setProjects(projects);
-  ingestProjectsFromApp(projects);
+function ensureProjectsI18nBinding(): void {
+  if (projectsI18nBound) return;
+  projectsI18nBound = true;
+  document.addEventListener(I18N_LOCALE_CHANGED, () => {
+    if (!document.querySelector(".page--projects")) return;
+    const projects = getProjects();
+    if (!Array.isArray(projects)) return;
+    renderProjectsContent(projects);
+  });
+}
+
+function renderProjectsContent(projects: Project[]): void {
   if (!getProjectsTab()) {
     setProjectsTab(localStorage.getItem("projectsTab") || "projects");
   }
@@ -602,7 +600,7 @@ export async function renderProjects(): Promise<void> {
           await renderProjects();
           showToast(t("projects.rename.success"));
         } catch (err: any) {
-          showToast(err.message);
+          showToast(apiErrorMessage(err, { fallbackKey: "projects.rename.failed" }));
         }
       });
       (el as any)[BOUND_FLAG] = true;
@@ -619,7 +617,7 @@ export async function renderProjects(): Promise<void> {
           await apiFetch(`/api/projects/${id}`, { method: "DELETE" });
           await renderProjects();
         } catch (err: any) {
-          showToast(err.message);
+          showToast(apiErrorMessage(err, { fallbackKey: "projects.delete.failed" }));
         }
       });
       (el as any)[BOUND_FLAG] = true;
@@ -670,4 +668,23 @@ export async function renderProjects(): Promise<void> {
     });
     (userAvatarBtn as any)[BOUND_FLAG] = true;
   }
+}
+
+export async function renderProjects(): Promise<void> {
+  ensureProjectsI18nBinding();
+  let projects: Project[];
+  try {
+    projects = await apiFetch<Project[]>("/api/projects");
+  } catch (err: any) {
+    if (err && err.status === 401) {
+      const renderAuth = await getRenderAuth();
+      renderAuth({ next: "/" });
+      return;
+    }
+    throw err;
+  }
+  // Cache for settings modal: in full mode tags are global but the legacy tag APIs require a project id.
+  setProjects(projects);
+  ingestProjectsFromApp(projects);
+  renderProjectsContent(projects);
 }

@@ -58,7 +58,7 @@ export async function bootstrapLoadedBoardView(args: {
   isCurrent: () => boolean;
   setResolvedRole: (role: string | null) => void;
   markMembersFetched: (projectId: number) => void;
-  renderLoadedBoard: (opts: { projectId: number; backLabel: string; backHref: string; minimalTopbar: boolean }) => void;
+  renderLoadedBoard: (opts: { projectId: number; backLabel?: string; backHref: string; minimalTopbar: boolean }) => void;
   markLoadSuccess: (slug: string) => void;
 }): Promise<boolean> {
   const { board, slug, tag, search } = args;

@@ -1,4 +1,5 @@
 import { apiFetch } from '../api.js';
+import { apiErrorMessage, t } from '../i18n/index.js';
 import { getSlug, getTag, getSearch, getSprintIdFromUrl, getBoardLaneMeta } from '../state/selectors.js';
 import { showToast } from '../utils.js';
 import { invalidateBoard, setBoardLimitPerLaneFloor } from '../orchestration/board-refresh.js';
@@ -209,13 +210,14 @@ export function initDnD(): void {
       const laneChanged = fromStatus != null && fromStatus !== toStatus;
       if (laneChanged) {
         const laneTitle = targetCol?.title ?? toStatus;
-        showToast(`Todo moved to ${laneTitle}`);
+        showToast(t("board.todo.movedTo", { lane: laneTitle }));
       }
 
       // Rely on SSE todo_moved event (debounced ~400ms) to refresh board; avoid double fetch.
     } catch (err: any) {
-      showToast(err.message);
-      invalidateBoard(getSlug(), getTag(), getSearch(), getSprintIdFromUrl()).catch((e: any) => showToast(e.message));
+      showToast(apiErrorMessage(err, { fallbackKey: "board.todo.moveFailed" }));
+      invalidateBoard(getSlug(), getTag(), getSearch(), getSprintIdFromUrl())
+        .catch((e: any) => showToast(apiErrorMessage(e, { fallbackKey: "board.refreshFailed" })));
     } finally {
       moveInFlight = false;
     }

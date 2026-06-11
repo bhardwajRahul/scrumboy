@@ -113,7 +113,7 @@ describe("projects rename dialog", () => {
     });
   });
 
-  it("keeps raw rename failure messages when the patch request fails", async () => {
+  it("uses the localized rename fallback when the patch request fails", async () => {
     showPromptDialogMock.mockResolvedValue("Beta");
     apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url === "/api/projects" && !init) {
@@ -133,6 +133,6 @@ describe("projects rename dialog", () => {
     renameBtn.click();
     await flushPromises(10);
 
-    expect(showToastMock).toHaveBeenCalledWith("rename raw failure");
+    expect(showToastMock).toHaveBeenCalledWith("Failed to rename project");
   });
 });

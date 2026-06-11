@@ -1,4 +1,5 @@
 import { on } from '../events.js';
+import { apiErrorMessage, t } from '../i18n/index.js';
 import { getBoard, getSearch, getSlug, getSprintIdFromUrl, getTag, getTagColors, } from '../state/selectors.js';
 import { isAnonymousBoard } from '../utils.js';
 import { buildChipsHTML, getCombinedChipData, } from './board-rendering.js';
@@ -43,7 +44,7 @@ function reloadBoardWithCurrentFilters() {
     if (!reloadBoardFn)
         return;
     reloadBoardFn(getSlug(), new URL(window.location.href).searchParams.get("tag") ?? "", getSearch(), getSprintIdFromUrl()).catch((err) => {
-        showErrorFn?.(err?.message || String(err));
+        showErrorFn?.(apiErrorMessage(err, { fallbackKey: "board.refreshFailed" }));
     });
 }
 function attachChipsDelegatedHandler() {
@@ -100,7 +101,7 @@ function bindSearchInput() {
         if (!reloadBoardFn)
             return;
         reloadBoardFn(getSlug(), getTag(), null, getSprintIdFromUrl()).catch((err) => {
-            showErrorFn?.(err?.message || String(err));
+            showErrorFn?.(apiErrorMessage(err, { fallbackKey: "board.refreshFailed" }));
         });
         updateClearButton();
     };
@@ -111,11 +112,14 @@ function bindSearchInput() {
             return;
         const hasValue = searchInput.value.trim() !== "";
         if (hasValue && !clearBtn) {
+            const clearSearchLabel = t("board.actions.clearSearch");
             const btn = document.createElement("button");
             btn.className = "search-clear";
             btn.id = "searchClear";
-            btn.setAttribute("aria-label", "Clear search");
-            btn.setAttribute("title", "Clear search");
+            btn.setAttribute("aria-label", clearSearchLabel);
+            btn.setAttribute("data-i18n-aria-label", "board.actions.clearSearch");
+            btn.setAttribute("title", clearSearchLabel);
+            btn.setAttribute("data-i18n-title", "board.actions.clearSearch");
             btn.textContent = "✕";
             btn.addEventListener("click", handleClearClick);
             wrapper.appendChild(btn);
@@ -135,7 +139,7 @@ function bindSearchInput() {
             if (!reloadBoardFn)
                 return;
             reloadBoardFn(getSlug(), getTag(), trimmedValue || null, getSprintIdFromUrl()).catch((err) => {
-                showErrorFn?.(err?.message || String(err));
+                showErrorFn?.(apiErrorMessage(err, { fallbackKey: "board.refreshFailed" }));
             });
         }, 300);
     });
