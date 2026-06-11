@@ -231,6 +231,28 @@ const enCatalog = {
   'settings.customization.keybindings.description': 'Click a key to record a new shortcut. Press Esc to cancel while listening.',
   'settings.customization.keybindings.capturePrompt': 'Press a shortcut for {action}',
   'settings.customization.keybindings.actions.openSettings': 'Open Settings',
+  'settings.customization.voiceFlow.title': 'VoiceFlow',
+  'settings.customization.voiceFlow.toggleLabel': 'Use voice commands to move, create and delete todos.',
+  'settings.customization.push.title': 'Background notifications (PWA)',
+  'settings.customization.push.description': 'Alerts when someone assigns you a todo while this app is in the background or closed.',
+  'settings.customization.push.toggleLabel': 'Web Push on this device',
+  'settings.customization.push.vapidNotice': 'Web Push needs VAPID keys on the server (SCRUMBOY_VAPID_PUBLIC_KEY and SCRUMBOY_VAPID_PRIVATE_KEY; see docs).',
+  'settings.customization.push.anonymousNotice': 'Web Push is not available in anonymous mode.',
+  'settings.customization.push.unsupported': 'Web Push is not supported in this browser.',
+  'settings.backup.export.title': 'Export Data',
+  'settings.backup.export.description': 'Download all your projects, todos, and tags as a JSON file.',
+  'settings.backup.export.action': 'Export Backup',
+  'settings.backup.import.title': 'Import Data',
+  'settings.backup.import.description': 'Restore from a backup file or merge data from another instance.',
+  'settings.backup.import.mode.merge': 'Merge & update (recommended)',
+  'settings.backup.import.mode.replace': 'Replace all data',
+  'settings.backup.import.mode.copy': 'Create a copy',
+  'settings.backup.import.confirmPlaceholder': 'Type REPLACE to confirm',
+  'settings.backup.import.action': 'Import',
+  'settings.backup.trello.title': 'Import Trello Board',
+  'settings.backup.trello.description': 'Upload a native Trello single-board JSON export, preview the conversion, then import it as a new Scrumboy board.',
+  'settings.backup.trello.previewAction': 'Preview Trello Import',
+  'settings.backup.trello.importAction': 'Import Trello Board',
 };
 
 function prefixCatalog(prefix: string): Record<string, string> {
@@ -498,18 +520,18 @@ describe('settings customization i18n', () => {
     expect(requestDesktopNotificationPermissionMock).not.toHaveBeenCalled();
   });
 
-  it('keeps a non-goal tab active and leaves its body untouched except tab labels on locale change', async () => {
-    // Charts now intentionally re-renders from cache on locale change, so the
-    // "untouched body" guarantee is asserted here against a non-goal tab (backup).
+  it('relocalizes backup tab static chrome in place on locale change without API calls', async () => {
+    // Phase 5: the backup tab is now localized, so its static copy must update
+    // on locale change (previously this asserted the body stayed untouched).
     const { i18n } = await setupSettingsView({ activeTab: 'backup' });
 
     const activeTab = document.querySelector('.settings-tab--active[data-tab="backup"]');
-    const tabContent = document.getElementById('settingsTabContent');
-    if (!(activeTab instanceof HTMLElement) || !(tabContent instanceof HTMLElement)) {
+    const exportTitle = document.querySelector('.settings-backup-export .settings-section__title');
+    if (!(activeTab instanceof HTMLElement) || !(exportTitle instanceof HTMLElement)) {
       throw new Error('missing backup tab content');
     }
+    expect(exportTitle.textContent).toBe('Export Data');
 
-    const bodyBefore = tabContent.innerHTML;
     apiFetchMock.mockClear();
     mountBurndownChartMock.mockClear();
 
@@ -519,7 +541,10 @@ describe('settings customization i18n', () => {
     expect(document.querySelector('.settings-tab--active[data-tab="backup"]')).toBe(activeTab);
     expect(document.getElementById('settingsDialogTitleLabel')?.textContent).toBe('DE Settings');
     expect(document.querySelector('.settings-tab[data-tab="backup"]')?.textContent).toBe('DE Backup');
-    expect(document.getElementById('settingsTabContent')?.innerHTML).toBe(bodyBefore);
+    expect(document.querySelector('.settings-backup-export .settings-section__title')?.textContent).toBe('DE Export Data');
+    expect(document.getElementById('backupImportBtn')?.textContent).toBe('DE Import');
+    const confirmInput = document.getElementById('backupConfirmationInput') as HTMLInputElement | null;
+    expect(confirmInput?.getAttribute('placeholder')).toBe('DE Type REPLACE to confirm');
     expect(apiFetchMock).not.toHaveBeenCalled();
     expect(mountBurndownChartMock).not.toHaveBeenCalled();
   });

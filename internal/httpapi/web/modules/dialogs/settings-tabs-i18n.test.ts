@@ -489,7 +489,7 @@ describe('settings tabs i18n (charts, sprints, workflow, tag colors)', () => {
     expect(document.getElementById('settingsDialogTitleLabel')?.textContent).toBe(titleBefore);
   });
 
-  it('audit: a non-goal tab body stays untouched except its tab label on locale change', async () => {
+  it('relocalizes backup tab static chrome in place on locale change without API calls', async () => {
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/board/alpha/tags') return [];
       throw new Error(`unexpected apiFetch url: ${url}`);
@@ -498,7 +498,8 @@ describe('settings tabs i18n (charts, sprints, workflow, tag colors)', () => {
     const { i18n } = await setupSettingsView({ activeTab: 'backup', slug: 'alpha', board: { project: {} } });
 
     const tabContent = document.getElementById('settingsTabContent');
-    const bodyBefore = tabContent?.innerHTML;
+    const trelloTitle = tabContent?.querySelector('[data-i18n-text="settings.backup.trello.title"]');
+    expect(trelloTitle?.textContent).toBe(enCatalog['settings.backup.trello.title']);
     apiFetchMock.mockClear();
 
     await i18n.setLocale('de');
@@ -506,7 +507,10 @@ describe('settings tabs i18n (charts, sprints, workflow, tag colors)', () => {
 
     expect(document.querySelector('.settings-tab--active[data-tab="backup"]')).toBeTruthy();
     expect(document.querySelector('.settings-tab[data-tab="backup"]')?.textContent).toBe(deCatalog['settings.tabs.backup']);
-    expect(document.getElementById('settingsTabContent')?.innerHTML).toBe(bodyBefore);
+    // Backup is now a localized surface: its static chrome relocalizes in place.
+    expect(
+      tabContent?.querySelector('[data-i18n-text="settings.backup.trello.title"]')?.textContent,
+    ).toBe(deCatalog['settings.backup.trello.title']);
     expect(apiFetchMock).not.toHaveBeenCalled();
   });
 });

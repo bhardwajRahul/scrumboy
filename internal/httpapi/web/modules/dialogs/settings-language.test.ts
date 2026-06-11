@@ -141,6 +141,11 @@ const enCatalog = {
   "settings.customization.notifications.actions.enable": "Enable notifications",
   "settings.customization.keybindings.title": "Keybindings",
   "settings.customization.keybindings.description": "Click a key to record a new shortcut. Press Esc to cancel while listening.",
+  "settings.customization.push.title": "Background notifications (PWA)",
+  "settings.customization.push.description": "Alerts when someone assigns you a todo while this app is in the background or closed.",
+  "settings.customization.push.toggleLabel": "Web Push on this device",
+  "settings.customization.push.anonymousNotice": "Web Push is not available in anonymous mode.",
+  "settings.customization.push.unsupported": "Web Push is not supported in this browser.",
   "test.shell": "Shell text",
 };
 
@@ -164,6 +169,11 @@ const deCatalog = {
   "settings.customization.notifications.actions.enable": "Benachrichtigungen aktivieren",
   "settings.customization.keybindings.title": "Tastenkürzel",
   "settings.customization.keybindings.description": "Klicke auf eine Taste, um ein neues Kürzel aufzuzeichnen. Drücke Esc, um das Lauschen abzubrechen.",
+  "settings.customization.push.title": "Hintergrund-Benachrichtigungen (PWA)",
+  "settings.customization.push.description": "Hinweise, wenn dir jemand ein Todo zuweist, während diese App im Hintergrund oder geschlossen ist.",
+  "settings.customization.push.toggleLabel": "Web Push auf diesem Gerät",
+  "settings.customization.push.anonymousNotice": "Web Push ist im anonymen Modus nicht verfügbar.",
+  "settings.customization.push.unsupported": "Web Push wird in diesem Browser nicht unterstützt.",
   "test.shell": "Shell-Text",
 };
 
@@ -187,6 +197,11 @@ const pseudoCatalog = {
   "settings.customization.notifications.actions.enable": "[!! Enable notifications !!]",
   "settings.customization.keybindings.title": "[!! Keybindings !!]",
   "settings.customization.keybindings.description": "[!! Click a key to record a new shortcut. Press Esc to cancel while listening. !!]",
+  "settings.customization.push.title": "[!! Background notifications (PWA) !!]",
+  "settings.customization.push.description": "[!! Alerts when someone assigns you a todo while this app is in the background or closed. !!]",
+  "settings.customization.push.toggleLabel": "[!! Web Push on this device !!]",
+  "settings.customization.push.anonymousNotice": "[!! Web Push is not available in anonymous mode. !!]",
+  "settings.customization.push.unsupported": "[!! Web Push is not supported in this browser. !!]",
   "test.shell": "[!! Shell text !!]",
 };
 
