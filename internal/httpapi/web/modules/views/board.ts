@@ -291,6 +291,7 @@ let lastUpdateBoardContentSprintId: string | null = null;
 
 type BoardRenderOptions = {
   backLabel?: string;
+  backLabelKey?: string;
   backHref?: string;
   minimalTopbar?: boolean;
   forceFullRender?: boolean;
@@ -916,6 +917,7 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
   lastBoardRenderProjectId = projectId;
   lastBoardRenderOptions = {
     backLabel: opts.backLabel,
+    backLabelKey: opts.backLabelKey,
     backHref: opts.backHref,
     minimalTopbar: opts.minimalTopbar,
   };
@@ -925,9 +927,8 @@ function renderBoardFromData(board: Board, projectId: number, tag: string, searc
   const isMobile = window.innerWidth <= 620;
   const searchPlaceholderKey = isMobile ? "board.search.placeholder.mobile" : "board.search.placeholder.desktop";
   const searchPlaceholder = t(searchPlaceholderKey);
-  const customBackLabel = opts.backLabel && !opts.backLabel.includes("Projects") ? opts.backLabel : "";
-  const backLabel = customBackLabel || t("board.backToProjects");
-  const backLabelKey = customBackLabel ? null : "board.backToProjects";
+  const backLabelKey = opts.backLabel != null ? null : (opts.backLabelKey ?? "board.backToProjects");
+  const backLabel = opts.backLabel ?? t(backLabelKey);
   const backHref = opts.backHref || "";
   const minimalTopbar = !!opts.minimalTopbar;
   setProjectId(projectId);

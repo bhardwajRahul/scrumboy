@@ -71,7 +71,6 @@ export async function bootstrapLoadedBoardView(args) {
     const minimalTopbar = !!board?.project?.expiresAt && (!showBackToProjects || getUser() == null);
     args.renderLoadedBoard({
         projectId,
-        backLabel: "← Projects",
         backHref: showBackToProjects && getUser() != null ? "/" : "",
         minimalTopbar,
     });

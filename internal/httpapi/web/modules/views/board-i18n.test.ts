@@ -5,6 +5,7 @@ import type { Board } from "../types.js";
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const initDnDMock = vi.hoisted(() => vi.fn());
 const setDnDColumnsMock = vi.hoisted(() => vi.fn());
+const customBootstrapBackLabel = vi.hoisted(() => ({ value: null as string | null }));
 
 vi.mock("../dom/elements.js", () => ({
   app: document.body,
@@ -127,6 +128,26 @@ vi.mock("../dialogs/bulk-edit.js", () => ({
   openBulkEditDialog: vi.fn(),
 }));
 
+vi.mock("./board-load-bootstrap.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./board-load-bootstrap.js")>();
+  return {
+    bootstrapLoadedBoardView: vi.fn(async (args) => {
+      if (customBootstrapBackLabel.value != null) {
+        return actual.bootstrapLoadedBoardView({
+          ...args,
+          renderLoadedBoard: (renderOpts) => {
+            args.renderLoadedBoard({
+              ...renderOpts,
+              backLabel: customBootstrapBackLabel.value!,
+            });
+          },
+        });
+      }
+      return actual.bootstrapLoadedBoardView(args);
+    }),
+  };
+});
+
 const enCatalog = {
   "board.actions.changeProjectImage": "Change project image",
   "board.actions.clearSearch": "Clear search",
@@ -163,7 +184,7 @@ function board(): Board {
       dominantColor: "#123456",
       creatorUserId: 1,
     },
-    tags: [],
+    tags: [{ name: "bug", color: "#ff0000" }],
     columnOrder: [
       { key: "backlog", name: "Backlog", color: "#9ca3af", isDone: false },
       { key: "done", name: "Done", color: "#ef4444", isDone: true },
@@ -181,11 +202,27 @@ async function flushPromises(count = 6): Promise<void> {
   }
 }
 
+async function renderPrefetchedBoard(
+  mod: typeof import("./board.js"),
+  opts: { tag?: string; search?: string } = {},
+): Promise<void> {
+  await mod.renderBoard(
+    "alpha",
+    opts.tag ?? "",
+    opts.search ?? "needle",
+    null,
+    null,
+    null,
+    { prefetchedBoard: board() },
+  );
+  await flushPromises();
+}
+
 describe("board i18n locale switching", () => {
   beforeEach(() => {
-    vi.resetModules();
     document.body.innerHTML = "";
     localStorage.clear();
+    customBootstrapBackLabel.value = null;
     window.history.replaceState({}, "", "/alpha?search=needle");
     apiFetchMock.mockReset();
     apiFetchMock.mockResolvedValue(null);
@@ -211,6 +248,7 @@ describe("board i18n locale switching", () => {
   });
 
   afterEach(async () => {
+    customBootstrapBackLabel.value = null;
     const i18n = await import("../i18n/index.js");
     i18n.resetI18nForTests();
     document.body.innerHTML = "";
@@ -218,7 +256,7 @@ describe("board i18n locale switching", () => {
     vi.restoreAllMocks();
   });
 
-  it("re-renders visible board chrome from cached board state after locale change without refetching", async () => {
+  it("updates the default back label after locale change without refetching", async () => {
     const i18n = await import("../i18n/index.js");
     await i18n.initI18n({
       locale: "en",
@@ -226,24 +264,97 @@ describe("board i18n locale switching", () => {
     });
     const mod = await import("./board.js");
 
-    await mod.renderBoard("alpha", "", "needle", null, null, null, { prefetchedBoard: board() });
-    await flushPromises();
+    await renderPrefetchedBoard(mod);
     apiFetchMock.mockClear();
 
-    expect(document.getElementById("backBtn")?.textContent).toBe("\u2190 Projects");
-    expect((document.getElementById("searchInput") as HTMLInputElement | null)?.getAttribute("placeholder")).toBe("Search todos...");
-    expect(document.querySelector(".filters__label")?.textContent).toBe("Tags:");
-    expect(document.querySelector("[data-tag='']")?.textContent).toBe("All");
-    expect(document.querySelector(".no-results")?.textContent).toBe("No todos found matching \"needle\"");
+    const backBtn = document.getElementById("backBtn");
+    expect(backBtn?.textContent).toBe("\u2190 Projects");
+    expect(backBtn?.getAttribute("data-i18n-text")).toBe("board.backToProjects");
 
     await i18n.setLocale("pseudo");
     await flushPromises();
 
     expect(document.getElementById("backBtn")?.textContent).toBe("[!! \u2190 Projects !!]");
-    expect((document.getElementById("searchInput") as HTMLInputElement | null)?.getAttribute("placeholder")).toBe("[!! Search todos... !!]");
+    expect(document.getElementById("backBtn")?.getAttribute("data-i18n-text")).toBe("board.backToProjects");
+    expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a custom back label when locale changes", async () => {
+    customBootstrapBackLabel.value = "\u2190 Home";
+    const i18n = await import("../i18n/index.js");
+    await i18n.initI18n({
+      locale: "en",
+      loadLocale: vi.fn(async (locale: "en" | "pseudo") => (locale === "pseudo" ? pseudoCatalog : enCatalog)),
+    });
+    const mod = await import("./board.js");
+
+    await renderPrefetchedBoard(mod);
+
+    const backBtn = document.getElementById("backBtn");
+    expect(backBtn?.textContent).toBe("\u2190 Home");
+    expect(backBtn?.getAttribute("data-i18n-text")).toBeNull();
+
+    await i18n.setLocale("pseudo");
+    await flushPromises();
+
+    expect(document.getElementById("backBtn")?.textContent).toBe("\u2190 Home");
+    expect(document.getElementById("backBtn")?.getAttribute("data-i18n-text")).toBeNull();
+  });
+
+  it("does not stack board locale rerenders when renderBoard runs repeatedly", async () => {
+    const i18n = await import("../i18n/index.js");
+    await i18n.initI18n({
+      locale: "en",
+      loadLocale: vi.fn(async (locale: "en" | "pseudo") => (locale === "pseudo" ? pseudoCatalog : enCatalog)),
+    });
+    const mod = await import("./board.js");
+
+    await renderPrefetchedBoard(mod);
+    await renderPrefetchedBoard(mod);
+
+    apiFetchMock.mockClear();
+    setDnDColumnsMock.mockClear();
+
+    await i18n.setLocale("pseudo");
+    await flushPromises();
+    expect(setDnDColumnsMock).toHaveBeenCalledTimes(1);
+
+    setDnDColumnsMock.mockClear();
+    await i18n.setLocale("en");
+    await flushPromises();
+    await i18n.setLocale("pseudo");
+    await flushPromises();
+
+    expect(setDnDColumnsMock).toHaveBeenCalledTimes(2);
+    expect(document.getElementById("backBtn")?.textContent).toBe("[!! \u2190 Projects !!]");
+    expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves search and tag filter state across locale re-render", async () => {
+    window.history.replaceState({}, "", "/alpha?tag=bug&search=needle");
+    const i18n = await import("../i18n/index.js");
+    await i18n.initI18n({
+      locale: "en",
+      loadLocale: vi.fn(async (locale: "en" | "pseudo") => (locale === "pseudo" ? pseudoCatalog : enCatalog)),
+    });
+    const mod = await import("./board.js");
+
+    await renderPrefetchedBoard(mod, { tag: "bug", search: "needle" });
+    apiFetchMock.mockClear();
+
+    const searchInput = document.getElementById("searchInput") as HTMLInputElement | null;
+    const activeTagChip = document.querySelector("[data-tag='bug']");
+    expect(searchInput?.value).toBe("needle");
+    expect(activeTagChip?.classList.contains("chip--active")).toBe(true);
+    expect(document.querySelector(".no-results")?.textContent).toBe('No todos found matching "needle"');
+
+    await i18n.setLocale("pseudo");
+    await flushPromises();
+
+    expect((document.getElementById("searchInput") as HTMLInputElement | null)?.value).toBe("needle");
+    expect(document.querySelector("[data-tag='bug']")?.classList.contains("chip--active")).toBe(true);
     expect(document.querySelector(".filters__label")?.textContent).toBe("[!! Tags: !!]");
-    expect(document.querySelector("[data-tag='']")?.textContent).toBe("[!! All !!]");
-    expect(document.querySelector(".no-results")?.textContent).toBe("[!! No todos found matching \"needle\" !!]");
+    expect(document.querySelector(".no-results")?.textContent).toBe('[!! No todos found matching "needle" !!]');
     expect(apiFetchMock).not.toHaveBeenCalled();
   });
 });

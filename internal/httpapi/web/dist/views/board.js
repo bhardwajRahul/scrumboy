@@ -811,6 +811,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     lastBoardRenderProjectId = projectId;
     lastBoardRenderOptions = {
         backLabel: opts.backLabel,
+        backLabelKey: opts.backLabelKey,
         backHref: opts.backHref,
         minimalTopbar: opts.minimalTopbar,
     };
@@ -820,9 +821,8 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     const isMobile = window.innerWidth <= 620;
     const searchPlaceholderKey = isMobile ? "board.search.placeholder.mobile" : "board.search.placeholder.desktop";
     const searchPlaceholder = t(searchPlaceholderKey);
-    const customBackLabel = opts.backLabel && !opts.backLabel.includes("Projects") ? opts.backLabel : "";
-    const backLabel = customBackLabel || t("board.backToProjects");
-    const backLabelKey = customBackLabel ? null : "board.backToProjects";
+    const backLabelKey = opts.backLabel != null ? null : (opts.backLabelKey ?? "board.backToProjects");
+    const backLabel = opts.backLabel ?? t(backLabelKey);
     const backHref = opts.backHref || "";
     const minimalTopbar = !!opts.minimalTopbar;
     setProjectId(projectId);
