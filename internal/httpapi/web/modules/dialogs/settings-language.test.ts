@@ -86,6 +86,7 @@ vi.mock('../core/keybindings.js', () => ({
 
 vi.mock('../core/assignmentNotify.js', () => ({
   requestDesktopNotificationPermission: vi.fn(),
+  getDesktopNotificationStatusKind: () => 'default',
   getDesktopNotificationStatusDescription: () => '',
 }));
 
@@ -121,23 +122,71 @@ vi.mock('./settings-sprints.js', () => ({
 }));
 
 const enCatalog = {
+  "common.close": "Close",
+  "settings.shell.title": "Settings",
   "settings.language.description": "Choose the language used for Scrumboy on this browser.",
   "settings.language.selectLabel": "Language",
   "settings.language.title": "Language",
+  "settings.tabs.customization": "Customization",
+  "settings.tabs.tagColors": "Tag Colors",
+  "settings.tabs.backup": "Backup",
+  "settings.customization.theme.title": "Theme",
+  "settings.customization.theme.description": "Choose your preferred color scheme.",
+  "settings.customization.theme.option.system": "System",
+  "settings.customization.theme.option.dark": "Dark",
+  "settings.customization.theme.option.light": "Light",
+  "settings.customization.notifications.title": "Desktop notifications",
+  "settings.customization.notifications.description": "OS-level alerts when someone assigns you a todo (works when this tab is in the background).",
+  "settings.customization.notifications.status.default": "Not enabled yet — click the button below (your browser will ask for permission).",
+  "settings.customization.notifications.actions.enable": "Enable notifications",
+  "settings.customization.keybindings.title": "Keybindings",
+  "settings.customization.keybindings.description": "Click a key to record a new shortcut. Press Esc to cancel while listening.",
   "test.shell": "Shell text",
 };
 
 const deCatalog = {
+  "common.close": "Schließen",
+  "settings.shell.title": "Einstellungen",
   "settings.language.description": "Wähle die Sprache, die Scrumboy in diesem Browser verwendet.",
   "settings.language.selectLabel": "Sprache",
   "settings.language.title": "Sprache",
+  "settings.tabs.customization": "Anpassung",
+  "settings.tabs.tagColors": "Tag-Farben",
+  "settings.tabs.backup": "Backup",
+  "settings.customization.theme.title": "Thema",
+  "settings.customization.theme.description": "Wähle dein bevorzugtes Farbschema.",
+  "settings.customization.theme.option.system": "System",
+  "settings.customization.theme.option.dark": "Dunkel",
+  "settings.customization.theme.option.light": "Hell",
+  "settings.customization.notifications.title": "Desktop-Benachrichtigungen",
+  "settings.customization.notifications.description": "Systemweite Hinweise, wenn dir jemand ein Todo zuweist (funktioniert, wenn dieser Tab im Hintergrund ist).",
+  "settings.customization.notifications.status.default": "Noch nicht aktiviert — klicke auf die Schaltfläche unten (dein Browser fragt nach Berechtigung).",
+  "settings.customization.notifications.actions.enable": "Benachrichtigungen aktivieren",
+  "settings.customization.keybindings.title": "Tastenkürzel",
+  "settings.customization.keybindings.description": "Klicke auf eine Taste, um ein neues Kürzel aufzuzeichnen. Drücke Esc, um das Lauschen abzubrechen.",
   "test.shell": "Shell-Text",
 };
 
 const pseudoCatalog = {
+  "common.close": "[!! Close !!]",
+  "settings.shell.title": "[!! Settings !!]",
   "settings.language.description": "[!! Choose the language used for Scrumboy on this browser. !!]",
   "settings.language.selectLabel": "[!! Language !!]",
   "settings.language.title": "[!! Language !!]",
+  "settings.tabs.customization": "[!! Customization !!]",
+  "settings.tabs.tagColors": "[!! Tag Colors !!]",
+  "settings.tabs.backup": "[!! Backup !!]",
+  "settings.customization.theme.title": "[!! Theme !!]",
+  "settings.customization.theme.description": "[!! Choose your preferred color scheme. !!]",
+  "settings.customization.theme.option.system": "[!! System !!]",
+  "settings.customization.theme.option.dark": "[!! Dark !!]",
+  "settings.customization.theme.option.light": "[!! Light !!]",
+  "settings.customization.notifications.title": "[!! Desktop notifications !!]",
+  "settings.customization.notifications.description": "[!! OS-level alerts when someone assigns you a todo (works when this tab is in the background). !!]",
+  "settings.customization.notifications.status.default": "[!! Not enabled yet — click the button below (your browser will ask for permission). !!]",
+  "settings.customization.notifications.actions.enable": "[!! Enable notifications !!]",
+  "settings.customization.keybindings.title": "[!! Keybindings !!]",
+  "settings.customization.keybindings.description": "[!! Click a key to record a new shortcut. Press Esc to cancel while listening. !!]",
   "test.shell": "[!! Shell text !!]",
 };
 
@@ -145,10 +194,15 @@ function installBaseDOM(): void {
   document.body.innerHTML = `
     <button id="shellProbe" data-i18n-text="test.shell"></button>
     <dialog id="settingsDialog">
-      <div class="dialog__title"></div>
+      <div class="dialog__header">
+        <div class="dialog__title">
+          <span id="settingsDialogTitleLabel" data-i18n-text="settings.shell.title">Settings</span>
+          <span id="settingsDialogVersion"></span>
+        </div>
+        <button id="closeSettingsBtn" type="button" data-i18n-aria-label="common.close"></button>
+      </div>
       <div class="dialog__content"></div>
     </dialog>
-    <button id="closeSettingsBtn" type="button"></button>
   `;
 }
 
@@ -204,6 +258,11 @@ describe('settings language selector', () => {
 
   afterEach(async () => {
     const i18n = await import('../i18n/index.js');
+    const settingsGlobal = globalThis as { __scrumboySettingsLocaleListener?: EventListener };
+    if (settingsGlobal.__scrumboySettingsLocaleListener) {
+      document.removeEventListener('scrumboy:i18n-locale-changed', settingsGlobal.__scrumboySettingsLocaleListener);
+      delete settingsGlobal.__scrumboySettingsLocaleListener;
+    }
     i18n.resetI18nForTests();
     document.body.innerHTML = '';
     document.documentElement.lang = 'en';

@@ -102,34 +102,42 @@ export const DEFAULT_KEY_CHORDS: Record<KeyActionId, string> = {
 export interface KeyActionMeta {
   id: KeyActionId;
   label: string;
+  labelKey: string;
+  labelValues?: Record<string, string | number>;
   /** Where this action applies (openSettings is global). */
   contexts: AppView[];
 }
 
 export const KEY_ACTION_LIST: KeyActionMeta[] = [
-  { id: "newTodo", label: "New Todo", contexts: ["board"] },
-  { id: "boardSearch", label: "Search todos", contexts: ["board"] },
-  { id: "openSettings", label: "Open Settings", contexts: ["board", "dashboard", "projects", "unknown"] },
+  { id: "newTodo", label: "New Todo", labelKey: "settings.customization.keybindings.actions.newTodo", contexts: ["board"] },
+  { id: "boardSearch", label: "Search todos", labelKey: "settings.customization.keybindings.actions.boardSearch", contexts: ["board"] },
+  { id: "openSettings", label: "Open Settings", labelKey: "settings.customization.keybindings.actions.openSettings", contexts: ["board", "dashboard", "projects", "unknown"] },
   {
     id: "cycleMainNavTabs",
     label: "Cycle Dashboard / Projects / Temporary",
+    labelKey: "settings.customization.keybindings.actions.cycleMainNavTabs",
     contexts: ["dashboard", "projects"],
   },
   {
     id: "cycleMainNavTabsReverse",
     label: "Cycle Dashboard / Projects / Temporary (reverse)",
+    labelKey: "settings.customization.keybindings.actions.cycleMainNavTabsReverse",
     contexts: ["dashboard", "projects"],
   },
-  { id: "createProject", label: "Create project", contexts: ["projects"] },
-  { id: "boardEscapeBack", label: "Back to projects (Esc)", contexts: ["board"] },
+  { id: "createProject", label: "Create project", labelKey: "settings.customization.keybindings.actions.createProject", contexts: ["projects"] },
+  { id: "boardEscapeBack", label: "Back to projects (Esc)", labelKey: "settings.customization.keybindings.actions.boardEscapeBack", contexts: ["board"] },
   ...DASHBOARD_PROJECT_IDS.map((id, i) => ({
     id,
     label: `Jump to project ${i + 1} (dashboard)`,
+    labelKey: "settings.customization.keybindings.actions.dashboardProject",
+    labelValues: { index: i + 1 },
     contexts: ["dashboard"] as AppView[],
   })),
   ...PROJECTS_LIST_IDS.map((id, i) => ({
     id,
     label: `Open project ${i + 1} (projects list)`,
+    labelKey: "settings.customization.keybindings.actions.projectsList",
+    labelValues: { index: i + 1 },
     contexts: ["projects"] as AppView[],
   })),
 ];

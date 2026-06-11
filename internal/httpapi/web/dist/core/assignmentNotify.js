@@ -57,11 +57,23 @@ export async function requestDesktopNotificationPermission() {
         return "denied";
     }
 }
-export function getDesktopNotificationStatusDescription() {
+export function getDesktopNotificationStatusKind() {
     if (typeof Notification === "undefined") {
-        return "Not supported in this browser.";
+        return "unsupported";
     }
     switch (Notification.permission) {
+        case "granted":
+            return "granted";
+        case "denied":
+            return "denied";
+        default:
+            return "default";
+    }
+}
+export function getDesktopNotificationStatusDescription() {
+    switch (getDesktopNotificationStatusKind()) {
+        case "unsupported":
+            return "Not supported in this browser.";
         case "granted":
             return "Enabled - you will receive OS notifications for new assignments.";
         case "denied":
