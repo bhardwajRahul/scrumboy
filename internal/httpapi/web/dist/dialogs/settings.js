@@ -329,8 +329,14 @@ function applySettingsLocaleToOpenDialog() {
     const tabContentEl = document.getElementById("settingsTabContent");
     if (!tabContentEl)
         return;
-    if (activeTab === "tag-colors" || activeTab === "workflow") {
+    if (activeTab === "workflow") {
         hydrateI18n(tabContentEl);
+        syncWorkflowLocaleState(tabContentEl);
+        return;
+    }
+    if (activeTab === "tag-colors") {
+        hydrateI18n(tabContentEl);
+        syncTagColorsLocaleState(tabContentEl);
         return;
     }
     if (activeTab === "sprints") {
@@ -430,6 +436,34 @@ function syncPushLocaleState() {
     if (pushReady && unsupported) {
         hint.textContent = t("settings.customization.push.unsupported");
     }
+}
+/**
+ * Re-localize Workflow-only dynamic aria-labels that are derived from raw lane
+ * keys and therefore cannot be updated by `hydrateI18n()` alone.
+ */
+function syncWorkflowLocaleState(root) {
+    root.querySelectorAll('[data-workflow-name]').forEach((inputEl) => {
+        const key = inputEl.getAttribute('data-workflow-name');
+        if (!key)
+            return;
+        inputEl.setAttribute('aria-label', t('settings.workflow.laneLabelAria', { key }));
+    });
+    root.querySelectorAll('[data-workflow-color]').forEach((inputEl) => {
+        const key = inputEl.getAttribute('data-workflow-color');
+        if (!key)
+            return;
+        inputEl.setAttribute('aria-label', t('settings.workflow.laneColorAria', { key }));
+    });
+}
+/**
+ * Re-localize the Tag Colors load-error wrapper while preserving the raw
+ * backend error detail captured in a data attribute.
+ */
+function syncTagColorsLocaleState(root) {
+    root.querySelectorAll('[data-tag-colors-load-error-message]').forEach((errorEl) => {
+        const message = errorEl.getAttribute('data-tag-colors-load-error-message') ?? '';
+        errorEl.textContent = t('settings.tagColors.error.loadFailed', { message });
+    });
 }
 /**
  * Re-localize stateful Profile labels that `renderUserAvatar` emits as plain
@@ -1226,7 +1260,8 @@ export async function renderSettingsModal(options) {
         }
         catch (err) {
             console.error("Failed to fetch tags:", err);
-            tagsHTML = `<div class='muted'>Error loading tags: ${escapeHTML(err.message)}</div>`;
+            const detail = err?.message ? String(err.message) : '';
+            tagsHTML = `<div class='muted' data-tag-colors-load-error-message="${escapeHTML(detail)}">${escapeHTML(t('settings.tagColors.error.loadFailed', { message: detail }))}</div>`;
         }
     }
     else {

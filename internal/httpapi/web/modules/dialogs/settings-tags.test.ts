@@ -1,6 +1,23 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import deCatalog from '../i18n/locales/de.json';
+import enCatalog from '../i18n/locales/en.json';
+
+const tagLocales: Record<string, Record<string, string>> = {
+  en: enCatalog as Record<string, string>,
+  de: deCatalog as Record<string, string>,
+};
+
+async function initTagI18n(locale: 'en' | 'de' = 'en'): Promise<typeof import('../i18n/index.js')> {
+  const i18n = await import('../i18n/index.js');
+  await i18n.initI18n({
+    locale,
+    loadLocale: async (code) => tagLocales[code] ?? tagLocales.en,
+  });
+  return i18n;
+}
+
 const selectorState: {
   search: string;
   projectId: number | null;
@@ -78,7 +95,8 @@ async function flushPromises(count = 6): Promise<void> {
   }
 }
 
-async function loadTagsModule() {
+async function loadTagsModule(locale: 'en' | 'de' = 'en') {
+  await initTagI18n(locale);
   const mod = await import('./settings-tags.js');
   return mod;
 }
@@ -101,7 +119,9 @@ describe('settings-tags', () => {
     showToastMock.mockClear();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const i18n = await import('../i18n/index.js');
+    i18n.resetI18nForTests();
     vi.restoreAllMocks();
     vi.resetModules();
     document.body.innerHTML = '';
@@ -260,6 +280,30 @@ describe('settings-tags', () => {
     expect(selectorState.tagColors).toEqual({ keep: '#00ff00' });
     expect(rerender).toHaveBeenCalledTimes(1);
     expect(invalidateBoardMock).not.toHaveBeenCalled();
+  });
+
+  it('uses localized delete confirm copy with the raw tag name', async () => {
+    selectorState.projectId = 7;
+    showConfirmDialogMock.mockResolvedValue(false);
+    const rerender = vi.fn().mockResolvedValue(undefined);
+    const mod = await loadTagsModule('de');
+
+    render(`<button class="settings-tag-delete" data-tag="bug" data-tag-id="5">Delete</button>`);
+    mod.bindTagTabInteractions({
+      signal: new AbortController().signal,
+      hasProjectAccess: true,
+      rerender,
+    });
+
+    const deleteBtn = document.querySelector('.settings-tag-delete[data-tag="bug"]');
+    if (!(deleteBtn instanceof HTMLElement)) throw new Error('missing tag delete button');
+    deleteBtn.click();
+    await flushPromises();
+
+    expect(showConfirmDialogMock).toHaveBeenCalledWith(
+      deCatalog['settings.tagColors.deleteConfirm.message'].replace('{name}', 'bug'),
+      deCatalog['settings.tagColors.deleteConfirm.title'],
+    );
   });
 
   it('does not bind tag interactions when project access is unavailable', async () => {

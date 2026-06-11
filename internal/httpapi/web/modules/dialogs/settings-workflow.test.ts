@@ -1,7 +1,24 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import deCatalog from '../i18n/locales/de.json';
+import enCatalog from '../i18n/locales/en.json';
+
 type WorkflowLane = { key: string; name: string; color?: string; isDone?: boolean };
+
+const workflowLocales: Record<string, Record<string, string>> = {
+  en: enCatalog as Record<string, string>,
+  de: deCatalog as Record<string, string>,
+};
+
+async function initWorkflowI18n(locale: 'en' | 'de' = 'en'): Promise<typeof import('../i18n/index.js')> {
+  const i18n = await import('../i18n/index.js');
+  await i18n.initI18n({
+    locale,
+    loadLocale: async (code) => workflowLocales[code] ?? workflowLocales.en,
+  });
+  return i18n;
+}
 
 const selectorState: {
   board: { columnOrder: WorkflowLane[] } | null;
@@ -76,7 +93,8 @@ async function flushPromises(count = 6): Promise<void> {
   }
 }
 
-async function loadWorkflowModule() {
+async function loadWorkflowModule(locale: 'en' | 'de' = 'en') {
+  await initWorkflowI18n(locale);
   const mod = await import('./settings-workflow.js');
   return mod;
 }
@@ -112,7 +130,9 @@ describe('settings-workflow', () => {
     showToastMock.mockClear();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const i18n = await import('../i18n/index.js');
+    i18n.resetI18nForTests();
     vi.restoreAllMocks();
     vi.resetModules();
     document.body.innerHTML = '';
@@ -328,6 +348,32 @@ describe('settings-workflow', () => {
     expect(rerender).toHaveBeenCalledTimes(1);
   });
 
+  it('uses localized delete confirm copy with the raw lane name', async () => {
+    const rerender = vi.fn().mockResolvedValue(undefined);
+    const mod = await loadWorkflowModule('de');
+    await primeOkWorkflowState(mod, rerender);
+    showConfirmDialogMock.mockResolvedValue(false);
+
+    render(mod.loadWorkflowTabContent({ slug: 'alpha', rerender }));
+    mod.bindWorkflowTabInteractions({
+      signal: new AbortController().signal,
+      settingsDialog: null,
+      closeSettingsBtn: null,
+      rerender,
+    });
+
+    const deleteBtn = document.querySelector('[data-workflow-delete="backlog"]');
+    if (!(deleteBtn instanceof HTMLElement)) throw new Error('missing workflow delete button');
+    deleteBtn.click();
+    await flushPromises();
+
+    expect(showConfirmDialogMock).toHaveBeenCalledWith(
+      (workflowLocales.de['settings.workflow.deleteConfirm.message'] ?? '').replace('{name}', 'Backlog'),
+      workflowLocales.de['settings.workflow.deleteConfirm.title'],
+      workflowLocales.de['settings.workflow.deleteConfirm.confirm'],
+    );
+  });
+
   it('only intercepts modal close actions when the workflow draft is dirty', async () => {
     const rerender = vi.fn().mockResolvedValue(undefined);
     const mod = await loadWorkflowModule();
@@ -366,5 +412,53 @@ describe('settings-workflow', () => {
     expect(showConfirmDialogMock).toHaveBeenCalledTimes(1);
     expect(closeSpy).toHaveBeenCalledTimes(1);
     expect(mod.isWorkflowDraftDirty()).toBe(false);
+  });
+
+  it('uses localized unsaved-draft confirm copy for cancel and close actions', async () => {
+    const rerender = vi.fn().mockResolvedValue(undefined);
+    const mod = await loadWorkflowModule('de');
+    await primeOkWorkflowState(mod, rerender);
+
+    const dialog = document.createElement('dialog') as HTMLDialogElement;
+    const closeSpy = vi.fn();
+    (dialog as HTMLDialogElement & { close: () => void }).close = closeSpy;
+    const closeSettingsBtn = document.createElement('button');
+
+    render(mod.loadWorkflowTabContent({ slug: 'alpha', rerender }));
+    mod.bindWorkflowTabInteractions({
+      signal: new AbortController().signal,
+      settingsDialog: dialog,
+      closeSettingsBtn,
+      rerender,
+    });
+
+    const nameInput = document.querySelector('[data-workflow-name="doing"]');
+    if (!(nameInput instanceof HTMLInputElement)) throw new Error('missing workflow name input');
+    nameInput.value = 'Dirty change';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    showConfirmDialogMock.mockResolvedValueOnce(false);
+    const cancelEvent = new Event('cancel', { cancelable: true });
+    dialog.dispatchEvent(cancelEvent);
+    await flushPromises();
+
+    const closeClick = new MouseEvent('click', { bubbles: true, cancelable: true });
+    showConfirmDialogMock.mockResolvedValueOnce(true);
+    closeSettingsBtn.dispatchEvent(closeClick);
+    await flushPromises();
+
+    expect(showConfirmDialogMock).toHaveBeenNthCalledWith(
+      1,
+      workflowLocales.de['settings.workflow.unsavedConfirm.message'],
+      workflowLocales.de['settings.workflow.unsavedConfirm.title'],
+      workflowLocales.de['settings.workflow.unsavedConfirm.confirm'],
+    );
+    expect(showConfirmDialogMock).toHaveBeenNthCalledWith(
+      2,
+      workflowLocales.de['settings.workflow.unsavedConfirm.message'],
+      workflowLocales.de['settings.workflow.unsavedConfirm.title'],
+      workflowLocales.de['settings.workflow.unsavedConfirm.confirm'],
+    );
+    expect(closeSpy).toHaveBeenCalledTimes(1);
   });
 });

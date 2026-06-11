@@ -385,6 +385,12 @@ describe('settings tabs i18n (charts, sprints, workflow, tag colors)', () => {
     expect(doingDelete.disabled).toBe(true);
     expect(doneDelete.disabled).toBe(true);
 
+    const todoNameInput = document.querySelector('[data-workflow-name="todo"]') as HTMLInputElement;
+    const todoColorInput = document.querySelector('[data-workflow-color="todo"]') as HTMLInputElement;
+    const addLaneInput = document.querySelector('[data-workflow-ghost-input]') as HTMLInputElement;
+    todoNameInput.value = 'Queued';
+    todoColorInput.value = '#123456';
+
     apiFetchMock.mockClear();
 
     await i18n.setLocale('de');
@@ -404,9 +410,58 @@ describe('settings tabs i18n (charts, sprints, workflow, tag colors)', () => {
     expect(doneDeleteAfter.disabled).toBe(true);
     expect(doneDeleteAfter.getAttribute('title')).toBe(deCatalog['settings.workflow.deleteTitle.done']);
 
+    // Dynamic aria labels and unsaved values (raw user data) stay intact.
+    expect((document.querySelector('[data-workflow-name="todo"]') as HTMLInputElement).value).toBe('Queued');
+    expect((document.querySelector('[data-workflow-color="todo"]') as HTMLInputElement).value).toBe('#123456');
+    expect((document.querySelector('[data-workflow-name="todo"]') as HTMLInputElement).getAttribute('aria-label')).toBe(
+      deCatalog['settings.workflow.laneLabelAria'].replace('{key}', 'todo'),
+    );
+    expect((document.querySelector('[data-workflow-color="todo"]') as HTMLInputElement).getAttribute('aria-label')).toBe(
+      deCatalog['settings.workflow.laneColorAria'].replace('{key}', 'todo'),
+    );
+    expect((document.querySelector('[data-workflow-ghost-input]') as HTMLInputElement).getAttribute('aria-label')).toBe(
+      deCatalog['settings.workflow.addLaneAria'],
+    );
+
     // Lane name input value (user data) preserved + chrome localized.
-    expect((document.querySelector('[data-workflow-name="todo"]') as HTMLInputElement).value).toBe('To Do');
     expect(document.querySelector('[data-i18n-text="settings.workflow.title"]')?.textContent).toBe(deCatalog['settings.workflow.title']);
+  });
+
+  it('Workflow: localizes lanes-unavailable error in place without refetching counts', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/board/alpha/tags') return [];
+      if (url === '/api/me') return USER;
+      if (url === '/api/board/alpha/workflow/counts') {
+        return { countsByColumnKey: {} };
+      }
+      throw new Error(`unexpected apiFetch url: ${url}`);
+    });
+
+    const { i18n } = await setupSettingsView({
+      activeTab: 'workflow',
+      slug: 'alpha',
+      board: {
+        project: { id: 7 },
+        columnOrder: [],
+      },
+      user: USER,
+      boardMembers: MAINTAINER,
+    });
+
+    await flushPromises();
+
+    const errorEl = document.querySelector('[data-i18n-text="settings.workflow.error.lanesUnavailable"]');
+    expect(errorEl?.textContent).toBe(enCatalog['settings.workflow.error.lanesUnavailable']);
+
+    apiFetchMock.mockClear();
+
+    await i18n.setLocale('de');
+    await flushPromises();
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-i18n-text="settings.workflow.error.lanesUnavailable"]')?.textContent).toBe(
+      deCatalog['settings.workflow.error.lanesUnavailable'],
+    );
   });
 
   it('Tag Colors: localizes chrome and preserves unsaved color picker value with raw tag names and no refetch', async () => {
@@ -444,6 +499,34 @@ describe('settings tabs i18n (charts, sprints, workflow, tag colors)', () => {
     expect(document.querySelector('.settings-color-clear')?.getAttribute('title')).toBe(deCatalog['settings.tagColors.clearTitle']);
     expect(document.querySelector('.settings-tag-delete')?.getAttribute('title')).toBe(deCatalog['settings.tagColors.deleteTitle']);
     expect(document.querySelector('.settings-color-picker')?.getAttribute('title')).toBe(deCatalog['settings.tagColors.colorTitle']);
+  });
+
+  it('Tag Colors: localizes the load-error prefix in place and preserves raw backend detail', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/board/alpha/tags') {
+        throw new Error('boom');
+      }
+      throw new Error(`unexpected apiFetch url: ${url}`);
+    });
+
+    const { i18n } = await setupSettingsView({
+      activeTab: 'tag-colors',
+      slug: 'alpha',
+      board: { project: {} },
+    });
+
+    const errorEl = document.querySelector('[data-tag-colors-load-error-message="boom"]');
+    expect(errorEl?.textContent).toBe(enCatalog['settings.tagColors.error.loadFailed'].replace('{message}', 'boom'));
+
+    apiFetchMock.mockClear();
+
+    await i18n.setLocale('de');
+    await flushPromises();
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-tag-colors-load-error-message="boom"]')?.textContent).toBe(
+      deCatalog['settings.tagColors.error.loadFailed'].replace('{message}', 'boom'),
+    );
   });
 
   it('audit: repeated renderSettingsModal calls do not stack settings locale listeners', async () => {

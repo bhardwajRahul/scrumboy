@@ -4,6 +4,7 @@ import { recordLocalMutation } from '../realtime/guard.js';
 import { getSearch, getSettingsProjectId, getSlug, getSprintIdFromUrl, getTag, getTagColors, getUser, } from '../state/selectors.js';
 import { setTagColors } from '../state/mutations.js';
 import { escapeHTML, sanitizeHexColor, showConfirmDialog, showToast } from '../utils.js';
+import { t } from '../i18n/index.js';
 let cachedTags = null;
 let cachedTagsHTML = null;
 let cachedTagsURL = null;
@@ -41,7 +42,7 @@ async function applyTagColorSuccess(tagName, color) {
         if (getSlug()) {
             await invalidateBoard(getSlug(), getTag(), getSearch(), getSprintIdFromUrl());
         }
-        showToast('Tag color updated');
+        showToast(t('settings.tagColors.toast.colorUpdated'));
     }
     catch (err) {
         showToast(err.message);
@@ -53,7 +54,7 @@ async function updateTagColor(tagName, tagId, color) {
     const isDurable = !!projectId;
     if (isDurable) {
         if (tagId == null || tagId <= 0) {
-            showToast('Cannot update color: tag ID missing');
+            showToast(t('settings.tagColors.toast.cannotUpdateMissingId'));
             return;
         }
         const url = `/api/projects/${projectId}/tags/id/${tagId}/color`;
@@ -91,7 +92,7 @@ async function updateTagColor(tagName, tagId, color) {
         }
         return;
     }
-    showToast('No project available');
+    showToast(t('settings.tagColors.toast.noProject'));
 }
 async function deleteTag(tagName, tagId, rerender) {
     let url = null;
@@ -104,13 +105,13 @@ async function deleteTag(tagName, tagId, rerender) {
     }
     else if (isDurableMode) {
         if (tagId == null) {
-            showToast('Cannot delete: tag ID missing');
+            showToast(t('settings.tagColors.toast.cannotDeleteMissingId'));
             return;
         }
         url = `/api/projects/${getSettingsProjectId()}/tags/id/${tagId}`;
     }
     else {
-        showToast('No project available');
+        showToast(t('settings.tagColors.toast.noProject'));
         return;
     }
     try {
@@ -135,7 +136,7 @@ async function deleteTag(tagName, tagId, rerender) {
         if (getSlug()) {
             await invalidateBoard(getSlug(), getTag(), getSearch(), getSprintIdFromUrl());
         }
-        showToast(`Tag "${tagName}" deleted`);
+        showToast(t('settings.tagColors.toast.deleted', { name: tagName }));
     }
     catch (err) {
         showToast(err.message);
@@ -246,7 +247,7 @@ export function bindTagTabInteractions(options) {
             const tagIdAttr = el.getAttribute('data-tag-id');
             const tagId = tagIdAttr ? parseInt(tagIdAttr, 10) : undefined;
             if (tagName) {
-                const confirmed = await showConfirmDialog(`Delete tag "${tagName}" from all projects? This will remove it from all todos.`, 'Delete Tag');
+                const confirmed = await showConfirmDialog(t('settings.tagColors.deleteConfirm.message', { name: tagName }), t('settings.tagColors.deleteConfirm.title'));
                 if (!confirmed)
                     return;
                 await deleteTag(tagName, !Number.isNaN(tagId) ? tagId : undefined, options.rerender);

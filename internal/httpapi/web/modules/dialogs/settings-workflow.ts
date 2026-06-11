@@ -11,6 +11,7 @@ import {
 } from '../state/selectors.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
+import { t } from '../i18n/index.js';
 
 type WorkflowLaneCountsState =
   | { status: 'loading' }
@@ -39,6 +40,14 @@ let workflowLaneCountsFetchGeneration = 0;
 let workflowTabDraft: WorkflowLaneDraft[] | null = null;
 let workflowTabDraftBaseline: WorkflowLaneDraft[] | null = null;
 let workflowTabDraftSlug: string | null = null;
+
+function workflowLaneLabelAria(key: string): string {
+  return t('settings.workflow.laneLabelAria', { key });
+}
+
+function workflowLaneColorAria(key: string): string {
+  return t('settings.workflow.laneColorAria', { key });
+}
 
 function normalizeWorkflowLaneColorForInput(color: string | undefined | null): string {
   const s = color?.trim();
@@ -130,10 +139,10 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
   const board = getBoard();
   const columns = board?.columnOrder ?? [];
   if (!getSlug()) {
-    return `<div class="settings-section"><div class="muted">No project in context.</div></div>`;
+    return `<div class="settings-section"><div class="muted" data-i18n-text="settings.workflow.error.noProject">${escapeHTML(t('settings.workflow.error.noProject'))}</div></div>`;
   }
   if (columns.length === 0) {
-    return `<div class="settings-section"><div class="muted">Workflow lanes are unavailable.</div></div>`;
+    return `<div class="settings-section"><div class="muted" data-i18n-text="settings.workflow.error.lanesUnavailable">${escapeHTML(t('settings.workflow.error.lanesUnavailable'))}</div></div>`;
   }
   ensureWorkflowDraftInitialized();
   const workflow = workflowTabDraft ?? [];
@@ -189,7 +198,7 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
               data-workflow-name="${escapeHTML(lane.key)}"
               value="${escapeHTML(lane.name)}"
               maxlength="200"
-              aria-label="Lane label for ${escapeHTML(lane.key)}"
+              aria-label="${escapeHTML(workflowLaneLabelAria(lane.key))}"
               style="flex:1; min-width:120px;"
             />
             <input
@@ -197,7 +206,7 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
               class="settings-color-picker"
               data-workflow-color="${escapeHTML(lane.key)}"
               value="${escapeHTML(inputColor)}"
-              aria-label="Lane color for ${escapeHTML(lane.key)}"
+              aria-label="${escapeHTML(workflowLaneColorAria(lane.key))}"
               title="Lane color"
               data-i18n-title="settings.workflow.laneColorTitle"
             />
@@ -215,7 +224,8 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
           maxlength="200"
           placeholder="Add lane..."
           data-i18n-placeholder="settings.workflow.addPlaceholder"
-          aria-label="Add lane"
+          aria-label="${escapeHTML(t('settings.workflow.addLaneAria'))}"
+          data-i18n-aria-label="settings.workflow.addLaneAria"
           style="flex:1; min-width:0;"
           ${titleAttr(FIELD_TOOLTIPS.workflowAddLane)}
         />
@@ -232,12 +242,12 @@ function renderWorkflowTabContent(countsState: WorkflowLaneCountsState): string 
 async function addWorkflowLane(name: string, rerender: RerenderFn): Promise<void> {
   const slug = getSlug();
   if (!slug) {
-    showToast('No project available');
+    showToast(t('settings.workflow.toast.noProject'));
     return;
   }
   const trimmed = name.trim();
   if (!trimmed) {
-    showToast('Lane name is required');
+    showToast(t('settings.workflow.toast.nameRequired'));
     return;
   }
   try {
@@ -250,9 +260,9 @@ async function addWorkflowLane(name: string, rerender: RerenderFn): Promise<void
     await invalidateBoard(slug, getTag(), getSearch(), getSprintIdFromUrl());
     syncWorkflowDraftFromBoardAfterMutation();
     await rerender();
-    showToast('Lane added');
+    showToast(t('settings.workflow.toast.laneAdded'));
   } catch (err: any) {
-    showToast(err.message || 'Failed to add lane');
+    showToast(err.message || t('settings.workflow.toast.addFailed'));
   }
 }
 
@@ -261,7 +271,7 @@ async function saveWorkflowDraftChanges(rerender: RerenderFn): Promise<void> {
   if (!slug || !workflowTabDraft || !workflowTabDraftBaseline) return;
   for (const lane of workflowTabDraft) {
     if (!lane.name.trim()) {
-      showToast('Lane name is required');
+      showToast(t('settings.workflow.toast.nameRequired'));
       return;
     }
   }
@@ -287,31 +297,31 @@ async function saveWorkflowDraftChanges(rerender: RerenderFn): Promise<void> {
     await invalidateBoard(slug, getTag(), getSearch(), getSprintIdFromUrl());
     syncWorkflowDraftFromBoardAfterMutation();
     await rerender();
-    showToast('Workflow updated');
+    showToast(t('settings.workflow.toast.updated'));
   } catch (err: any) {
-    showToast(err.message || 'Failed to update workflow');
+    showToast(err.message || t('settings.workflow.toast.updateFailed'));
   }
 }
 
 async function deleteWorkflowLane(key: string, rerender: RerenderFn): Promise<void> {
   const slug = getSlug();
   if (!slug) {
-    showToast('No project available');
+    showToast(t('settings.workflow.toast.noProject'));
     return;
   }
   const lane = getBoard()?.columnOrder?.find((item) => item.key === key);
   if (!lane) {
-    showToast('Lane not found');
+    showToast(t('settings.workflow.toast.laneNotFound'));
     return;
   }
   if (lane.isDone) {
-    showToast('Done lane cannot be deleted');
+    showToast(t('settings.workflow.toast.doneCannotDelete'));
     return;
   }
   const confirmed = await showConfirmDialog(
-    `Delete lane "${lane.name}"? Only empty non-done lanes can be deleted.`,
-    'Delete lane?',
-    'Delete'
+    t('settings.workflow.deleteConfirm.message', { name: lane.name }),
+    t('settings.workflow.deleteConfirm.title'),
+    t('settings.workflow.deleteConfirm.confirm')
   );
   if (!confirmed) return;
   try {
@@ -323,10 +333,23 @@ async function deleteWorkflowLane(key: string, rerender: RerenderFn): Promise<vo
     await invalidateBoard(slug, getTag(), getSearch(), getSprintIdFromUrl());
     syncWorkflowDraftFromBoardAfterMutation();
     await rerender();
-    showToast('Lane deleted');
+    showToast(t('settings.workflow.toast.laneDeleted'));
   } catch (err: any) {
-    showToast(err.message || 'Failed to delete lane');
+    showToast(err.message || t('settings.workflow.toast.deleteFailed'));
   }
+}
+
+export function syncWorkflowLocaleState(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[data-workflow-name]').forEach((inputEl) => {
+    const key = inputEl.getAttribute('data-workflow-name');
+    if (!key) return;
+    inputEl.setAttribute('aria-label', workflowLaneLabelAria(key));
+  });
+  root.querySelectorAll<HTMLElement>('[data-workflow-color]').forEach((inputEl) => {
+    const key = inputEl.getAttribute('data-workflow-color');
+    if (!key) return;
+    inputEl.setAttribute('aria-label', workflowLaneColorAria(key));
+  });
 }
 
 export function loadWorkflowTabContent(options: {
@@ -450,9 +473,9 @@ export function bindWorkflowTabInteractions(options: BindWorkflowTabInteractions
       if (!isWorkflowDraftDirty()) return;
       e.preventDefault();
       void showConfirmDialog(
-        'You have unsaved changes. Discard them?',
-        'Unsaved changes',
-        'Discard'
+        t('settings.workflow.unsavedConfirm.message'),
+        t('settings.workflow.unsavedConfirm.title'),
+        t('settings.workflow.unsavedConfirm.confirm')
       ).then((discard) => {
         if (discard) {
           resetWorkflowDraftToBaseline();
@@ -471,9 +494,9 @@ export function bindWorkflowTabInteractions(options: BindWorkflowTabInteractions
       e.preventDefault();
       e.stopImmediatePropagation();
       void showConfirmDialog(
-        'You have unsaved changes. Discard them?',
-        'Unsaved changes',
-        'Discard'
+        t('settings.workflow.unsavedConfirm.message'),
+        t('settings.workflow.unsavedConfirm.title'),
+        t('settings.workflow.unsavedConfirm.confirm')
       ).then((discard) => {
         if (discard) {
           resetWorkflowDraftToBaseline();

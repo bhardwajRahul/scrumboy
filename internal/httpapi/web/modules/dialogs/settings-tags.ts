@@ -12,6 +12,7 @@ import {
 } from '../state/selectors.js';
 import { setTagColors } from '../state/mutations.js';
 import { escapeHTML, sanitizeHexColor, showConfirmDialog, showToast } from '../utils.js';
+import { t } from '../i18n/index.js';
 
 type BindTagTabInteractionsOptions = {
   signal: AbortSignal;
@@ -63,7 +64,7 @@ async function applyTagColorSuccess(tagName: string, color: string | null): Prom
       await invalidateBoard(getSlug(), getTag(), getSearch(), getSprintIdFromUrl());
     }
 
-    showToast('Tag color updated');
+    showToast(t('settings.tagColors.toast.colorUpdated'));
   } catch (err: any) {
     showToast(err.message);
   }
@@ -80,7 +81,7 @@ async function updateTagColor(
 
   if (isDurable) {
     if (tagId == null || tagId <= 0) {
-      showToast('Cannot update color: tag ID missing');
+      showToast(t('settings.tagColors.toast.cannotUpdateMissingId'));
       return;
     }
     const url = `/api/projects/${projectId}/tags/id/${tagId}/color`;
@@ -117,7 +118,7 @@ async function updateTagColor(
     return;
   }
 
-  showToast('No project available');
+  showToast(t('settings.tagColors.toast.noProject'));
 }
 
 async function deleteTag(
@@ -135,12 +136,12 @@ async function deleteTag(
         : `/api/board/${getSlug()}/tags/${encodeURIComponent(tagName)}`;
   } else if (isDurableMode) {
     if (tagId == null) {
-      showToast('Cannot delete: tag ID missing');
+      showToast(t('settings.tagColors.toast.cannotDeleteMissingId'));
       return;
     }
     url = `/api/projects/${getSettingsProjectId()}/tags/id/${tagId}`;
   } else {
-    showToast('No project available');
+    showToast(t('settings.tagColors.toast.noProject'));
     return;
   }
 
@@ -170,7 +171,7 @@ async function deleteTag(
       await invalidateBoard(getSlug(), getTag(), getSearch(), getSprintIdFromUrl());
     }
 
-    showToast(`Tag "${tagName}" deleted`);
+    showToast(t('settings.tagColors.toast.deleted', { name: tagName }));
   } catch (err: any) {
     showToast(err.message);
   }
@@ -301,8 +302,8 @@ export function bindTagTabInteractions(options: BindTagTabInteractionsOptions): 
         const tagId = tagIdAttr ? parseInt(tagIdAttr, 10) : undefined;
         if (tagName) {
           const confirmed = await showConfirmDialog(
-            `Delete tag "${tagName}" from all projects? This will remove it from all todos.`,
-            'Delete Tag'
+            t('settings.tagColors.deleteConfirm.message', { name: tagName }),
+            t('settings.tagColors.deleteConfirm.title')
           );
           if (!confirmed) return;
           await deleteTag(tagName, !Number.isNaN(tagId) ? tagId : undefined, options.rerender);
