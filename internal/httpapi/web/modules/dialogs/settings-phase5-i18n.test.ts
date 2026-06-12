@@ -298,7 +298,7 @@ describe('settings phase 5 i18n (profile / users / backup / customization)', () 
     expect(apiFetchMock).not.toHaveBeenCalled();
   });
 
-  it('removes an open dialog locale listener on close so locale changes do not duplicate work or reset fields', async () => {
+  it('releases the Enable-2FA locale listener on native cancel/close so closed dialogs do not relocalize', async () => {
     const user = { id: 1, name: 'Grace', email: 'grace@example.com', systemRole: 'owner', twoFactorEnabled: false };
     const { i18n } = await setupSettingsView({ activeTab: 'profile', user });
 
@@ -306,16 +306,17 @@ describe('settings phase 5 i18n (profile / users / backup / customization)', () 
     document.getElementById('enable2FABtn')?.dispatchEvent(new Event('click'));
     await flushPromises();
 
-    const addSpy = vi.spyOn(document, 'addEventListener');
-    // Close the dialog; its locale listener must be released.
-    document.getElementById('enable2FACancel')?.dispatchEvent(new Event('click'));
-    expect(document.querySelector('body > dialog.dialog')).toBeNull();
+    const dialog = document.querySelector('body > dialog.dialog') as HTMLDialogElement | null;
+    expect(dialog?.querySelector('.dialog__title')?.textContent).toBe('Enable two-factor authentication');
 
-    // A later locale change must not throw or recreate dialog content.
+    dialog?.dispatchEvent(new Event('cancel'));
+    dialog?.close();
+    expect(dialog?.open).toBe(false);
+
     await i18n.setLocale('de');
     await flushPromises();
-    expect(document.querySelector('body > dialog.dialog')).toBeNull();
-    addSpy.mockRestore();
+
+    expect(dialog?.querySelector('.dialog__title')?.textContent).toBe('Enable two-factor authentication');
   });
 
   // ---- Users ------------------------------------------------------------
