@@ -2,6 +2,13 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.1] - 2026-06-12
+
+### Fixed
+
+- **Auth post-login redirect** - Bootstrap, login, and 2FA completion now redirect using the sanitized `next` path from auth state instead of a raw URL that could still carry `oidc_error` query noise after OIDC cleanup.
+- **Settings dialog i18n listeners** - Dynamic settings dialogs (e.g. Enable 2FA) release their locale-change listener on native `cancel`/`close`, preventing stale relocalization after the dialog is dismissed.
+
 ## [3.18.0] - 2026-06-12
 
 ### Added
