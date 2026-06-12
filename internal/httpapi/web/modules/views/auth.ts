@@ -352,7 +352,7 @@ function renderAuthView(state: AuthBaseState, options: { handleOidcError: boolea
               password: state.draft.password,
             }),
           });
-          redirectAfterAuth(next || "/");
+          redirectAfterAuth(state.options.next || "/");
         } catch (err) {
           showToast(authApiErrorMessage(err, "auth.bootstrap.failed"));
         }
@@ -376,10 +376,10 @@ function renderAuthView(state: AuthBaseState, options: { handleOidcError: boolea
           { method: "POST", body: JSON.stringify({ email: state.draft.email, password: state.draft.password }) },
         );
         if (res && res.requires2fa && res.tempToken && res.user) {
-          render2FAStep({ tempToken: res.tempToken, user: res.user, next });
+          render2FAStep({ tempToken: res.tempToken, user: res.user, next: state.options.next });
           return;
         }
-        redirectAfterAuth(next || "/");
+        redirectAfterAuth(state.options.next || "/");
       } catch (err) {
         showToast(authApiErrorMessage(err, "auth.login.failed"));
       }
@@ -411,7 +411,7 @@ function render2FAView(state: TwoFactorState): void {
   ensureAuthLocaleListener();
   authViewState = state;
 
-  const { tempToken, user, next } = state.options;
+  const { tempToken, user } = state.options;
   const displayName = twoFactorDisplayName(user);
   const version = getAppVersion();
 
@@ -449,7 +449,7 @@ function render2FAView(state: TwoFactorState): void {
           method: "POST",
           body: JSON.stringify({ tempToken, code: state.draft.code }),
         });
-        redirectAfterAuth(next || "/");
+        redirectAfterAuth(state.options.next || "/");
       } catch (err) {
         showToast(authApiErrorMessage(err, "auth.2fa.failed"));
       }
