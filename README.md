@@ -181,17 +181,19 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 
 - Authentication & 2FA: TOTP supported when `SCRUMBOY_ENCRYPTION_KEY` is set.
 
-- Audit trail: append-only `audit_events` table; todo/member/project/link actions logged (see `docs/AUDIT_TRAIL.md`).
+- Audit trail: append-only `audit_events` table; todo/member/project/link actions logged (see [docs/audit_trail.md](docs/audit_trail.md)).
 
 - Backup: export/import JSON; merge or replace; scope full or single project (see store backup logic).
 
 - PWA: Excellent UX for mobile users.
 
+- Multi-language UI: English, Deutsch, Français, and Português (Brasil). The app can infer language from the browser or you can switch it in `Settings -> Language`. The pseudo-locale is reserved for localhost/dev QA.
+
 - Anonymous shareable boards can be created in both Full & Anonymous deployments.
 
-- VoiceFlow - deterministic voice commands (see `docs/VOICEFLOW.md`).
+- VoiceFlow - deterministic voice commands (see [docs/voiceflow.md](docs/voiceflow.md)).
 
-- Sticky-Note Wall - per-project scratchpad of draggable sticky notes on the board (see `docs/WALL.md`).
+- Sticky-Note Wall - per-project scratchpad of draggable sticky notes on the board (see [docs/wall.md](docs/wall.md)).
 
 - Todo notes Markdown preview (optional) - **markdown** / **preview** tabs in the todo Notes field; optional Mermaid diagrams in fenced ` ```mermaid ` blocks in preview only (see `FAQ.md`, `docs/markdown&mermaid.md`).
 
@@ -403,8 +405,8 @@ Invariants (e.g. canonical URL `/{slug}`, no UI links to `/p/{id}`) are enforced
 
 - **MCP (HTTP tools + JSON-RPC):** [`docs/mcp.md`](docs/mcp.md) - tool catalog, auth, legacy vs `/mcp/rpc`, examples (agents & automation). See also [`API.md`](API.md) for exhaustive MCP HTTP detail.
 - **PWA / Web Push (VAPID):** [`docs/pwa.md`](docs/pwa.md) - keys, subscriber contact, post-login auto-subscribe when VAPID is configured, Settings opt-out, tradeoffs.
-- **Roles and permissions:** `docs/ROLES_AND_PERMISSIONS.md` - project roles, backend authorization, anonymous boards.
-- **Audit trail:** `docs/AUDIT_TRAIL.md` - action vocabulary, event model, integration points.
+- **Roles and permissions:** [`docs/roles_and_permissions.md`](docs/roles_and_permissions.md) - project roles, backend authorization, anonymous boards.
+- **Audit trail:** [`docs/audit_trail.md`](docs/audit_trail.md) - action vocabulary, event model, integration points.
 
 ---
 
