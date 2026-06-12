@@ -624,6 +624,55 @@ describe("auth view i18n", () => {
     expect(document.getElementById("authSsoBtn")?.getAttribute("href")).not.toContain("oidc_error");
   });
 
+  it("uses the sanitized explicit next for bootstrap, login, and 2FA redirects after OIDC cleanup", async () => {
+    await setupI18n("en");
+    const auth = await import("./auth.js");
+    const sanitizedNext = "/projects?tab=mine";
+    const explicitNext = `${sanitizedNext}&oidc_error=state_invalid`;
+
+    window.history.replaceState({}, "", "/auth?oidc_error=state_invalid");
+    apiFetchMock.mockResolvedValueOnce({});
+    auth.renderAuth({ next: explicitNext, bootstrap: true, oidcEnabled: true, localAuthEnabled: true });
+    (document.getElementById("authName") as HTMLInputElement).value = "Admin";
+    (document.getElementById("authEmail") as HTMLInputElement).value = "admin@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "secret";
+    document.getElementById("bootstrapBtn")?.dispatchEvent(new Event("click", { bubbles: true }));
+    await flushPromises();
+    expect(redirectAfterAuthMock).toHaveBeenLastCalledWith(sanitizedNext);
+
+    document.body.innerHTML = "";
+    redirectAfterAuthMock.mockReset();
+    apiFetchMock.mockReset();
+    window.history.replaceState({}, "", "/auth?oidc_error=state_invalid");
+    apiFetchMock.mockResolvedValueOnce({});
+    auth.renderAuth({ next: explicitNext, oidcEnabled: true, localAuthEnabled: true });
+    (document.getElementById("authEmail") as HTMLInputElement).value = "user@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "password";
+    document.getElementById("authForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+    expect(redirectAfterAuthMock).toHaveBeenLastCalledWith(sanitizedNext);
+
+    document.body.innerHTML = "";
+    redirectAfterAuthMock.mockReset();
+    apiFetchMock.mockReset();
+    window.history.replaceState({}, "", "/auth?oidc_error=state_invalid");
+    apiFetchMock.mockResolvedValueOnce({
+      requires2fa: true,
+      tempToken: "temp-token",
+      user: { id: 7, email: "user@example.com" },
+    });
+    apiFetchMock.mockResolvedValueOnce({});
+    auth.renderAuth({ next: explicitNext, oidcEnabled: true, localAuthEnabled: true });
+    (document.getElementById("authEmail") as HTMLInputElement).value = "user@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "password";
+    document.getElementById("authForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+    (document.getElementById("auth2FACode") as HTMLInputElement).value = "123456";
+    document.getElementById("auth2FAForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+    expect(redirectAfterAuthMock).toHaveBeenLastCalledWith(sanitizedNext);
+  });
+
   it("binds one auth locale listener across repeated auth renders and transitions", async () => {
     const i18n = await import("../i18n/index.js");
     await i18n.initI18n({ locale: "en", loadLocale: loader() });
