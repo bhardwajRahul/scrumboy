@@ -1,8 +1,10 @@
-# i18n effort — remaining work after Phase 4
+# i18n effort — remaining work after Phase 4 (historical snapshot)
 
 **Date:** 2026-06-11  
 **Scope:** Frontend web app (`internal/httpapi/web`)  
 **Catalog:** ~450 keys in `modules/i18n/locales/en.json` (parity across en, de, fr, pt, pseudo via `npm run verify:i18n`)
+
+> Historical note: this backlog snapshot predates the shipped `3.18.0`+ sweep. Many items listed here as remaining are now complete, including public `fr` / `pt` locales, auth, wall, profile/users/backup settings, and broader Settings localization. The remaining sections are preserved as implementation history and intentionally describe work that has since moved. Use current code/tests and `CHANGELOG.md` `3.18.0`+ as the source of truth.
 
 ---
 

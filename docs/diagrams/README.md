@@ -44,7 +44,7 @@ The viewer ports Scrumboy's semantic edge coloring (`mermaid-semantic-edges.js` 
 | [scrumboy_board_kanban.md](scrumboy_board_kanban.md) | Board REST, drag-drop, workflows |
 | [scrumboy_realtime_events.md](scrumboy_realtime_events.md) | Eventbus, SSE, webhooks, push |
 | [scrumboy_mcp_agora.md](scrumboy_mcp_agora.md) | Optional MCP and Agora automation |
-| [scrumboy_voiceflow.md](scrumboy_voiceflow.md) | Optional browser speech commands |
+| [scrumboy_voiceflow.md](scrumboy_voiceflow.md) | Speech commands; UI localized, grammar English-centric |
 | [scrumboy_wall_canvas.md](scrumboy_wall_canvas.md) | Scrumbaby wall canvas |
 | [scrumboy_backup_import.md](scrumboy_backup_import.md) | Backup JSON and Trello import |
-| [scrumboy_frontend_spa.md](scrumboy_frontend_spa.md) | SPA router, state, views |
+| [scrumboy_frontend_spa.md](scrumboy_frontend_spa.md) | SPA router, state, locale runtime |

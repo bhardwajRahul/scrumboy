@@ -2,6 +2,13 @@
 
 Voice commands are project-scoped. Everything you say applies to the project you are currently viewing.
 
+## Locale boundary
+
+* The surrounding Scrumboy UI follows the app locale, including the `Settings -> Customization -> VoiceFlow` toggle and nearby board chrome.
+* VoiceFlow command parsing, built-in status aliases, spoken confirmations, and spoken disambiguation words remain English-centric today.
+* In **Hands-Free** mode, confirmation words are still **`yes`** and **`no`**, and ambiguous-target choices are still **`one`**, **`two`**, and **`three`**.
+* If you use Scrumboy in a non-English UI, **Safe-Mode** is the safer option because the command grammar does not switch with the app locale yet.
+
 ## Basic Rules
 
 * “story” and “todo” mean the same thing
