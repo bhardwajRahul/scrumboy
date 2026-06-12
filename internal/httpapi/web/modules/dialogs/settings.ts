@@ -507,21 +507,26 @@ function ensureSettingsLocaleListener(): void {
  * Make a Settings-owned dynamic dialog locale-safe: localizes its static
  * `data-i18n-*` chrome now and re-applies it on every locale change while the
  * dialog is open, without rebuilding the dialog or resetting typed fields.
- * Returns a cleanup that the dialog's close handler must call so the listener
- * is removed exactly once (no duplication, no leaks).
+ * Returns an idempotent cleanup that manual close handlers can call; native
+ * dialog `cancel` and `close` also release the listener automatically.
  */
-function bindDialogLocale(dialog: HTMLElement, sync?: () => void): () => void {
+function bindDialogLocale(dialog: HTMLDialogElement, sync?: () => void): () => void {
   let removed = false;
-  const remove = () => {
+  const handleNativeCleanup: EventListener = () => {
+    release();
+  };
+  const release = () => {
     if (removed) return;
     removed = true;
     document.removeEventListener(I18N_LOCALE_CHANGED, listener);
+    dialog.removeEventListener("cancel", handleNativeCleanup);
+    dialog.removeEventListener("close", handleNativeCleanup);
   };
   const listener: EventListener = () => {
     // Self-clean if the dialog was detached without calling the cleanup
     // (defensive: avoids leaked listeners hydrating stale nodes).
     if (!dialog.isConnected) {
-      remove();
+      release();
       return;
     }
     hydrateI18n(dialog);
@@ -531,7 +536,9 @@ function bindDialogLocale(dialog: HTMLElement, sync?: () => void): () => void {
   hydrateI18n(dialog);
   sync?.();
   document.addEventListener(I18N_LOCALE_CHANGED, listener);
-  return remove;
+  dialog.addEventListener("cancel", handleNativeCleanup);
+  dialog.addEventListener("close", handleNativeCleanup);
+  return release;
 }
 
 /**
