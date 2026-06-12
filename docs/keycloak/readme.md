@@ -49,4 +49,4 @@ Ensure the **redirect URL** matches what is registered in the client (**`…/*`*
 
 This realm is for **local development** only (`sslRequired: none`, known test password). Do not import as-is into production.
 
-For more on Scrumboy OIDC behavior, see [OIDC.md](../OIDC.md).
+For more on Scrumboy OIDC behavior, see [oidc.md](../oidc.md).
