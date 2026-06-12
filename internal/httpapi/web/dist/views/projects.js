@@ -1,19 +1,21 @@
 import { app, settingsDialog } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
 import { ingestProjectsFromApp } from '../core/notifications.js';
+import { apiErrorMessage, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
+import { temporaryBoardsNavLabelKey } from '../nav-labels.js';
 import { navigate } from '../router.js';
 import { escapeHTML, showToast, renderUserAvatar, confirmDelete, showPromptDialog } from '../utils.js';
 import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
-import { getProjectsTab, getProjectView, getUser, } from '../state/selectors.js';
+import { getProjectsTab, getProjectView, getProjects, getUser, } from '../state/selectors.js';
 import { setProjects, setProjectsTab, setProjectView, setSettingsActiveTab, } from '../state/mutations.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
-import { temporaryBoardsNavLabel } from '../nav-labels.js';
 // Symbol for idempotent listener attachment
 const BOUND_FLAG = Symbol('bound');
 // Board prefetch cache for Projects → Board navigation (hover to prefetch, click to use)
 const boardPrefetchPromises = new Map();
 const resolvedBoardBySlug = new Map();
 const PREFETCH_DELAY_MS = 250;
+let projectsI18nBound = false;
 const DEFAULT_WORKFLOW_LANES = [
     { key: "backlog", name: "Backlog", color: "#9CA3AF", position: 0, isDone: false },
     { key: "not_started", name: "Not Started", color: "#F59E0B", position: 1, isDone: false },
@@ -74,48 +76,49 @@ function insertLaneBeforeDone(lanes, name) {
 }
 function validateWorkflowLanes(lanes) {
     if (lanes.length < 2)
-        return "Workflow must have at least 2 lanes.";
+        return t("projects.workflow.validation.minLanes");
     const keyRe = /^[a-z0-9](?:[a-z0-9_]*[a-z0-9])?$/;
     const colorRe = /^#[0-9a-fA-F]{6}$/;
     let doneCount = 0;
     const seen = new Set();
     for (const lane of lanes) {
         if (!lane.name || lane.name.trim() === "")
-            return "Lane names cannot be empty.";
+            return t("projects.workflow.validation.emptyName");
         if (!keyRe.test(lane.key))
-            return "Lane keys must be snake_case (letters, numbers, underscore).";
+            return t("projects.workflow.validation.invalidKey");
         if (!colorRe.test(lane.color || ""))
-            return "Lane colors must be valid hex colors.";
+            return t("projects.workflow.validation.invalidColor");
         if (seen.has(lane.key))
-            return "Duplicate lane keys. Rename lanes to fix.";
+            return t("projects.workflow.validation.duplicateKey");
         seen.add(lane.key);
         if (lane.isDone)
             doneCount++;
     }
     if (doneCount !== 1)
-        return "Exactly one lane must be marked as Done.";
+        return t("projects.workflow.validation.exactlyOneDone");
     return null;
 }
 function renderWorkflowEditorBody(lanes, listId = "workflowModalLaneList", ghostId = "workflowModalGhostInput") {
+    const addLaneAriaLabel = escapeHTML(t("projects.workflow.addLaneAriaLabel"));
     return `
-    <div class="muted" style="margin-bottom: 8px;">Configure lanes before creating the project.</div>
+    <div class="muted" style="margin-bottom: 8px;" data-i18n-text="projects.workflow.helper">${escapeHTML(t("projects.workflow.helper"))}</div>
     <div id="${escapeHTML(listId)}">
       ${lanes.map((lane) => `
         <div class="row" style="margin-bottom:6px;" data-lane-key="${escapeHTML(lane.key)}">
-          <button type="button" class="btn btn--ghost btn--small workflow-lane__handle" aria-label="Reorder lane">↕</button>
+          <button type="button" class="btn btn--ghost btn--small workflow-lane__handle" aria-label="${escapeHTML(t("projects.workflow.reorderLane"))}">↕</button>
           <input class="input" data-lane-name="${escapeHTML(lane.key)}" value="${escapeHTML(lane.name)}" maxlength="50" />
-          <input type="color" class="settings-color-picker" data-lane-color="${escapeHTML(lane.key)}" value="${escapeHTML(lane.color || "#64748b")}" aria-label="Lane color for ${escapeHTML(lane.name)}" />
+          <input type="color" class="settings-color-picker" data-lane-color="${escapeHTML(lane.key)}" value="${escapeHTML(lane.color || "#64748b")}" aria-label="${escapeHTML(t("projects.workflow.laneColor", { name: lane.name }))}" />
           <label class="muted workflow-done-label-wrap" style="display:flex; align-items:center; gap:4px;"${titleAttr(FIELD_TOOLTIPS.doneLane)}>
-            <input type="radio" name="workflowModalDoneLane" data-lane-done="${escapeHTML(lane.key)}" ${lane.isDone ? "checked" : ""} aria-label="Set ${escapeHTML(lane.name)} as done lane" />
-            <span class="workflow-done-label">Done</span>
+            <input type="radio" name="workflowModalDoneLane" data-lane-done="${escapeHTML(lane.key)}" ${lane.isDone ? "checked" : ""} aria-label="${escapeHTML(t("projects.workflow.setDoneLane", { name: lane.name }))}" />
+            <span class="workflow-done-label" data-i18n-text="projects.workflow.doneLabel">${escapeHTML(t("projects.workflow.doneLabel"))}</span>
           </label>
           <button class="btn btn--ghost btn--small" type="button" data-lane-remove="${escapeHTML(lane.key)}" ${lanes.length <= 2 || lane.isDone ? "disabled" : ""}>×</button>
         </div>
       `).join("")}
     </div>
     <div class="row" style="gap:8px;align-items:center;">
-      <input class="input" id="${escapeHTML(ghostId)}" placeholder="Add lane..." style="flex:1;min-width:0;"${titleAttr(FIELD_TOOLTIPS.workflowAddLane)} />
-      <button type="button" class="btn btn--small" id="workflowModalGhostAdd" aria-label="Add lane">Add</button>
+      <input class="input" id="${escapeHTML(ghostId)}" placeholder="${escapeHTML(t("projects.workflow.addLanePlaceholder"))}" data-i18n-placeholder="projects.workflow.addLanePlaceholder" style="flex:1;min-width:0;"${titleAttr(FIELD_TOOLTIPS.workflowAddLane)} />
+      <button type="button" class="btn btn--small" id="workflowModalGhostAdd" aria-label="${addLaneAriaLabel}" data-i18n-aria-label="projects.workflow.addLaneAriaLabel" data-i18n-text="projects.workflow.addLaneAction">${escapeHTML(t("projects.workflow.addLaneAction"))}</button>
     </div>
   `;
 }
@@ -245,12 +248,12 @@ function openWorkflowSetupModal(projectName) {
     dialog.innerHTML = `
     <div class="dialog__form">
       <div class="dialog__header">
-        <div class="dialog__title">Customize Workflow</div>
+        <div class="dialog__title" data-i18n-text="projects.workflow.title">${escapeHTML(t("projects.workflow.title"))}</div>
       </div>
       <div class="dialog__content" id="workflowModalContent"></div>
       <div class="dialog__footer">
-        <button type="button" class="btn btn--ghost" id="workflowModalCancel">Cancel</button>
-        <button type="button" class="btn" id="workflowModalConfirm">Confirm</button>
+        <button type="button" class="btn btn--ghost" id="workflowModalCancel" data-i18n-text="projects.workflow.cancelAction">${escapeHTML(t("projects.workflow.cancelAction"))}</button>
+        <button type="button" class="btn" id="workflowModalConfirm" data-i18n-text="projects.workflow.confirmAction">${escapeHTML(t("projects.workflow.confirmAction"))}</button>
       </div>
     </div>
   `;
@@ -300,7 +303,8 @@ function openWorkflowSetupModal(projectName) {
                 isDone: l.isDone,
             })),
         };
-        confirmBtn.textContent = "Creating...";
+        confirmBtn.textContent = t("projects.workflow.creating");
+        confirmBtn.setAttribute("data-i18n-text", "projects.workflow.creating");
         confirmBtn.disabled = true;
         try {
             const p = await apiFetch("/api/projects", { method: "POST", body: JSON.stringify(payload) });
@@ -309,8 +313,9 @@ function openWorkflowSetupModal(projectName) {
             navigate(`/${p.slug}`);
         }
         catch (err) {
-            showToast(err.message);
-            confirmBtn.textContent = "Confirm";
+            showToast(apiErrorMessage(err, { fallbackKey: "projects.create.failed" }));
+            confirmBtn.textContent = t("projects.workflow.confirmAction");
+            confirmBtn.setAttribute("data-i18n-text", "projects.workflow.confirmAction");
             confirmBtn.disabled = false;
         }
     });
@@ -330,40 +335,43 @@ async function getRenderAuth() {
         return window.renderAuth || renderAuth;
     }
 }
-export async function renderProjects() {
-    let projects;
-    try {
-        projects = await apiFetch("/api/projects");
-    }
-    catch (err) {
-        if (err && err.status === 401) {
-            const renderAuth = await getRenderAuth();
-            renderAuth({ next: "/" });
+function ensureProjectsI18nBinding() {
+    if (projectsI18nBound)
+        return;
+    projectsI18nBound = true;
+    document.addEventListener(I18N_LOCALE_CHANGED, () => {
+        if (!document.querySelector(".page--projects"))
             return;
-        }
-        throw err;
-    }
-    // Cache for settings modal: in full mode tags are global but the legacy tag APIs require a project id.
-    setProjects(projects);
-    ingestProjectsFromApp(projects);
+        const projects = getProjects();
+        if (!Array.isArray(projects))
+            return;
+        renderProjectsContent(projects);
+    });
+}
+function renderProjectsContent(projects) {
     if (!getProjectsTab()) {
         setProjectsTab(localStorage.getItem("projectsTab") || "projects");
     }
     const durableProjects = projects.filter((p) => !p.expiresAt);
     const temporaryBoards = projects.filter((p) => !!p.expiresAt);
     const activeList = getProjectsTab() === "temporary" ? temporaryBoards : durableProjects;
-    const emptyMsg = getProjectsTab() === "temporary" ? "No temporary boards yet." : "No projects yet.";
-    const temporaryLabel = temporaryBoardsNavLabel();
+    const emptyKey = getProjectsTab() === "temporary" ? "projects.empty.temporary" : "projects.empty.projects";
+    const createButtonKey = getProjectsTab() === "temporary"
+        ? "projects.actions.createTemporaryBoard"
+        : "projects.actions.create";
+    const temporaryLabelKey = temporaryBoardsNavLabelKey();
     const tabsHTML = `
     <div class="chips" style="margin-top: 10px; margin-bottom: 12px;">
-      <button class="chip" id="dashboardTabBtn" type="button">
-        Dashboard
+      <button class="chip" id="dashboardTabBtn" type="button" data-i18n-text="projects.tabs.dashboard">
+        ${escapeHTML(t("projects.tabs.dashboard"))}
       </button>
       <button class="chip ${getProjectsTab() === "projects" ? "chip--active" : ""}" data-projects-tab="projects">
-        Projects <span class="chip__count">${durableProjects.length}</span>
+        <span class="projects-tab__label" data-i18n-text="projects.tabs.projects">${escapeHTML(t("projects.tabs.projects"))}</span>
+        <span class="chip__count">${durableProjects.length}</span>
       </button>
       <button class="chip ${getProjectsTab() === "temporary" ? "chip--active" : ""}" data-projects-tab="temporary">
-        ${temporaryLabel} <span class="chip__count">${temporaryBoards.length}</span>
+        <span class="projects-tab__label" data-i18n-text="${temporaryLabelKey}">${escapeHTML(t(temporaryLabelKey))}</span>
+        <span class="chip__count">${temporaryBoards.length}</span>
       </button>
     </div>
   `;
@@ -374,7 +382,7 @@ export async function renderProjects() {
           <img src="/scrumboytext.png" alt="Scrumboy" class="brand-text" />
         </div>
         <div class="spacer"></div>
-        ${!getUser() ? `<button class="btn btn--ghost" id="settingsBtn" aria-label="Settings">
+        ${!getUser() ? `<button class="btn btn--ghost" id="settingsBtn" aria-label="${escapeHTML(t("projects.actions.settings"))}" data-i18n-aria-label="projects.actions.settings">
           <span class="hamburger">☰</span>
         </button>` : ''}
         ${renderUserAvatar(getUser())}
@@ -383,30 +391,30 @@ export async function renderProjects() {
       <div class="container">
         <div class="panel">
           <div class="panel__header">
-          <div class="panel__title">Projects</div>
+          <div class="panel__title" data-i18n-text="projects.title">${escapeHTML(t("projects.title"))}</div>
             <div class="view-toggle">
-              <button class="btn btn--ghost btn--small view-toggle-btn ${getProjectView() === 'list' ? 'view-toggle-btn--active' : ''}" data-view="list" title="List view">
+              <button class="btn btn--ghost btn--small view-toggle-btn ${getProjectView() === 'list' ? 'view-toggle-btn--active' : ''}" data-view="list" title="${escapeHTML(t("projects.view.list"))}" data-i18n-title="projects.view.list">
                 <span>☰</span>
               </button>
-              <button class="btn btn--ghost btn--small view-toggle-btn ${getProjectView() === 'grid' ? 'view-toggle-btn--active' : ''}" data-view="grid" title="Grid view">
+              <button class="btn btn--ghost btn--small view-toggle-btn ${getProjectView() === 'grid' ? 'view-toggle-btn--active' : ''}" data-view="grid" title="${escapeHTML(t("projects.view.grid"))}" data-i18n-title="projects.view.grid">
                 <span>⊞</span>
               </button>
             </div>
           </div>
           ${tabsHTML}
           <form id="createProjectForm" class="row">
-            ${getProjectsTab() === "temporary" ? `<div class="spacer"></div>` : `<input class="input" id="projectName" placeholder="New project name" maxlength="200" required />`}
-            <button class="btn" type="submit">${getProjectsTab() === "temporary" ? "Create Temporary Board" : "Create"}</button>
+            ${getProjectsTab() === "temporary" ? `<div class="spacer"></div>` : `<input class="input" id="projectName" placeholder="${escapeHTML(t("projects.fields.namePlaceholder"))}" data-i18n-placeholder="projects.fields.namePlaceholder" maxlength="200" required />`}
+            <button class="btn" type="submit" data-i18n-text="${createButtonKey}">${escapeHTML(t(createButtonKey))}</button>
           </form>
           <div class="${getProjectView() === 'grid' ? 'project-grid' : 'list'}" id="projectList">
-            ${activeList.length === 0 ? `<div class="muted">${escapeHTML(emptyMsg)}</div>` : ""}
+            ${activeList.length === 0 ? `<div class="muted" data-i18n-text="${emptyKey}">${escapeHTML(t(emptyKey))}</div>` : ""}
             ${activeList
         .map((p) => {
         const displayName = p.expiresAt ? `${p.name} (${p.slug})` : p.name;
         const isMaintainer = (p.role || "").toLowerCase() === "maintainer";
         const maintainerActions = isMaintainer ? `
-                    <button class="btn btn--ghost btn--small" data-rename="${p.id}" title="Rename project">Rename</button>
-                    <button class="btn btn--danger btn--small" data-del="${p.id}">Delete</button>` : "";
+                    <button class="btn btn--ghost btn--small" data-rename="${p.id}" title="${escapeHTML(t("projects.actions.renameProject"))}" data-i18n-title="projects.actions.renameProject" data-i18n-text="projects.actions.rename">${escapeHTML(t("projects.actions.rename"))}</button>
+                    <button class="btn btn--danger btn--small" data-del="${p.id}" data-i18n-text="projects.actions.delete">${escapeHTML(t("projects.actions.delete"))}</button>` : "";
         return getProjectView() === 'grid' ? `
               <div class="project-grid__item">
                 <button class="project-grid__image-btn" data-open="${p.slug}" title="${escapeHTML(displayName)}">
@@ -479,7 +487,7 @@ export async function renderProjects() {
             const projectNameEl = document.getElementById("projectName");
             const name = (projectNameEl?.value || "").trim();
             if (!name) {
-                showToast("Project name is required.");
+                showToast(t("projects.validation.nameRequired"));
                 return;
             }
             openWorkflowSetupModal(name);
@@ -542,11 +550,11 @@ export async function renderProjects() {
                 if (!project)
                     return;
                 const nextName = await showPromptDialog({
-                    title: "Rename Project",
-                    label: "Project Name",
+                    title: t("projects.rename.title"),
+                    label: t("projects.rename.label"),
                     initialValue: project.name,
-                    confirmLabel: "Rename",
-                    placeholder: "Project name",
+                    confirmLabel: t("projects.rename.confirmAction"),
+                    placeholder: t("projects.rename.placeholder"),
                     maxLength: 200,
                 });
                 const newName = nextName?.trim() ?? "";
@@ -558,10 +566,10 @@ export async function renderProjects() {
                         body: JSON.stringify({ name: newName }),
                     });
                     await renderProjects();
-                    showToast("Project renamed");
+                    showToast(t("projects.rename.success"));
                 }
                 catch (err) {
-                    showToast(err.message);
+                    showToast(apiErrorMessage(err, { fallbackKey: "projects.rename.failed" }));
                 }
             });
             el[BOUND_FLAG] = true;
@@ -572,14 +580,14 @@ export async function renderProjects() {
             el.addEventListener("click", async (e) => {
                 e.stopPropagation(); // Prevent navigation when clicking delete
                 const id = el.getAttribute("data-del");
-                if (!await confirmDelete("Delete this project and all its todos?"))
+                if (!await confirmDelete(t("projects.delete.confirmMessage")))
                     return;
                 try {
                     await apiFetch(`/api/projects/${id}`, { method: "DELETE" });
                     await renderProjects();
                 }
                 catch (err) {
-                    showToast(err.message);
+                    showToast(apiErrorMessage(err, { fallbackKey: "projects.delete.failed" }));
                 }
             });
             el[BOUND_FLAG] = true;
@@ -625,4 +633,23 @@ export async function renderProjects() {
         });
         userAvatarBtn[BOUND_FLAG] = true;
     }
+}
+export async function renderProjects() {
+    ensureProjectsI18nBinding();
+    let projects;
+    try {
+        projects = await apiFetch("/api/projects");
+    }
+    catch (err) {
+        if (err && err.status === 401) {
+            const renderAuth = await getRenderAuth();
+            renderAuth({ next: "/" });
+            return;
+        }
+        throw err;
+    }
+    // Cache for settings modal: in full mode tags are global but the legacy tag APIs require a project id.
+    setProjects(projects);
+    ingestProjectsFromApp(projects);
+    renderProjectsContent(projects);
 }

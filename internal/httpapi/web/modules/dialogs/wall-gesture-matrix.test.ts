@@ -16,6 +16,7 @@ import {
   dispatchPointer,
   flushPromises,
   flushRaf,
+  initWallTestI18n,
   installDialogPolyfill,
   makeNote,
   makeWallDoc,
@@ -23,6 +24,7 @@ import {
   setupWallDom,
   type TestNote,
 } from "./wall-test-harness.js";
+import enCatalog from "../i18n/locales/en.json";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const confirmDeleteMock = vi.hoisted(() => vi.fn());
@@ -147,8 +149,9 @@ function getNoteEl(id: string): HTMLElement {
 }
 
 describe("wall gesture × modality regression matrix", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
+    await initWallTestI18n({ en: enCatalog as Record<string, string> });
     installDialogPolyfill();
     setupWallDom({ wallDialogEl, wallSurfaceEl, closeWallBtnEl, wallTrashEl });
     apiFetchMock.mockReset();

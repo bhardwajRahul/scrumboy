@@ -8,14 +8,19 @@
 // DOM is torn down on every exit path.
 
 import { wallDialog } from "../dom/elements.js";
+import { t } from "../i18n/index.js";
 
 export type WallNoteMenuChoice = "create-todo" | "delete";
 
 export interface WallNoteMenuOptions {
   /** Hides the "Create Todo from Note" item when false. Defaults to true. */
   showCreateTodo?: boolean;
-  /** Overrides the Delete item's label. Defaults to "Delete". */
-  deleteLabel?: string;
+  /**
+   * When set (group delete), the Delete item shows the localized
+   * "Delete {count} notes" label. Omitted/undefined uses the single-note
+   * "Delete" label.
+   */
+  deleteCount?: number;
 }
 
 export function openWallNoteContextMenu(
@@ -27,7 +32,8 @@ export function openWallNoteContextMenu(
   return new Promise<WallNoteMenuChoice | null>((resolve) => {
     const host = (wallDialog as HTMLElement | null) ?? document.body;
     const showCreateTodo = options?.showCreateTodo !== false;
-    const deleteLabel = options?.deleteLabel ?? "Delete";
+    const deleteCount = options?.deleteCount;
+    const isGroupDelete = typeof deleteCount === "number" && deleteCount > 1;
 
     const menu = document.createElement("div");
     menu.className = "context-menu wall-note-context-menu";
@@ -41,7 +47,8 @@ export function openWallNoteContextMenu(
       createBtn.className = "context-menu__item";
       createBtn.setAttribute("role", "menuitem");
       createBtn.dataset.action = "create-todo";
-      createBtn.textContent = "Create Todo from Note";
+      createBtn.textContent = t("wall.menu.createTodoFromNote");
+      createBtn.setAttribute("data-i18n-text", "wall.menu.createTodoFromNote");
       menu.appendChild(createBtn);
     }
 
@@ -50,7 +57,15 @@ export function openWallNoteContextMenu(
     deleteBtn.className = "context-menu__item";
     deleteBtn.setAttribute("role", "menuitem");
     deleteBtn.dataset.action = "delete";
-    deleteBtn.textContent = deleteLabel;
+    if (isGroupDelete) {
+      // Count-interpolated label cannot be hydrated by data-i18n-text; stamp
+      // the raw count so the wall locale-sync helper can re-resolve it in place.
+      deleteBtn.textContent = t("wall.menu.deleteCount", { count: deleteCount });
+      deleteBtn.dataset.i18nCount = String(deleteCount);
+    } else {
+      deleteBtn.textContent = t("common.delete");
+      deleteBtn.setAttribute("data-i18n-text", "common.delete");
+    }
 
     menu.appendChild(deleteBtn);
 

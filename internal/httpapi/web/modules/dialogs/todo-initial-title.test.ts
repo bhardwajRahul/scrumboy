@@ -189,4 +189,74 @@ describe("openTodoDialog initialTitle seeding", () => {
 
     expect(input.value).toBe("");
   });
+
+  it("renders unknown sprint states as raw text in the sprint select", async () => {
+    installTodoDom();
+    const showModal = vi.fn();
+    (document.getElementById("todoDialog") as HTMLDialogElement).showModal = showModal;
+
+    vi.doMock("../api.js", () => ({
+      apiFetch: vi.fn(async (path: string) => {
+        if (path.endsWith("/tags")) return [];
+        if (path.endsWith("/sprints")) {
+          return { sprints: [{ id: 7, name: "Sprint 7", state: "PAUSED" }] };
+        }
+        return [];
+      }),
+    }));
+    vi.doMock("../state/selectors.js", () => ({
+      getBoard: () => ({ columnOrder: [{ key: "backlog", name: "Backlog" }] }),
+      getBoardMembers: () => [],
+      getMarkdownNotesEnabled: () => false,
+      getMermaidNotesEnabled: () => false,
+      getSlug: () => "demo-board",
+      getTagColors: () => ({}),
+      getUser: () => ({ id: 1, name: "Ada" }),
+    }));
+    vi.doMock("../state/mutations.js", () => ({
+      setAvailableTags: vi.fn(),
+      setAvailableTagsMap: vi.fn(),
+      setEditingTodo: vi.fn(),
+      setTagColors: vi.fn(),
+    }));
+    vi.doMock("../utils.js", () => ({
+      escapeHTML: (s: string) => s,
+      isAnonymousBoard: () => false,
+      showConfirmDialog: vi.fn(),
+      showToast: vi.fn(),
+    }));
+    vi.doMock("../sprints.js", () => ({ normalizeSprints: (res: { sprints?: unknown[] } | null) => res?.sprints ?? [] }));
+    vi.doMock("./todo-links.js", () => ({
+      bindShareTodoButton: vi.fn(),
+      bindTodoDialogLinkLifecycle: vi.fn(),
+      initializeTodoDialogLinks: vi.fn(),
+      resetTodoDialogLinks: vi.fn(),
+    }));
+    vi.doMock("./todo-permissions.js", () => ({
+      computeTodoDialogPermissions: () => ({
+        canSubmitTodo: true,
+        canDeleteTodo: false,
+        canEditAssignment: true,
+        canChangeEstimation: true,
+        canEditTags: true,
+        canEditNotes: true,
+        canEditTitle: true,
+        canEditStatus: true,
+      }),
+      setTodoFormPermissions: vi.fn(),
+    }));
+    vi.doMock("./todo-tags.js", () => ({
+      getTagsFromChips: () => [],
+      renderTagsChips: vi.fn(),
+      resetTodoTagAutocompleteBindings: vi.fn(),
+      setupTagAutocomplete: vi.fn(),
+    }));
+
+    const { openTodoDialog } = await import("./todo.js");
+    await openTodoDialog({ mode: "create", role: "maintainer" });
+
+    const sprintSelect = document.getElementById("todoSprint") as HTMLSelectElement;
+    expect(Array.from(sprintSelect.options).map((option) => option.textContent)).toContain("Sprint 7 (PAUSED)");
+    expect(showModal).toHaveBeenCalled();
+  });
 });

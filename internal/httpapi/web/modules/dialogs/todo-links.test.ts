@@ -68,6 +68,24 @@ function renderLinksShell(): void {
   `;
 }
 
+const i18nCatalogs = {
+  en: {
+    "errors.NOT_FOUND": "Not found",
+    "todo.links.remove": "Remove link",
+    "todo.links.removeFailed": "Failed to remove link",
+  },
+  de: {
+    "errors.NOT_FOUND": "Nicht gefunden",
+    "todo.links.remove": "Link entfernen",
+    "todo.links.removeFailed": "Link konnte nicht entfernt werden",
+  },
+  pseudo: {
+    "errors.NOT_FOUND": "[!! Not found !!]",
+    "todo.links.remove": "[!! Remove link !!]",
+    "todo.links.removeFailed": "[!! Failed to remove link !!]",
+  },
+};
+
 async function flushPromises(count = 8): Promise<void> {
   for (let i = 0; i < count; i++) {
     await Promise.resolve();
@@ -91,7 +109,9 @@ describe('todo-links', () => {
     showToastMock.mockClear();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const i18n = await import("../i18n/index.js");
+    i18n.resetI18nForTests();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.resetModules();
@@ -311,6 +331,45 @@ describe('todo-links', () => {
     await flushPromises();
 
     expect(showToastMock).toHaveBeenCalledWith('Failed to remove link');
+  });
+
+  it('localizes code-based link removal failures instead of showing the raw English message', async () => {
+    const i18n = await import("../i18n/index.js");
+    await i18n.initI18n({
+      locale: "de",
+      loadLocale: vi.fn(async (locale: "en" | "de" | "pseudo") => i18nCatalogs[locale]),
+    });
+
+    apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/board/alpha/todos/5/links' && !init) {
+        return {
+          outbound: [{ localId: 7, title: 'Outbound' }],
+          inbound: [],
+        };
+      }
+      if (url === '/api/board/alpha/todos/5/links/7' && init?.method === 'DELETE') {
+        throw {
+          status: 404,
+          data: {
+            error: {
+              code: "NOT_FOUND",
+              message: "Failed to remove link",
+            },
+          },
+        };
+      }
+      throw new Error(`unexpected apiFetch call: ${url} ${init?.method ?? 'GET'}`);
+    });
+    const mod = await loadTodoLinksModule();
+
+    await mod.initializeTodoDialogLinks('alpha', 5);
+
+    const removeBtn = document.querySelector('[data-link-remove="7"]');
+    if (!(removeBtn instanceof HTMLElement)) throw new Error('missing localized remove button');
+    removeBtn.click();
+    await flushPromises();
+
+    expect(showToastMock).toHaveBeenCalledWith('Nicht gefunden');
   });
 
   it('clears pending search state, chips, and overlays through resetTodoDialogLinks', async () => {

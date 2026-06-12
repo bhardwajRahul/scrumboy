@@ -1,7 +1,18 @@
 import { initBulkEditDialog, openBulkEditDialog } from '../dialogs/bulk-edit.js';
+import { I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 
 let selectedTodoIds = new Set<number>();
 let bulkEditUiInitialized = false;
+
+function selectionLabel(count: number): string {
+  return count === 1
+    ? t("board.selection.single")
+    : t("board.selection.multiple", { count });
+}
+
+export function __selectionLabelForTest(count: number): string {
+  return selectionLabel(count);
+}
 
 export function getSelectedTodoIds(): Set<number> {
   return selectedTodoIds;
@@ -23,7 +34,7 @@ export function updateBulkEditBar(): void {
   const n = selectedTodoIds.size;
   if (n >= 2) {
     bar.style.display = "";
-    btn.textContent = `Edit ${n} selected`;
+    btn.textContent = selectionLabel(n);
   } else {
     bar.style.display = "none";
     btn.textContent = "";
@@ -46,6 +57,9 @@ export function ensureBulkEditUi(opts: {
   bulkEditUiInitialized = true;
   initBulkEditDialog(() => {
     clearTodoMultiSelection();
+    updateBulkEditBar();
+  });
+  document.addEventListener(I18N_LOCALE_CHANGED, () => {
     updateBulkEditBar();
   });
   const barBtn = document.getElementById("bulkEditBarBtn");

@@ -57,10 +57,13 @@ import {
   saveKeybindingOverride,
   setKeybindingsCaptureListening,
   type KeyActionId,
+  type KeyActionMeta,
 } from '../core/keybindings.js';
 import {
   requestDesktopNotificationPermission,
   getDesktopNotificationStatusDescription,
+  getDesktopNotificationStatusKind,
+  type DesktopNotificationStatusKind,
 } from '../core/assignmentNotify.js';
 import { isPushSubscribed, subscribeToPush, unsubscribeFromPush } from '../core/push.js';
 import { getVoiceFlowEnabledPreference, setVoiceFlowEnabledPreference } from '../core/voiceflow-preferences.js';
@@ -77,12 +80,17 @@ import {
   invalidateTagsCache as invalidateTagSettingsCache,
   loadTagSettingsContent,
 } from './settings-tags.js';
-import { bindSprintsTabInteractions, renderSprintsTabContent } from './settings-sprints.js';
+import { bindSprintsTabInteractions, refreshSprintDateLabels, renderSprintsTabContent } from './settings-sprints.js';
+import { getLocale, hydrateI18n, I18N_LOCALE_CHANGED, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
 
 export { invalidateTagsCache } from './settings-tags.js';
 
 // Import view functions - renderProjects is not needed here
 declare function renderProjects(): Promise<void>;
+
+type SettingsGlobal = typeof globalThis & {
+  __scrumboySettingsLocaleListener?: EventListener;
+};
 
 /** Active keybinding capture listener (settings customization); removed when starting a new capture or on abort. */
 let keybindingCaptureKeydown: ((e: KeyboardEvent) => void) | null = null;
@@ -117,6 +125,7 @@ installSettingsDialogCloseForKeybindingCaptureOnce();
 let settingsAbortController: AbortController | null = null;
 let settingsProfileRefetchController: AbortController | null = null;
 let settingsProfileRefetchVersion = 0;
+let settingsLocaleListenerBound = false;
 
 // Only one sprint row in edit mode at a time
 let burndownSprintIndex = 0;
@@ -213,6 +222,373 @@ function getTagColor(tagName: string): string | null {
   return getTagColors()[tagName] || null;
 }
 
+function getSelectedSettingsLocale(): string {
+  const currentLocale = getLocale();
+  return isPublicLocale(currentLocale) ? currentLocale : "en";
+}
+
+function getWallpaperSummaryMessageKey(mode: "off" | "color" | "image" | "builtin"): string {
+  switch (mode) {
+    case "off":
+      return "settings.customization.wallpaper.summary.off";
+    case "color":
+      return "settings.customization.wallpaper.summary.color";
+    case "builtin":
+      return "settings.customization.wallpaper.summary.builtin";
+    default:
+      return "settings.customization.wallpaper.summary.image";
+  }
+}
+
+function getDesktopNotificationStatusMessageKey(kind: DesktopNotificationStatusKind): string {
+  switch (kind) {
+    case "unsupported":
+      return "settings.customization.notifications.status.unsupported";
+    case "granted":
+      return "settings.customization.notifications.status.granted";
+    case "denied":
+      return "settings.customization.notifications.status.denied";
+    default:
+      return "settings.customization.notifications.status.default";
+  }
+}
+
+function getDesktopNotificationButtonMessageKey(kind: DesktopNotificationStatusKind): string {
+  return kind === "granted"
+    ? "settings.customization.notifications.actions.enabled"
+    : "settings.customization.notifications.actions.enable";
+}
+
+function getKeybindingActionLabel(meta: KeyActionMeta): string {
+  return t(meta.labelKey, meta.labelValues);
+}
+
+function getKeybindingActionMeta(actionId: KeyActionId): KeyActionMeta | undefined {
+  return KEY_ACTION_LIST.find((meta) => meta.id === actionId);
+}
+
+function getKeybindingCapturePrompt(actionId: KeyActionId): string {
+  const meta = getKeybindingActionMeta(actionId);
+  return t("settings.customization.keybindings.capturePrompt", {
+    action: meta ? getKeybindingActionLabel(meta) : actionId,
+  });
+}
+
+function syncSettingsDialogVersionText(): void {
+  const versionEl = document.getElementById("settingsDialogVersion");
+  if (!versionEl) return;
+  const versionText = getAppVersion();
+  versionEl.textContent = versionText ? ` v${versionText}` : "";
+}
+
+function syncSettingsLocaleSelectOptions(): void {
+  const select = document.getElementById("settingsLocaleSelect") as HTMLSelectElement | null;
+  if (!select) return;
+  const options = publicLocaleOptions();
+  const needsRebuild =
+    select.options.length !== options.length ||
+    options.some((option, index) => {
+      const existing = select.options[index];
+      return !existing || existing.value !== option.id || existing.textContent !== option.label;
+    });
+
+  if (needsRebuild) {
+    select.innerHTML = options
+      .map((option) => `<option value="${escapeHTML(option.id)}">${escapeHTML(option.label)}</option>`)
+      .join("");
+  }
+  select.value = getSelectedSettingsLocale();
+}
+
+function syncWallpaperLocaleState(): void {
+  const wallpaperState = getStoredWallpaperState();
+  const summaryEl = document.getElementById("wallpaperSummary");
+  if (summaryEl) {
+    summaryEl.setAttribute("data-i18n-text", getWallpaperSummaryMessageKey(wallpaperState.mode));
+  }
+  const uploadBtn = document.getElementById("wallpaperUploadBtn");
+  if (uploadBtn) {
+    uploadBtn.setAttribute(
+      "data-i18n-text",
+      wallpaperState.mode === "image"
+        ? "settings.customization.wallpaper.actions.replace"
+        : "settings.customization.wallpaper.actions.upload",
+    );
+  }
+}
+
+function syncDesktopNotificationLocaleState(): void {
+  const statusKind = getDesktopNotificationStatusKind();
+  const statusEl = document.getElementById("desktopNotifyStatus");
+  if (statusEl) {
+    statusEl.setAttribute("data-i18n-text", getDesktopNotificationStatusMessageKey(statusKind));
+  }
+  const buttonEl = document.getElementById("desktopNotifyEnableBtn");
+  if (buttonEl) {
+    buttonEl.setAttribute("data-i18n-text", getDesktopNotificationButtonMessageKey(statusKind));
+  }
+}
+
+function syncKeybindingLabelTexts(): void {
+  document.querySelectorAll<HTMLElement>(".keybinding-row__label").forEach((labelEl) => {
+    const actionId = labelEl.getAttribute("data-keybinding-action-id") as KeyActionId | null;
+    if (!actionId) return;
+    const meta = getKeybindingActionMeta(actionId);
+    if (!meta) return;
+    labelEl.textContent = getKeybindingActionLabel(meta);
+  });
+}
+
+function syncKeybindingCapturePrompt(): void {
+  const captureBtn = document.querySelector<HTMLElement>(".keybinding-capture--listening[data-keybinding-action]");
+  if (!captureBtn) return;
+  const actionId = captureBtn.getAttribute("data-keybinding-action") as KeyActionId | null;
+  if (!actionId) return;
+  captureBtn.textContent = getKeybindingCapturePrompt(actionId);
+}
+
+function bindBurndownNav(signal: AbortSignal | undefined): void {
+  const opts = signal ? { signal } : undefined;
+  const prevBtn = document.getElementById("burndown-prev");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", async () => {
+      if (burndownSprintIndex > 0) {
+        burndownSprintIndex--;
+        await renderSettingsModal();
+      }
+    }, opts);
+  }
+  const nextBtn = document.getElementById("burndown-next");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", async () => {
+      const sprints = cachedSprintsForCharts ?? [];
+      if (burndownSprintIndex < sprints.length - 1) {
+        burndownSprintIndex++;
+        await renderSettingsModal();
+      }
+    }, opts);
+  }
+}
+
+function relocalizeChartsFromCache(): void {
+  const contentEl = document.querySelector("#settingsDialog .dialog__content");
+  if (!contentEl) return;
+  const chartBlock = contentEl.querySelector(".chart-block");
+  if (!chartBlock) return;
+
+  const slug = getSlug();
+  const sprints = cachedSprintsForCharts ?? [];
+  if (sprints.length > 0 && burndownSprintIndex >= sprints.length) {
+    burndownSprintIndex = Math.max(0, sprints.length - 1);
+  }
+  const currentSprint = sprints.length > 0 ? sprints[burndownSprintIndex] : null;
+  const canPrev = sprints.length > 0 && burndownSprintIndex > 0;
+  const canNext = sprints.length > 0 && burndownSprintIndex < sprints.length - 1;
+  const dataIsSprintScoped = !!slug && !!currentSprint;
+  const realBurndownData = cachedRealBurndownData ?? [];
+
+  chartBlock.innerHTML = currentSprint
+    ? renderRealBurndownChart(realBurndownData, currentSprint, { canPrev, canNext }, dataIsSprintScoped)
+    : renderRealBurndownChart(realBurndownData, undefined, undefined, dataIsSprintScoped);
+
+  // Re-bind nav buttons (innerHTML replacement dropped the previous listeners) and
+  // re-mount the chart from cached data only - never refetch on locale change.
+  bindBurndownNav(settingsAbortController?.signal);
+  const mount = chartBlock.querySelector("#burndown-uplot-mount");
+  if (mount) {
+    destroyBurndownChart();
+    mountBurndownChart(mount as HTMLElement, realBurndownData, currentSprint ?? null, dataIsSprintScoped);
+  }
+}
+
+function applySettingsLocaleToOpenDialog(): void {
+  const headerEl = settingsDialog.querySelector(".dialog__header");
+  if (headerEl) {
+    hydrateI18n(headerEl);
+  }
+  const tabsEl = settingsDialog.querySelector(".settings-tabs");
+  if (tabsEl) {
+    hydrateI18n(tabsEl);
+  }
+  syncSettingsDialogVersionText();
+
+  const activeTab = getSettingsActiveTab();
+
+  if (activeTab === "customization") {
+    const customizationEl = document.getElementById("settingsCustomizationContent");
+    if (!customizationEl) return;
+    syncSettingsLocaleSelectOptions();
+    syncWallpaperLocaleState();
+    syncDesktopNotificationLocaleState();
+    hydrateI18n(customizationEl);
+    syncKeybindingLabelTexts();
+    syncKeybindingCapturePrompt();
+    syncPushLocaleState();
+    return;
+  }
+
+  if (activeTab === "charts") {
+    relocalizeChartsFromCache();
+    return;
+  }
+
+  const tabContentEl = document.getElementById("settingsTabContent");
+  if (!tabContentEl) return;
+
+  if (activeTab === "workflow") {
+    hydrateI18n(tabContentEl);
+    syncWorkflowLocaleState(tabContentEl);
+    return;
+  }
+
+  if (activeTab === "tag-colors") {
+    hydrateI18n(tabContentEl);
+    syncTagColorsLocaleState(tabContentEl);
+    return;
+  }
+
+  if (activeTab === "sprints") {
+    hydrateI18n(tabContentEl);
+    refreshSprintDateLabels(tabContentEl);
+    return;
+  }
+
+  if (activeTab === "profile") {
+    // Localize static chrome in place; raw identity values (name, email, ID,
+    // system role) carry no data-i18n attribute and stay as rendered.
+    hydrateI18n(tabContentEl);
+    syncProfileLocaleState();
+    return;
+  }
+
+  if (activeTab === "users") {
+    // Hydrate existing table/action chrome in place. Rows (names, emails, role
+    // values) carry no data-i18n attribute, so raw data is preserved and no
+    // /api/admin/users refetch happens.
+    hydrateI18n(tabContentEl);
+    return;
+  }
+
+  if (activeTab === "backup") {
+    // Localize static chrome, then rebuild preview/warnings/result blocks from
+    // stored state only - never call export/import/preview APIs on locale
+    // change. Import mode, file selection, and the typed REPLACE confirmation
+    // live in inputs that hydration does not touch.
+    hydrateI18n(tabContentEl);
+    const backupPreview = getBackupPreview() as BackupPreviewResponse | null;
+    renderBackupPreview(backupPreview);
+    renderBackupWarnings(backupPreview?.warnings ?? null);
+    const trelloPreview = getTrelloImportPreview() as TrelloImportPreviewResponse | null;
+    renderTrelloPreview(trelloPreview);
+    renderTrelloWarnings(trelloPreview);
+    renderTrelloImportResult(getTrelloImportResult() as TrelloImportResponse | null);
+    return;
+  }
+}
+
+function ensureSettingsLocaleListener(): void {
+  if (settingsLocaleListenerBound) return;
+  settingsLocaleListenerBound = true;
+  const settingsGlobal = globalThis as SettingsGlobal;
+  if (settingsGlobal.__scrumboySettingsLocaleListener) {
+    document.removeEventListener(I18N_LOCALE_CHANGED, settingsGlobal.__scrumboySettingsLocaleListener);
+  }
+  const listener: EventListener = () => {
+    if (!(settingsDialog as HTMLDialogElement | null)?.open) {
+      return;
+    }
+    applySettingsLocaleToOpenDialog();
+  };
+  settingsGlobal.__scrumboySettingsLocaleListener = listener;
+  document.addEventListener(I18N_LOCALE_CHANGED, listener);
+}
+
+/**
+ * Make a Settings-owned dynamic dialog locale-safe: localizes its static
+ * `data-i18n-*` chrome now and re-applies it on every locale change while the
+ * dialog is open, without rebuilding the dialog or resetting typed fields.
+ * Returns a cleanup that the dialog's close handler must call so the listener
+ * is removed exactly once (no duplication, no leaks).
+ */
+function bindDialogLocale(dialog: HTMLElement, sync?: () => void): () => void {
+  let removed = false;
+  const remove = () => {
+    if (removed) return;
+    removed = true;
+    document.removeEventListener(I18N_LOCALE_CHANGED, listener);
+  };
+  const listener: EventListener = () => {
+    // Self-clean if the dialog was detached without calling the cleanup
+    // (defensive: avoids leaked listeners hydrating stale nodes).
+    if (!dialog.isConnected) {
+      remove();
+      return;
+    }
+    hydrateI18n(dialog);
+    sync?.();
+  };
+  // Localize immediately so non-English locales render correctly on open.
+  hydrateI18n(dialog);
+  sync?.();
+  document.addEventListener(I18N_LOCALE_CHANGED, listener);
+  return remove;
+}
+
+/**
+ * Re-localize the Web Push hint without probing push capability or changing the
+ * toggle/subscription state. Only the unsupported-browser hint is locale-driven;
+ * all other hint states stay empty, matching the binding logic.
+ */
+function syncPushLocaleState(): void {
+  const hint = document.getElementById("pushNotifyHint");
+  if (!hint) return;
+  const pushReady = getAuthStatusAvailable() && getPushConfigured();
+  const unsupported = !("serviceWorker" in navigator) || !("PushManager" in window);
+  if (pushReady && unsupported) {
+    hint.textContent = t("settings.customization.push.unsupported");
+  }
+}
+
+/**
+ * Re-localize Workflow-only dynamic aria-labels that are derived from raw lane
+ * keys and therefore cannot be updated by `hydrateI18n()` alone.
+ */
+function syncWorkflowLocaleState(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[data-workflow-name]').forEach((inputEl) => {
+    const key = inputEl.getAttribute('data-workflow-name');
+    if (!key) return;
+    inputEl.setAttribute('aria-label', t('settings.workflow.laneLabelAria', { key }));
+  });
+  root.querySelectorAll<HTMLElement>('[data-workflow-color]').forEach((inputEl) => {
+    const key = inputEl.getAttribute('data-workflow-color');
+    if (!key) return;
+    inputEl.setAttribute('aria-label', t('settings.workflow.laneColorAria', { key }));
+  });
+}
+
+/**
+ * Re-localize the Tag Colors load-error wrapper while preserving the raw
+ * backend error detail captured in a data attribute.
+ */
+function syncTagColorsLocaleState(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[data-tag-colors-load-error-message]').forEach((errorEl) => {
+    const message = errorEl.getAttribute('data-tag-colors-load-error-message') ?? '';
+    errorEl.textContent = t('settings.tagColors.error.loadFailed', { message });
+  });
+}
+
+/**
+ * Re-localize stateful Profile labels that `renderUserAvatar` emits as plain
+ * attributes (no `data-i18n-*`). Leaves raw identity values (name, email, ID,
+ * system role) untouched and never refetches `/api/me`.
+ */
+function syncProfileLocaleState(): void {
+  const avatarBtn = document.getElementById("profileAvatarBtn");
+  if (avatarBtn) {
+    avatarBtn.setAttribute("aria-label", t("settings.profile.changeAvatar"));
+  }
+}
+
 // Render backup tab HTML
 export function renderBackupTabHTML(): string {
   const isAnonymousMode = !getAuthStatusAvailable();
@@ -222,42 +598,42 @@ export function renderBackupTabHTML(): string {
   return `
     <div class="settings-backup-section">
       <div class="settings-backup-export">
-        <div class="settings-section__title">Export Data</div>
-        <div class="settings-section__description muted">Download all your projects, todos, and tags as a JSON file.</div>
-        <button class="btn" type="button" id="backupExportBtn">Export Backup</button>
+        <div class="settings-section__title" data-i18n-text="settings.backup.export.title">Export Data</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.backup.export.description">Download all your projects, todos, and tags as a JSON file.</div>
+        <button class="btn" type="button" id="backupExportBtn" data-i18n-text="settings.backup.export.action">Export Backup</button>
       </div>
       <div class="settings-backup-import">
-        <div class="settings-section__title">Import Data</div>
-        <div class="settings-section__description muted">Restore from a backup file or merge data from another instance.</div>
+        <div class="settings-section__title" data-i18n-text="settings.backup.import.title">Import Data</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.backup.import.description">Restore from a backup file or merge data from another instance.</div>
         <input type="file" accept=".json" id="backupFileInput" style="margin-bottom: 16px;">
         <div style="margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 8px;">
             <input type="radio" name="importMode" value="merge" checked>
-            <span>Merge & update (recommended)</span>
+            <span data-i18n-text="settings.backup.import.mode.merge">Merge & update (recommended)</span>
           </label>
           <label style="display: block; margin-bottom: 8px;" ${replaceHidden}>
             <input type="radio" name="importMode" value="replace" ${replaceDisabled}>
-            <span>Replace all data</span>
+            <span data-i18n-text="settings.backup.import.mode.replace">Replace all data</span>
           </label>
           <label style="display: block; margin-bottom: 8px;">
             <input type="radio" name="importMode" value="copy">
-            <span>Create a copy</span>
+            <span data-i18n-text="settings.backup.import.mode.copy">Create a copy</span>
           </label>
         </div>
         <div id="backupPreview" class="settings-backup-preview" style="display: none; margin-bottom: 16px; padding: 12px; background: var(--panel); border-radius: 4px;"></div>
         <div id="backupConfirmation" style="display: none; margin-bottom: 16px;">
-          <input type="text" id="backupConfirmationInput" placeholder="Type REPLACE to confirm" class="settings-backup-confirmation" style="width: 100%; padding: 8px;">
+          <input type="text" id="backupConfirmationInput" placeholder="Type REPLACE to confirm" data-i18n-placeholder="settings.backup.import.confirmPlaceholder" class="settings-backup-confirmation" style="width: 100%; padding: 8px;">
         </div>
         <div id="backupWarnings" class="settings-backup-warnings" style="display: none; margin-bottom: 16px; padding: 12px; background: var(--panel); border-radius: 4px; color: var(--muted);"></div>
-        <button class="btn" type="button" id="backupImportBtn" disabled>Import</button>
+        <button class="btn" type="button" id="backupImportBtn" disabled data-i18n-text="settings.backup.import.action">Import</button>
       </div>
       <div class="settings-backup-import" style="margin-top: 24px;">
-        <div class="settings-section__title">Import Trello Board</div>
-        <div class="settings-section__description muted">Upload a native Trello single-board JSON export, preview the conversion, then import it as a new Scrumboy board.</div>
+        <div class="settings-section__title" data-i18n-text="settings.backup.trello.title">Import Trello Board</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.backup.trello.description">Upload a native Trello single-board JSON export, preview the conversion, then import it as a new Scrumboy board.</div>
         <input type="file" accept=".json,application/json" id="trelloImportFileInput" style="margin-bottom: 12px;">
         <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
-          <button class="btn btn--ghost" type="button" id="trelloImportPreviewBtn">Preview Trello Import</button>
-          <button class="btn" type="button" id="trelloImportBtn" disabled>Import Trello Board</button>
+          <button class="btn btn--ghost" type="button" id="trelloImportPreviewBtn" data-i18n-text="settings.backup.trello.previewAction">Preview Trello Import</button>
+          <button class="btn" type="button" id="trelloImportBtn" disabled data-i18n-text="settings.backup.trello.importAction">Import Trello Board</button>
         </div>
         <div id="trelloImportPreview" class="settings-backup-preview" style="display: none; margin-bottom: 16px; padding: 12px; background: var(--panel); border-radius: 4px;"></div>
         <div id="trelloImportWarnings" class="settings-backup-warnings" style="display: none; margin-bottom: 16px; padding: 12px; background: var(--panel); border-radius: 4px; color: var(--muted);"></div>
@@ -271,13 +647,62 @@ function renderVoiceFlowCustomizationHTML(): string {
   const enabled = getVoiceFlowEnabledPreference();
   return `
     <div class="settings-section">
-      <div class="settings-section__title">VoiceFlow</div>
+      <div class="settings-section__title" data-i18n-text="settings.customization.voiceFlow.title">VoiceFlow</div>
       <label class="row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
         <input type="checkbox" id="voiceFlowEnabledToggle" ${enabled ? "checked" : ""} />
-        <span>Use voice commands to move, create and delete todos.</span>
+        <span data-i18n-text="settings.customization.voiceFlow.toggleLabel">Use voice commands to move, create and delete todos.</span>
       </label>
     </div>
   `;
+}
+
+/**
+ * Render the backup preview block from a stored preview payload. Pure with
+ * respect to network: rebuilds localized chrome only, leaving raw backend
+ * warning strings untouched. Used on first preview and on locale change.
+ */
+function renderBackupPreview(preview: BackupPreviewResponse | null): void {
+  const previewEl = document.getElementById("backupPreview");
+  if (!previewEl) return;
+  if (!preview) {
+    previewEl.innerHTML = "";
+    previewEl.style.display = "none";
+    return;
+  }
+  let previewHTML = `<strong>${escapeHTML(t("settings.backup.preview.heading"))}</strong><br>`;
+  previewHTML += `${escapeHTML(t("settings.backup.preview.projects", { count: preview.projects }))}<br>`;
+  previewHTML += `${escapeHTML(t("settings.backup.preview.todos", { count: preview.todos }))}<br>`;
+  previewHTML += `${escapeHTML(t("settings.backup.preview.tags", { count: preview.tags }))}<br>`;
+  if (preview.links !== undefined && preview.links > 0) {
+    previewHTML += `${escapeHTML(t("settings.backup.preview.links", { count: preview.links }))}<br>`;
+  }
+  if (preview.willDelete !== undefined) {
+    previewHTML += `${escapeHTML(t("settings.backup.preview.willDelete", { count: preview.willDelete }))}<br>`;
+  }
+  if (preview.willUpdate !== undefined) {
+    previewHTML += `${escapeHTML(t("settings.backup.preview.willUpdate", { count: preview.willUpdate }))}<br>`;
+  }
+  if (preview.willCreate !== undefined) {
+    previewHTML += `${escapeHTML(t("settings.backup.preview.willCreate", { count: preview.willCreate }))}<br>`;
+  }
+  previewEl.innerHTML = previewHTML;
+  previewEl.style.display = "block";
+}
+
+/**
+ * Render the backup warnings block from raw backend warning strings. Localizes
+ * only the heading; warning content stays exactly as returned by the API.
+ */
+function renderBackupWarnings(warnings: string[] | undefined | null): void {
+  const warningsEl = document.getElementById("backupWarnings");
+  if (!warningsEl) return;
+  if (!warnings || warnings.length === 0) {
+    warningsEl.innerHTML = "";
+    warningsEl.style.display = "none";
+    return;
+  }
+  warningsEl.innerHTML = `<strong>${escapeHTML(t("settings.backup.warnings.heading"))}</strong><br>${warnings.map((w) => escapeHTML(w)).join("<br>")}`;
+  warningsEl.style.display = "block";
 }
 
 // Backup handlers
@@ -290,7 +715,7 @@ async function handleBackupExport(): Promise<void> {
     });
     if (!response.ok) {
       const err = await response.json();
-      showToast(err.error?.message || "Export failed");
+      showToast(err.error?.message || t("settings.backup.toast.exportFailed"));
       return;
     }
     const blob = await response.blob();
@@ -310,9 +735,9 @@ async function handleBackupExport(): Promise<void> {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
-    showToast("Backup exported successfully");
+    showToast(t("settings.backup.toast.exported"));
   } catch (err: any) {
-    showToast(err.message || "Export failed");
+    showToast(err.message || t("settings.backup.toast.exportFailed"));
   }
 }
 
@@ -329,7 +754,7 @@ async function handleBackupFileSelect(e: Event): Promise<void> {
 
     // Validate structure
     if (!data.version || !data.projects || !Array.isArray(data.projects)) {
-      showToast("Invalid backup file format");
+      showToast(t("settings.backup.toast.invalidFormat"));
       return;
     }
 
@@ -348,44 +773,16 @@ async function handleBackupFileSelect(e: Event): Promise<void> {
       })
     }) as BackupPreviewResponse;
 
-    // Display preview
-    const previewEl = document.getElementById("backupPreview");
-    if (previewEl) {
-      let previewHTML = `<strong>Preview:</strong><br>`;
-      previewHTML += `Projects: ${preview.projects}<br>`;
-      previewHTML += `Todos: ${preview.todos}<br>`;
-      previewHTML += `Tags: ${preview.tags}<br>`;
-      if (preview.links !== undefined && preview.links > 0) {
-        previewHTML += `Links: ${preview.links}<br>`;
-      }
-      if (preview.willDelete !== undefined) {
-        previewHTML += `Will delete: ${preview.willDelete} projects<br>`;
-      }
-      if (preview.willUpdate !== undefined) {
-        previewHTML += `Will update: ${preview.willUpdate} items<br>`;
-      }
-      if (preview.willCreate !== undefined) {
-        previewHTML += `Will create: ${preview.willCreate} items<br>`;
-      }
-      previewEl.innerHTML = previewHTML;
-      previewEl.style.display = "block";
-    }
-
-    // Display warnings if any
-    if (preview.warnings && preview.warnings.length > 0) {
-      const warningsEl = document.getElementById("backupWarnings");
-      if (warningsEl) {
-        warningsEl.innerHTML = `<strong>Warnings:</strong><br>${preview.warnings.map((w: string) => escapeHTML(w)).join("<br>")}`;
-        warningsEl.style.display = "block";
-      }
-    }
-
     setBackupPreview(preview);
+    renderBackupPreview(preview);
+    renderBackupWarnings(preview.warnings);
     updateBackupUI();
   } catch (err: any) {
-    showToast(err.message || "Failed to read backup file");
+    showToast(err.message || t("settings.backup.toast.readFailed"));
     setBackupData(null);
     setBackupPreview(null);
+    renderBackupPreview(null);
+    renderBackupWarnings(null);
     updateBackupUI();
   }
 }
@@ -438,7 +835,7 @@ async function handleBackupImport(): Promise<void> {
   
   if (!getBackupData()) {
     console.log("handleBackupImport: No backup data");
-    showToast("No backup file selected");
+    showToast(t("settings.backup.toast.noFile"));
     return;
   }
 
@@ -452,7 +849,7 @@ async function handleBackupImport(): Promise<void> {
   
   if (importBtn && importBtn.disabled) {
     console.log("handleBackupImport: Button is disabled, returning");
-    showToast("Please complete the confirmation to enable import");
+    showToast(t("settings.backup.toast.completeConfirmation"));
     return;
   }
 
@@ -468,7 +865,7 @@ async function handleBackupImport(): Promise<void> {
   if (importMode === "replace") {
     if (!confirmationInput || confirmationInput.value.trim() !== "REPLACE") {
       console.log("handleBackupImport: Invalid confirmation");
-      showToast("Please type REPLACE in the confirmation field");
+      showToast(t("settings.backup.toast.typeReplace"));
       return;
     }
   }
@@ -503,7 +900,7 @@ async function handleBackupImport(): Promise<void> {
       importBtn.disabled = true;
       importBtn.setAttribute("disabled", "disabled");
       const originalText = importBtn.textContent;
-      importBtn.textContent = "Importing...";
+      importBtn.textContent = t("settings.backup.import.importing");
     }
 
     console.log("handleBackupImport: Calling API...");
@@ -514,19 +911,15 @@ async function handleBackupImport(): Promise<void> {
     console.log("handleBackupImport: API call completed", result);
 
     // Show results
-    let message = `Import completed: `;
-    if ((result as any).imported !== undefined) message += `${(result as any).imported} projects imported, `;
-    if ((result as any).updated !== undefined) message += `${(result as any).updated} updated, `;
-    if ((result as any).created !== undefined) message += `${(result as any).created} created`;
-    showToast(message);
+    const summaryParts: string[] = [];
+    if ((result as any).imported !== undefined) summaryParts.push(t("settings.backup.import.summary.imported", { count: (result as any).imported }));
+    if ((result as any).updated !== undefined) summaryParts.push(t("settings.backup.import.summary.updated", { count: (result as any).updated }));
+    if ((result as any).created !== undefined) summaryParts.push(t("settings.backup.import.summary.created", { count: (result as any).created }));
+    showToast(t("settings.backup.toast.importComplete", { summary: summaryParts.join(", ") }));
 
     // Show warnings if any
     if ((result as any).warnings && (result as any).warnings.length > 0) {
-      const warningsEl = document.getElementById("backupWarnings");
-      if (warningsEl) {
-        warningsEl.innerHTML = `<strong>Warnings:</strong><br>${(result as any).warnings.map((w: string) => escapeHTML(w)).join("<br>")}`;
-        warningsEl.style.display = "block";
-      }
+      renderBackupWarnings((result as any).warnings as string[]);
     }
 
     // Reload the page to show updated data
@@ -541,7 +934,7 @@ async function handleBackupImport(): Promise<void> {
       data: err.data,
       stack: err.stack
     });
-    const errorMsg = err.message || err.data?.error?.message || "Import failed";
+    const errorMsg = err.message || err.data?.error?.message || t("settings.backup.toast.importFailed");
     console.error("handleBackupImport: Showing toast with message:", errorMsg);
     showToast(errorMsg);
     // Re-enable button on error - use stored reference if available
@@ -549,7 +942,7 @@ async function handleBackupImport(): Promise<void> {
     if (importBtn) {
       importBtn.disabled = false;
       importBtn.removeAttribute("disabled");
-      importBtn.textContent = "Import";
+      importBtn.textContent = t("settings.backup.import.action");
       console.log("handleBackupImport: Button restored");
     } else {
       console.error("handleBackupImport: Could not find button to restore");
@@ -587,20 +980,21 @@ export function renderTrelloPreview(preview: TrelloImportPreviewResponse | null)
     previewEl.style.display = "none";
     return;
   }
+  const doneColumnLabel = preview.detectedDoneColumn || t("settings.backup.trello.preview.doneNotDetected");
   previewEl.innerHTML = `
-    <strong>${escapeHTML(preview.boardName || "Unnamed Trello board")}</strong><br>
-    Open lists: ${preview.openLists}<br>
-    Closed lists: ${preview.closedLists}<br>
-    Cards: ${preview.cards}<br>
-    Archived cards: ${preview.archivedCards}<br>
-    Labels: ${preview.labels}<br>
-    Members referenced: ${preview.membersReferenced}<br>
-    Checklists: ${preview.checklists}<br>
-    Checklist items: ${preview.checklistItems}<br>
-    Comment actions: ${preview.commentCardActions}<br>
-    Attachments: ${preview.attachments}<br>
-    Custom field items: ${preview.customFieldItems}<br>
-    Done column: ${escapeHTML(preview.detectedDoneColumn || "Not detected")}${preview.detectedDoneReason ? ` (${escapeHTML(preview.detectedDoneReason)})` : ""}
+    <strong>${escapeHTML(preview.boardName || t("settings.backup.trello.preview.unnamedBoard"))}</strong><br>
+    ${escapeHTML(t("settings.backup.trello.preview.openLists", { count: preview.openLists }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.closedLists", { count: preview.closedLists }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.cards", { count: preview.cards }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.archivedCards", { count: preview.archivedCards }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.labels", { count: preview.labels }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.membersReferenced", { count: preview.membersReferenced }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.checklists", { count: preview.checklists }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.checklistItems", { count: preview.checklistItems }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.commentActions", { count: preview.commentCardActions }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.attachments", { count: preview.attachments }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.customFieldItems", { count: preview.customFieldItems }))}<br>
+    ${escapeHTML(t("settings.backup.trello.preview.doneColumn", { column: doneColumnLabel }))}${preview.detectedDoneReason ? ` (${escapeHTML(preview.detectedDoneReason)})` : ""}
   `;
   previewEl.style.display = "block";
 }
@@ -620,11 +1014,11 @@ export function renderTrelloWarnings(preview: TrelloImportPreviewResponse | null
 
   let html = "";
   if (hardErrors.length > 0) {
-    html += `<strong>Hard errors</strong><br>${hardErrors.map((item) => escapeHTML(item)).join("<br>")}`;
+    html += `<strong>${escapeHTML(t("settings.backup.trello.warnings.hardErrors"))}</strong><br>${hardErrors.map((item) => escapeHTML(item)).join("<br>")}`;
   }
   if (warnings.length > 0) {
     if (html) html += `<br><br>`;
-    html += `<strong>Warnings</strong><br>${warnings.map((item) => escapeHTML(item)).join("<br>")}`;
+    html += `<strong>${escapeHTML(t("settings.backup.trello.warnings.warnings"))}</strong><br>${warnings.map((item) => escapeHTML(item)).join("<br>")}`;
   }
   warningsEl.innerHTML = html;
   warningsEl.style.display = "block";
@@ -642,10 +1036,10 @@ export function renderTrelloImportResult(result: TrelloImportResponse | null): v
   }
 
   resultEl.innerHTML = `
-    <strong>Import complete</strong><br>
-    Created board: <a href="/${encodeURIComponent(result.project.slug)}">${escapeHTML(result.project.name)}</a><br>
-    Todos: ${result.summary.todos}<br>
-    Labels: ${result.summary.labels}
+    <strong>${escapeHTML(t("settings.backup.trello.result.complete"))}</strong><br>
+    ${escapeHTML(t("settings.backup.trello.result.createdBoard"))} <a href="/${encodeURIComponent(result.project.slug)}">${escapeHTML(result.project.name)}</a><br>
+    ${escapeHTML(t("settings.backup.trello.result.todos", { count: result.summary.todos }))}<br>
+    ${escapeHTML(t("settings.backup.trello.result.labels", { count: result.summary.labels }))}
   `;
   resultEl.style.display = "block";
 }
@@ -674,7 +1068,7 @@ async function handleTrelloFileSelect(e: Event): Promise<void> {
     renderTrelloImportResult(null);
     updateTrelloImportUI();
   } catch (err: any) {
-    showToast(err.message || "Failed to read Trello export");
+    showToast(err.message || t("settings.backup.trello.toast.readFailed"));
     setTrelloImportData(null);
     setTrelloImportPreview(null);
     setTrelloImportResult(null);
@@ -688,7 +1082,7 @@ async function handleTrelloFileSelect(e: Event): Promise<void> {
 export async function handleTrelloPreview(): Promise<void> {
   const raw = getTrelloImportData();
   if (!raw) {
-    showToast("Select a Trello JSON export first");
+    showToast(t("settings.backup.trello.toast.selectFirst"));
     return;
   }
 
@@ -696,7 +1090,7 @@ export async function handleTrelloPreview(): Promise<void> {
   try {
     if (previewBtn) {
       previewBtn.disabled = true;
-      previewBtn.textContent = "Previewing...";
+      previewBtn.textContent = t("settings.backup.trello.previewing");
     }
     const preview = await apiFetch<TrelloImportPreviewResponse>("/api/import/trello/preview", {
       method: "POST",
@@ -709,14 +1103,14 @@ export async function handleTrelloPreview(): Promise<void> {
     renderTrelloImportResult(null);
     updateTrelloImportUI();
   } catch (err: any) {
-    showToast(err.message || "Trello preview failed");
+    showToast(err.message || t("settings.backup.trello.toast.previewFailed"));
     setTrelloImportPreview(null);
     renderTrelloPreview(null);
     renderTrelloWarnings(null);
     updateTrelloImportUI();
   } finally {
     if (previewBtn) {
-      previewBtn.textContent = "Preview Trello Import";
+      previewBtn.textContent = t("settings.backup.trello.previewAction");
     }
     updateTrelloImportUI();
   }
@@ -726,15 +1120,15 @@ export async function handleTrelloImport(): Promise<void> {
   const raw = getTrelloImportData();
   const preview = getTrelloImportPreview() as TrelloImportPreviewResponse | null;
   if (!raw) {
-    showToast("Select a Trello JSON export first");
+    showToast(t("settings.backup.trello.toast.selectFirst"));
     return;
   }
   if (!preview) {
-    showToast("Preview the Trello import before importing");
+    showToast(t("settings.backup.trello.toast.previewFirst"));
     return;
   }
   if (preview.hardErrors && preview.hardErrors.length > 0) {
-    showToast("Resolve the Trello import errors before importing");
+    showToast(t("settings.backup.trello.toast.resolveErrors"));
     return;
   }
 
@@ -742,7 +1136,7 @@ export async function handleTrelloImport(): Promise<void> {
   try {
     if (importBtn) {
       importBtn.disabled = true;
-      importBtn.textContent = "Importing...";
+      importBtn.textContent = t("settings.backup.trello.importing");
     }
     const result = await apiFetch<TrelloImportResponse>("/api/import/trello", {
       method: "POST",
@@ -751,12 +1145,12 @@ export async function handleTrelloImport(): Promise<void> {
     setTrelloImportResult(result);
     renderTrelloImportResult(result);
     renderTrelloWarnings(preview);
-    showToast(`Imported Trello board: ${result.project.name}`);
+    showToast(t("settings.backup.trello.toast.imported", { name: result.project.name }));
   } catch (err: any) {
-    showToast(err.message || "Trello import failed");
+    showToast(err.message || t("settings.backup.trello.toast.importFailed"));
   } finally {
     if (importBtn) {
-      importBtn.textContent = "Import Trello Board";
+      importBtn.textContent = t("settings.backup.trello.importAction");
     }
     updateTrelloImportUI();
   }
@@ -839,6 +1233,7 @@ async function setupBackupTab(signal?: AbortSignal): Promise<void> {
 }
 
 export async function renderSettingsModal(options?: { skipProfileRefetch?: boolean }): Promise<void> {
+  ensureSettingsLocaleListener();
   const contentEl = document.querySelector("#settingsDialog .dialog__content");
   if (!contentEl) {
     console.error("Settings dialog content element not found");
@@ -1011,7 +1406,8 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       }
     } catch (err: any) {
       console.error("Failed to fetch tags:", err);
-      tagsHTML = `<div class='muted'>Error loading tags: ${escapeHTML(err.message)}</div>`;
+      const detail = err?.message ? String(err.message) : '';
+      tagsHTML = `<div class='muted' data-tag-colors-load-error-message="${escapeHTML(detail)}">${escapeHTML(t('settings.tagColors.error.loadFailed', { message: detail }))}</div>`;
     }
   } else {
     // No project access - clear cache
@@ -1022,16 +1418,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
     cachedRealBurndownURL = null;
   }
 
-  // Get version from meta tag (embedded at build time)
-  const versionText = getAppVersion();
-  
-  // Update the Settings title to include version number
-  const titleEl = document.querySelector("#settingsDialog .dialog__title");
-  if (titleEl && versionText) {
-    titleEl.innerHTML = `Settings <span style="font-size: 0.75em; color: var(--muted); opacity: 0.6; font-weight: normal;">v${escapeHTML(versionText)}</span>`;
-  } else if (titleEl) {
-    titleEl.textContent = "Settings";
-  }
+  syncSettingsDialogVersionText();
 
   const profileHTML = (() => {
     if (!showProfileTab) return "";
@@ -1039,47 +1426,47 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
     const twoFactorSection = u ? (u.twoFactorEnabled
       ? `
         <div class="settings-section" style="margin-top: 24px;">
-          <div class="settings-section__title">Two-factor authentication</div>
-          <div class="settings-section__description muted">2FA is enabled. You can disable it or regenerate recovery codes.</div>
+          <div class="settings-section__title" data-i18n-text="settings.profile.twoFactor.title">Two-factor authentication</div>
+          <div class="settings-section__description muted" data-i18n-text="settings.profile.twoFactor.enabledDescription">2FA is enabled. You can disable it or regenerate recovery codes.</div>
           <div style="margin-top: 12px; display: flex; flex-wrap: wrap; gap: 8px;">
-            <button class="btn btn--ghost" id="disable2FABtn">Disable 2FA</button>
-            <button class="btn btn--ghost" id="regenerateRecoveryCodesBtn">Regenerate recovery codes</button>
+            <button class="btn btn--ghost" id="disable2FABtn" data-i18n-text="settings.profile.twoFactor.disable">Disable 2FA</button>
+            <button class="btn btn--ghost" id="regenerateRecoveryCodesBtn" data-i18n-text="settings.profile.twoFactor.regenerate">Regenerate recovery codes</button>
           </div>
         </div>
       `
       : `
         <div class="settings-section" style="margin-top: 24px;">
-          <div class="settings-section__title">Two-factor authentication</div>
-          <div class="settings-section__description muted">Add an extra layer of security with an authenticator app.</div>
-          <button class="btn" id="enable2FABtn" style="margin-top: 8px;">Enable 2FA</button>
+          <div class="settings-section__title" data-i18n-text="settings.profile.twoFactor.title">Two-factor authentication</div>
+          <div class="settings-section__description muted" data-i18n-text="settings.profile.twoFactor.disabledDescription">Add an extra layer of security with an authenticator app.</div>
+          <button class="btn" id="enable2FABtn" style="margin-top: 8px;" data-i18n-text="settings.profile.twoFactor.enable">Enable 2FA</button>
         </div>
       `) : "";
     return `
       <div class="settings-section" style="position: relative;">
-        <div class="settings-section__title">Profile</div>
-        <div class="settings-section__description muted">Signed-in user for this instance.</div>
+        <div class="settings-section__title" data-i18n-text="settings.profile.title">Profile</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.profile.description">Signed-in user for this instance.</div>
         ${u ? `
           <div class="profile-avatar-wrap" style="margin-bottom: 16px;">
             <div style="display: flex; align-items: center; gap: 12px;">
               ${renderUserAvatar(u, { id: 'profileAvatarBtn', ariaLabel: 'Change avatar' })}
-              ${u.image ? `<button class="btn btn--ghost" id="removeAvatarBtn">Remove avatar</button>` : ""}
+              ${u.image ? `<button class="btn btn--ghost" id="removeAvatarBtn" data-i18n-text="settings.profile.removeAvatar">Remove avatar</button>` : ""}
             </div>
             <div id="profileAvatarError" class="muted" style="display: none; margin-top: 8px;" role="alert"></div>
           </div>
           <div class="settings-kv">
-            <div class="settings-kv__row"><div class="muted">Name</div><div>${escapeHTML(u.name || "")}</div></div>
-            <div class="settings-kv__row"><div class="muted">Email</div><div>${escapeHTML(u.email || "")}</div></div>
-            <div class="settings-kv__row"><div class="muted">User ID</div><div>${u.id != null ? escapeHTML(String(u.id)) : ""}</div></div>
-            <div class="settings-kv__row"><div class="muted">System Role</div><div>${u.systemRole ? escapeHTML(u.systemRole.charAt(0).toUpperCase() + u.systemRole.slice(1)) : "User"}</div></div>
-            <div class="settings-kv__row"><div class="muted">Authentication</div><div>Authenticated</div></div>
+            <div class="settings-kv__row"><div class="muted" data-i18n-text="settings.profile.fields.name">Name</div><div>${escapeHTML(u.name || "")}</div></div>
+            <div class="settings-kv__row"><div class="muted" data-i18n-text="settings.profile.fields.email">Email</div><div>${escapeHTML(u.email || "")}</div></div>
+            <div class="settings-kv__row"><div class="muted" data-i18n-text="settings.profile.fields.userId">User ID</div><div>${u.id != null ? escapeHTML(String(u.id)) : ""}</div></div>
+            <div class="settings-kv__row"><div class="muted" data-i18n-text="settings.profile.fields.systemRole">System Role</div><div>${u.systemRole ? escapeHTML(u.systemRole.charAt(0).toUpperCase() + u.systemRole.slice(1)) : "User"}</div></div>
+            <div class="settings-kv__row"><div class="muted" data-i18n-text="settings.profile.fields.authentication">Authentication</div><div data-i18n-text="settings.profile.authenticated">Authenticated</div></div>
           </div>
           <div style="margin-top: 16px; display: flex; gap: 8px;">
-            <button class="btn btn--danger" id="logoutBtn">Log out</button>
-            ${u.isBootstrap ? `<button class="btn" id="createUserBtn">Create User</button>` : ""}
+            <button class="btn btn--danger" id="logoutBtn" data-i18n-text="settings.profile.logout">Log out</button>
+            ${u.isBootstrap ? `<button class="btn" id="createUserBtn" data-i18n-text="settings.profile.createUser">Create User</button>` : ""}
           </div>
           ${twoFactorSection}
         ` : `
-          <div class="muted">Not signed in.</div>
+          <div class="muted" data-i18n-text="settings.profile.notSignedIn">Not signed in.</div>
         `}
       </div>
     `;
@@ -1090,128 +1477,150 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
     const chord = getResolvedChordForAction(meta.id);
     return `
       <div class="keybinding-row" data-keybinding-row="${meta.id}">
-        <span class="keybinding-row__label">${escapeHTML(meta.label)}</span>
+        <span class="keybinding-row__label" data-keybinding-action-id="${meta.id}">${escapeHTML(meta.label)}</span>
         <button type="button" class="btn btn--ghost keybinding-capture" data-keybinding-capture data-keybinding-action="${meta.id}">
           ${escapeHTML(formatChordForDisplay(chord))}
         </button>
       </div>`;
   }).join("");
 
-  const desktopNotifyGranted =
-    typeof Notification !== "undefined" && Notification.permission === "granted";
+  const desktopNotifyStatusKind = getDesktopNotificationStatusKind();
+  const desktopNotifyGranted = desktopNotifyStatusKind === "granted";
 
   const pushVapidServerReady = showProfileTab && getPushConfigured();
+  const activeSettingsTab = getSettingsActiveTab();
 
   const showWallpaperSettings = getAuthStatusAvailable();
   const wallpaperState = showWallpaperSettings ? getStoredWallpaperState() : { v: 1 as const, mode: "off" as const };
   const wallpaperPickerHex =
     showWallpaperSettings && wallpaperState.mode === "color" && wallpaperState.hex ? wallpaperState.hex : "#8b919a";
-  const wallpaperSummaryLabel =
+  const wallpaperSummaryText =
     wallpaperState.mode === "off"
-      ? "Off"
+      ? "Off: default appearance"
       : wallpaperState.mode === "color"
-        ? "Solid color"
+        ? "Solid color: active"
         : wallpaperState.mode === "builtin"
-          ? "Default image"
-          : "Custom image";
+          ? "Default image: active"
+          : "Custom image: active";
   const wallpaperImageModeSelected =
     wallpaperState.mode === "image" || wallpaperState.mode === "builtin";
 
   const wallpaperSectionHTML = showWallpaperSettings
     ? `
       <div class="settings-section">
-        <div class="settings-section__title">Wallpaper</div>
-        <div class="settings-section__description muted">Optional background behind the app. A scrim keeps text readable. Boards and cards stay solid; Settings can show the wallpaper when it is active.</div>
-        <p class="muted" style="margin:8px 0 0 0;font-size:13px;">
-          ${wallpaperSummaryLabel}: ${wallpaperState.mode === "off" ? "default appearance" : "active"}
+        <div class="settings-section__title" data-i18n-text="settings.customization.wallpaper.title">Wallpaper</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.wallpaper.description">Optional background behind the app. A scrim keeps text readable. Boards and cards stay solid; Settings can show the wallpaper when it is active.</div>
+        <p class="muted" id="wallpaperSummary" style="margin:8px 0 0 0;font-size:13px;" data-i18n-text="${getWallpaperSummaryMessageKey(wallpaperState.mode)}">
+          ${escapeHTML(wallpaperSummaryText)}
         </p>
         <div class="theme-selector theme-selector--inline" style="margin-top:10px;">
           <label class="theme-option theme-option--inline">
             <input type="radio" name="wallpaperMode" value="off" ${wallpaperState.mode === "off" ? "checked" : ""}>
-            <span>Off</span>
+            <span data-i18n-text="settings.customization.wallpaper.mode.off">Off</span>
           </label>
           <label class="theme-option theme-option--inline">
             <input type="radio" name="wallpaperMode" value="color" ${wallpaperState.mode === "color" ? "checked" : ""}>
-            <span>Solid color</span>
+            <span data-i18n-text="settings.customization.wallpaper.mode.color">Solid color</span>
           </label>
           <label class="theme-option theme-option--inline">
             <input type="radio" name="wallpaperMode" value="image" ${wallpaperImageModeSelected ? "checked" : ""} ${getUser() || wallpaperState.mode === "builtin" ? "" : "disabled"}>
-            <span>Custom image</span>
+            <span data-i18n-text="settings.customization.wallpaper.mode.image">Custom image</span>
           </label>
         </div>
         <div id="wallpaperColorRow" class="wallpaper-settings-color-row" style="margin-top:12px;${wallpaperState.mode === "color" ? "" : "display:none;"}">
           <label class="row" style="align-items:center;gap:10px;">
-            <span class="muted">Color</span>
+            <span class="muted" data-i18n-text="settings.customization.wallpaper.colorLabel">Color</span>
             <input type="color" id="wallpaperColorPicker" value="${escapeHTML(wallpaperPickerHex)}" ${wallpaperState.mode === "color" ? "" : "disabled"} />
           </label>
         </div>
         <div class="wallpaper-settings-wallpaper-actions" style="margin-top:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn" id="wallpaperUploadBtn" ${getUser() ? "" : "disabled"} style="${wallpaperImageModeSelected && getUser() ? "" : "display:none;"}">${wallpaperState.mode === "image" ? "Replace image…" : "Upload image…"}</button>
-          <button type="button" class="btn btn--ghost" id="wallpaperRemoveBtn" ${wallpaperState.mode === "off" ? "disabled" : ""}>Remove wallpaper</button>
+          <button type="button" class="btn" id="wallpaperUploadBtn" ${getUser() ? "" : "disabled"} style="${wallpaperImageModeSelected && getUser() ? "" : "display:none;"}" data-i18n-text="${wallpaperState.mode === "image" ? "settings.customization.wallpaper.actions.replace" : "settings.customization.wallpaper.actions.upload"}">${wallpaperState.mode === "image" ? "Replace image…" : "Upload image…"}</button>
+          <button type="button" class="btn btn--ghost" id="wallpaperRemoveBtn" ${wallpaperState.mode === "off" ? "disabled" : ""} data-i18n-text="settings.customization.wallpaper.actions.remove">Remove wallpaper</button>
         </div>
-        ${!getUser() ? `<p class="muted" style="margin-top:10px;font-size:13px;">Sign in to use a custom image. Solid color and Off work without signing in.</p>` : ""}
+        ${!getUser() ? `<p class="muted" style="margin-top:10px;font-size:13px;" data-i18n-text="settings.customization.wallpaper.signInHint">Sign in to use a custom image. Solid color and Off work without signing in.</p>` : ""}
       </div>
     `
     : "";
 
-  const pushPwaDisabledNotice = !pushVapidServerReady
+  const pushPwaDisabledNoticeKey = !pushVapidServerReady
+    ? showProfileTab
+      ? "settings.customization.push.vapidNotice"
+      : "settings.customization.push.anonymousNotice"
+    : "";
+  const pushPwaDisabledNoticeText = !pushVapidServerReady
     ? showProfileTab
       ? "Web Push needs VAPID keys on the server (SCRUMBOY_VAPID_PUBLIC_KEY and SCRUMBOY_VAPID_PRIVATE_KEY; see docs)."
       : "Web Push is not available in anonymous mode."
     : "";
 
-  const customizationHTML = `
+  const selectedPublicLocale = getSelectedSettingsLocale();
+  const languageSectionHTML = `
       <div class="settings-section">
-        <div class="settings-section__title">Theme</div>
-        <div class="settings-section__description muted">Choose your preferred color scheme.</div>
+        <label class="settings-section__title" for="settingsLocaleSelect" data-i18n-text="settings.language.title">Language</label>
+        <div class="settings-section__description muted" data-i18n-text="settings.language.description">Choose the language used for Scrumboy on this browser.</div>
+        <select class="select" id="settingsLocaleSelect" aria-label="Language" data-i18n-aria-label="settings.language.selectLabel" style="margin-top: 10px; min-width: 180px;">
+          ${publicLocaleOptions().map((option) => `
+            <option value="${escapeHTML(option.id)}" ${option.id === selectedPublicLocale ? "selected" : ""}>${escapeHTML(option.label)}</option>
+          `).join("")}
+        </select>
+      </div>
+    `;
+
+  const customizationHTML = activeSettingsTab === "customization" ? `
+    <div id="settingsCustomizationContent">
+      ${languageSectionHTML}
+      <div class="settings-section">
+        <div class="settings-section__title" data-i18n-text="settings.customization.theme.title">Theme</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.theme.description">Choose your preferred color scheme.</div>
         <div class="theme-selector theme-selector--inline">
           <label class="theme-option theme-option--inline">
             <input type="radio" name="theme" value="system" ${getStoredTheme() === THEME_SYSTEM ? "checked" : ""}>
-            <span>System</span>
+            <span data-i18n-text="settings.customization.theme.option.system">System</span>
           </label>
           <label class="theme-option theme-option--inline">
             <input type="radio" name="theme" value="dark" ${getStoredTheme() === THEME_DARK ? "checked" : ""}>
-            <span>Dark</span>
+            <span data-i18n-text="settings.customization.theme.option.dark">Dark</span>
           </label>
           <label class="theme-option theme-option--inline">
             <input type="radio" name="theme" value="light" ${getStoredTheme() === THEME_LIGHT ? "checked" : ""}>
-            <span>Light</span>
+            <span data-i18n-text="settings.customization.theme.option.light">Light</span>
           </label>
         </div>
       </div>
       ${wallpaperSectionHTML}
       ${getAuthStatusAvailable() ? renderVoiceFlowCustomizationHTML() : ""}
       <div class="settings-section">
-        <div class="settings-section__title">Desktop notifications</div>
-        <div class="settings-section__description muted">OS-level alerts when someone assigns you a todo (works when this tab is in the background).</div>
-        <p class="muted" style="margin: 8px 0;">${escapeHTML(getDesktopNotificationStatusDescription())}</p>
-        <button type="button" class="btn" id="desktopNotifyEnableBtn" ${desktopNotifyGranted ? "disabled" : ""}>${desktopNotifyGranted ? "Notifications enabled" : "Enable notifications"}</button>
+        <div class="settings-section__title" data-i18n-text="settings.customization.notifications.title">Desktop notifications</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.notifications.description">OS-level alerts when someone assigns you a todo (works when this tab is in the background).</div>
+        <p class="muted" id="desktopNotifyStatus" style="margin: 8px 0;" data-i18n-text="${getDesktopNotificationStatusMessageKey(desktopNotifyStatusKind)}">${escapeHTML(getDesktopNotificationStatusDescription())}</p>
+        <button type="button" class="btn" id="desktopNotifyEnableBtn" ${desktopNotifyGranted ? "disabled" : ""} data-i18n-text="${getDesktopNotificationButtonMessageKey(desktopNotifyStatusKind)}">${desktopNotifyGranted ? "Notifications enabled" : "Enable notifications"}</button>
       </div>
-      ${pushPwaDisabledNotice ? `<p class="settings-push-vapid-notice" role="status">${escapeHTML(pushPwaDisabledNotice)}</p>` : ""}
+      ${pushPwaDisabledNoticeKey ? `<p class="settings-push-vapid-notice" role="status" data-i18n-text="${pushPwaDisabledNoticeKey}">${escapeHTML(pushPwaDisabledNoticeText)}</p>` : ""}
       <div class="settings-section settings-section--push-pwa${!pushVapidServerReady ? " settings-section--push-pwa-disabled" : ""}">
-        <div class="settings-section__title">Background notifications (PWA)</div>
-        <div class="settings-section__description muted">Alerts when someone assigns you a todo while this app is in the background or closed (best on an installed PWA). Requires VAPID keys on the server. When configured, sign-in triggers an automatic subscribe attempt (the browser may ask for permission). Use the toggle to turn Web Push off or back on for this browser only.</div>
+        <div class="settings-section__title" data-i18n-text="settings.customization.push.title">Background notifications (PWA)</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.push.description">Alerts when someone assigns you a todo while this app is in the background or closed (best on an installed PWA). Requires VAPID keys on the server. When configured, sign-in triggers an automatic subscribe attempt (the browser may ask for permission). Use the toggle to turn Web Push off or back on for this browser only.</div>
         <label class="row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
           <input type="checkbox" id="pushNotifyToggle" ${!pushVapidServerReady ? "disabled" : ""} />
-          <span>Web Push on this device</span>
+          <span data-i18n-text="settings.customization.push.toggleLabel">Web Push on this device</span>
         </label>
         <p class="muted" id="pushNotifyHint" style="margin:8px 0 0 0;font-size:13px;"></p>
       </div>
       <div class="settings-section settings-section--keybindings">
-        <div class="settings-section__title">Keybindings</div>
-        <div class="settings-section__description muted">Click a key to record a new shortcut. Press Esc to cancel while listening.</div>
+        <div class="settings-section__title" data-i18n-text="settings.customization.keybindings.title">Keybindings</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.keybindings.description">Click a key to record a new shortcut. Press Esc to cancel while listening.</div>
         <div class="keybinding-list">
           ${keybindingRowsHTML}
         </div>
       </div>
-    `;
+    </div>
+    ` : "";
 
   // Determine content for each tab
   const tagColorsContent = hasProjectAccess 
     ? `
       <div class="settings-section">
-        <div class="settings-section__title">Tag Colors</div>
-        <div class="settings-section__description muted">Assign custom colors to tags. Colors will appear in filter chips and todo cards.</div>
+        <div class="settings-section__title" data-i18n-text="settings.tagColors.title">Tag Colors</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.tagColors.description">Assign custom colors to tags. Colors will appear in filter chips and todo cards.</div>
         <div class="settings-tags-list">
           ${tagsHTML}
         </div>
@@ -1219,9 +1628,9 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
     `
     : `
       <div class="settings-section">
-        <div class="settings-section__title">Tag Colors</div>
-        <div class="settings-section__description muted">Assign custom colors to tags. Colors will appear in filter chips and todo cards.</div>
-        <div class="muted">No projects available. Create a project to manage tag colors.</div>
+        <div class="settings-section__title" data-i18n-text="settings.tagColors.title">Tag Colors</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.tagColors.description">Assign custom colors to tags. Colors will appear in filter chips and todo cards.</div>
+        <div class="muted" data-i18n-text="settings.tagColors.noProjects">No projects available. Create a project to manage tag colors.</div>
       </div>
     `;
 
@@ -1270,19 +1679,23 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
   destroyBurndownChart();
   contentEl.innerHTML = `
     <div class="settings-tabs">
-      ${showProfileTab ? `<button class="settings-tab ${getSettingsActiveTab() === "profile" ? "settings-tab--active" : ""}" data-tab="profile">Profile</button>` : ``}
-      ${showUsersTab ? `<button class="settings-tab ${getSettingsActiveTab() === "users" ? "settings-tab--active" : ""}" data-tab="users">Users</button>` : ``}
-      ${showSprintsTab ? `<button class="settings-tab ${getSettingsActiveTab() === "sprints" ? "settings-tab--active" : ""}" data-tab="sprints">Sprints</button>` : ``}
-      ${showWorkflowTab ? `<button class="settings-tab ${getSettingsActiveTab() === "workflow" ? "settings-tab--active" : ""}" data-tab="workflow">Workflow</button>` : ``}
-      <button class="settings-tab ${getSettingsActiveTab() === "customization" ? "settings-tab--active" : ""}" data-tab="customization">Customization</button>
-      <button class="settings-tab ${getSettingsActiveTab() === "tag-colors" ? "settings-tab--active" : ""}" data-tab="tag-colors">Tag Colors</button>
-      ${showChartsTab ? `<button class="settings-tab ${getSettingsActiveTab() === "charts" ? "settings-tab--active" : ""}" data-tab="charts">Charts</button>` : ``}
-      <button class="settings-tab ${getSettingsActiveTab() === "backup" ? "settings-tab--active" : ""}" data-tab="backup">Backup</button>
+      ${showProfileTab ? `<button class="settings-tab ${activeSettingsTab === "profile" ? "settings-tab--active" : ""}" data-tab="profile" data-i18n-text="settings.tabs.profile">Profile</button>` : ``}
+      ${showUsersTab ? `<button class="settings-tab ${activeSettingsTab === "users" ? "settings-tab--active" : ""}" data-tab="users" data-i18n-text="settings.tabs.users">Users</button>` : ``}
+      ${showSprintsTab ? `<button class="settings-tab ${activeSettingsTab === "sprints" ? "settings-tab--active" : ""}" data-tab="sprints" data-i18n-text="settings.tabs.sprints">Sprints</button>` : ``}
+      ${showWorkflowTab ? `<button class="settings-tab ${activeSettingsTab === "workflow" ? "settings-tab--active" : ""}" data-tab="workflow" data-i18n-text="settings.tabs.workflow">Workflow</button>` : ``}
+      <button class="settings-tab ${activeSettingsTab === "customization" ? "settings-tab--active" : ""}" data-tab="customization" data-i18n-text="settings.tabs.customization">Customization</button>
+      <button class="settings-tab ${activeSettingsTab === "tag-colors" ? "settings-tab--active" : ""}" data-tab="tag-colors" data-i18n-text="settings.tabs.tagColors">Tag Colors</button>
+      ${showChartsTab ? `<button class="settings-tab ${activeSettingsTab === "charts" ? "settings-tab--active" : ""}" data-tab="charts" data-i18n-text="settings.tabs.charts">Charts</button>` : ``}
+      <button class="settings-tab ${activeSettingsTab === "backup" ? "settings-tab--active" : ""}" data-tab="backup" data-i18n-text="settings.tabs.backup">Backup</button>
     </div>
     <div class="settings-tab-content" id="settingsTabContent">
-      ${getSettingsActiveTab() === "profile" ? profileHTML : getSettingsActiveTab() === "users" ? usersHTML : getSettingsActiveTab() === "sprints" ? sprintsHTML : getSettingsActiveTab() === "workflow" ? workflowHTML : getSettingsActiveTab() === "customization" ? customizationHTML : getSettingsActiveTab() === "tag-colors" ? tagColorsContent : getSettingsActiveTab() === "charts" ? chartsContent : getSettingsActiveTab() === "backup" ? renderBackupTabHTML() : ""}
+      ${activeSettingsTab === "profile" ? profileHTML : activeSettingsTab === "users" ? usersHTML : activeSettingsTab === "sprints" ? sprintsHTML : activeSettingsTab === "workflow" ? workflowHTML : activeSettingsTab === "customization" ? customizationHTML : activeSettingsTab === "tag-colors" ? tagColorsContent : activeSettingsTab === "charts" ? chartsContent : activeSettingsTab === "backup" ? renderBackupTabHTML() : ""}
     </div>
   `;
+
+  if (getLocale() !== "en") {
+    applySettingsLocaleToOpenDialog();
+  }
 
   // Abort previous listeners before attaching new ones
   if (keybindingCaptureKeydown) {
@@ -1296,25 +1709,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
 
   // Charts tab: burndown sprint navigation, mount uPlot chart, scrollbar behavior
   if (getSettingsActiveTab() === "charts") {
-    const prevBtn = document.getElementById("burndown-prev");
-    const nextBtn = document.getElementById("burndown-next");
-    if (prevBtn) {
-      prevBtn.addEventListener("click", async () => {
-        if (burndownSprintIndex > 0) {
-          burndownSprintIndex--;
-          await renderSettingsModal();
-        }
-      }, { signal });
-    }
-    if (nextBtn) {
-      nextBtn.addEventListener("click", async () => {
-        const sprints = cachedSprintsForCharts ?? [];
-        if (burndownSprintIndex < sprints.length - 1) {
-          burndownSprintIndex++;
-          await renderSettingsModal();
-        }
-      }, { signal });
-    }
+    bindBurndownNav(signal);
     const mount = contentEl.querySelector("#burndown-uplot-mount");
     if (mount) {
       destroyBurndownChart();
@@ -1426,9 +1821,9 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
           if (updated) setUser(updated);
           refreshAvatarsOutsideSettings();
           await renderSettingsModal({ skipProfileRefetch: true });
-          showToast("Avatar updated");
+          showToast(t("settings.profile.toast.avatarUpdated"));
         } catch (err: any) {
-          const msg = err?.message ?? String(err) ?? "Upload failed";
+          const msg = err?.message ?? String(err) ?? t("settings.profile.toast.uploadFailed");
           showToast(msg);
           if (profileAvatarError) {
             profileAvatarError.textContent = msg;
@@ -1453,7 +1848,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         if (updated) setUser(updated);
         refreshAvatarsOutsideSettings();
         await renderSettingsModal({ skipProfileRefetch: true });
-        showToast("Avatar removed");
+        showToast(t("settings.profile.toast.avatarRemoved"));
       } catch (err: any) {
         showToast(err.message);
       }
@@ -1495,10 +1890,10 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
             method: "PATCH",
             body: JSON.stringify({ role: "admin" }),
           });
-          showToast("User promoted to admin");
+          showToast(t("settings.users.toast.promoted"));
           await renderSettingsModal();
         } catch (err: any) {
-          showToast(err.message || "Failed to promote user");
+          showToast(err.message || t("settings.users.toast.promoteFailed"));
         }
       }, { signal });
     });
@@ -1510,9 +1905,9 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         if (!userId) return;
         
         const confirmed = await showConfirmDialog(
-          "Demote this user from admin to regular user?",
-          "Demote user?",
-          "Demote"
+          t("settings.users.demote.confirmMessage"),
+          t("settings.users.demote.confirmTitle"),
+          t("settings.users.demote.confirmAction")
         );
         if (!confirmed) {
           return;
@@ -1523,10 +1918,10 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
             method: "PATCH",
             body: JSON.stringify({ role: "user" }),
           });
-          showToast("User demoted to regular user");
+          showToast(t("settings.users.toast.demoted"));
           await renderSettingsModal();
         } catch (err: any) {
-          showToast(err.message || "Failed to demote user");
+          showToast(err.message || t("settings.users.toast.demoteFailed"));
         }
       }, { signal });
     });
@@ -1537,7 +1932,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         const userId = (e.currentTarget as HTMLElement).getAttribute("data-user-id");
         if (!userId) return;
         
-        if (!await confirmDelete("Delete this user? This action cannot be undone.")) {
+        if (!await confirmDelete(t("settings.users.delete.confirmMessage"))) {
           return;
         }
         
@@ -1545,10 +1940,10 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
           await apiFetch(`/api/admin/users/${userId}`, {
             method: "DELETE",
           });
-          showToast("User deleted");
+          showToast(t("settings.users.toast.deleted"));
           await renderSettingsModal();
         } catch (err: any) {
-          showToast(err.message || "Failed to delete user");
+          showToast(err.message || t("settings.users.toast.deleteFailed"));
         }
       }, { signal });
     });
@@ -1600,9 +1995,9 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       try {
         const blob = await processWallpaperFileForUpload(file);
         await uploadWallpaperImage(blob);
-        showToast("Wallpaper updated");
+        showToast(t("settings.customization.wallpaper.toast.updated"));
       } catch (err: any) {
-        showToast(err?.message ?? String(err) ?? "Upload failed");
+        showToast(err?.message ?? String(err) ?? t("settings.customization.wallpaper.toast.uploadFailed"));
       }
       await renderSettingsModal();
     };
@@ -1629,7 +2024,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
           el.checked = false;
           syncWallpaperRadiosFromState();
           if (!getUser()) {
-            showToast("Sign in to use a custom image");
+            showToast(t("settings.customization.wallpaper.toast.signInRequired"));
             return;
           }
           openWallpaperFileDialog();
@@ -1658,7 +2053,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       "click",
       () => {
         if (!getUser()) {
-          showToast("Sign in to use a custom image");
+          showToast(t("settings.customization.wallpaper.toast.signInRequired"));
           return;
         }
         openWallpaperFileDialog();
@@ -1673,7 +2068,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       "click",
       async () => {
         await setWallpaperOff();
-        showToast("Wallpaper removed");
+        showToast(t("settings.customization.wallpaper.toast.removed"));
         await renderSettingsModal();
       },
       { signal }
@@ -1681,6 +2076,19 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
   }
 
   if (getSettingsActiveTab() === "customization") {
+    const localeSelect = document.getElementById("settingsLocaleSelect") as HTMLSelectElement | null;
+    if (localeSelect) {
+      localeSelect.addEventListener(
+        "change",
+        async () => {
+          const nextLocale = localeSelect.value;
+          if (!isPublicLocale(nextLocale)) return;
+          await setLocale(nextLocale);
+        },
+        { signal }
+      );
+    }
+
     const voiceFlowEnabledToggle = document.getElementById("voiceFlowEnabledToggle") as HTMLInputElement | null;
     if (voiceFlowEnabledToggle) {
       voiceFlowEnabledToggle.addEventListener(
@@ -1700,11 +2108,11 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         async () => {
           const r = await requestDesktopNotificationPermission();
           if (r === "granted") {
-            showToast("Desktop notifications enabled");
+            showToast(t("settings.customization.notifications.toast.enabled"));
           } else if (r === "denied") {
-            showToast("Notifications blocked. You can allow them in your browser settings for this site.");
+            showToast(t("settings.customization.notifications.toast.blocked"));
           } else {
-            showToast("Notification permission not granted");
+            showToast(t("settings.customization.notifications.toast.notGranted"));
           }
           await renderSettingsModal();
         },
@@ -1722,7 +2130,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       } else if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
         pushToggle.disabled = true;
         if (pushHint) {
-          pushHint.textContent = "Web Push is not supported in this browser.";
+          pushHint.textContent = t("settings.customization.push.unsupported");
         }
       } else {
         isPushSubscribed()
@@ -1737,13 +2145,13 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
               const ok = await subscribeToPush();
               if (!ok) {
                 pushToggle.checked = false;
-                showToast("Could not enable Web Push. Allow notifications or check server VAPID configuration.");
+                showToast(t("settings.customization.push.toast.enableFailed"));
               } else {
-                showToast("Web Push enabled");
+                showToast(t("settings.customization.push.toast.enabled"));
               }
             } else {
               await unsubscribeFromPush();
-              showToast("Web Push disabled");
+              showToast(t("settings.customization.push.toast.disabled"));
             }
             await renderSettingsModal();
           },
@@ -1760,7 +2168,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
           const actionId = (btn as HTMLElement).getAttribute("data-keybinding-action") as KeyActionId | null;
           if (!actionId) return;
           (btn as HTMLElement).classList.add("keybinding-capture--listening");
-          (btn as HTMLElement).textContent = "Press a key…";
+          (btn as HTMLElement).textContent = getKeybindingCapturePrompt(actionId);
           setKeybindingsCaptureListening(true);
           const onKey = (e: KeyboardEvent) => {
             if (e.key === "Escape") {
@@ -1816,7 +2224,7 @@ async function renderUsersTabContent(): Promise<string> {
     const users: any[] = await apiFetch("/api/admin/users");
     
     if (users.length === 0) {
-      return `<div class="settings-section"><div class="muted">No users found.</div></div>`;
+      return `<div class="settings-section"><div class="muted" data-i18n-text="settings.users.empty">No users found.</div></div>`;
     }
 
     const rows = users.map((user: any) => {
@@ -1841,18 +2249,18 @@ async function renderUsersTabContent(): Promise<string> {
           // Admin: can demote to user or delete
           actionsHTML = `
             <div class="users-table__actions">
-              <button class="btn btn--ghost btn--small" data-action="demote" data-user-id="${user.id}" data-user-role="${userRole}">Demote</button>
-              <button class="btn btn--danger btn--small" data-action="delete" data-user-id="${user.id}">Delete</button>
-              <button class="btn btn--ghost btn--small" data-action="password" data-user-id="${user.id}">Password</button>
+              <button class="btn btn--ghost btn--small" data-action="demote" data-user-id="${user.id}" data-user-role="${userRole}" data-i18n-text="settings.users.actions.demote">Demote</button>
+              <button class="btn btn--danger btn--small" data-action="delete" data-user-id="${user.id}" data-i18n-text="settings.users.actions.delete">Delete</button>
+              <button class="btn btn--ghost btn--small" data-action="password" data-user-id="${user.id}" data-i18n-text="settings.users.actions.password">Password</button>
             </div>
           `;
         } else if (isUserRole) {
           // User: can promote to admin or delete
           actionsHTML = `
             <div class="users-table__actions">
-              <button class="btn btn--ghost btn--small" data-action="promote" data-user-id="${user.id}" data-user-role="${userRole}">Promote</button>
-              <button class="btn btn--danger btn--small" data-action="delete" data-user-id="${user.id}">Delete</button>
-              <button class="btn btn--ghost btn--small" data-action="password" data-user-id="${user.id}">Password</button>
+              <button class="btn btn--ghost btn--small" data-action="promote" data-user-id="${user.id}" data-user-role="${userRole}" data-i18n-text="settings.users.actions.promote">Promote</button>
+              <button class="btn btn--danger btn--small" data-action="delete" data-user-id="${user.id}" data-i18n-text="settings.users.actions.delete">Delete</button>
+              <button class="btn btn--ghost btn--small" data-action="password" data-user-id="${user.id}" data-i18n-text="settings.users.actions.password">Password</button>
             </div>
           `;
         }
@@ -1875,25 +2283,25 @@ async function renderUsersTabContent(): Promise<string> {
 
     return `
       <div class="settings-section">
-        <div class="settings-section__title">User Management</div>
-        <div class="settings-section__description muted">Manage system users and roles.</div>
+        <div class="settings-section__title" data-i18n-text="settings.users.management.title">User Management</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.users.management.description">Manage system users and roles.</div>
         <table class="users-table">
           <thead>
             <tr>
-              <th style="width: 35%;">User</th>
-              <th>System Role</th>
-              <th>Actions</th>
+              <th style="width: 35%;" data-i18n-text="settings.users.table.user">User</th>
+              <th data-i18n-text="settings.users.table.systemRole">System Role</th>
+              <th data-i18n-text="settings.users.table.actions">Actions</th>
             </tr>
           </thead>
           <tbody>
             ${rows}
           </tbody>
         </table>
-        ${isOwner || isAdmin ? `<div style="margin-top: 16px;"><button class="btn btn--ghost" id="createUserBtn">Create User</button></div>` : ""}
+        ${isOwner || isAdmin ? `<div style="margin-top: 16px;"><button class="btn btn--ghost" id="createUserBtn" data-i18n-text="settings.users.createUser">Create User</button></div>` : ""}
       </div>
     `;
   } catch (err: any) {
-    return `<div class="settings-section"><div class="muted">Error loading users: ${escapeHTML(err.message || "Unknown error")}</div></div>`;
+    return `<div class="settings-section"><div class="muted"><span data-i18n-text="settings.users.loadError">Error loading users:</span> ${escapeHTML(err.message || "Unknown error")}</div></div>`;
   }
 }
 
@@ -1903,27 +2311,29 @@ function showPasswordResetDialog(userId: string): void {
   dialog.innerHTML = `
     <form method="dialog" class="dialog__form" id="passwordResetForm">
       <div class="dialog__header">
-        <div class="dialog__title">Reset Password</div>
-        <button class="btn btn--ghost" type="button" id="passwordResetDialogClose" aria-label="Close">✕</button>
+        <div class="dialog__title" data-i18n-text="settings.users.passwordReset.title">Reset Password</div>
+        <button class="btn btn--ghost" type="button" id="passwordResetDialogClose" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
       </div>
 
-      <p class="muted">Generate a one-time password reset link. The link will expire in 30 minutes.</p>
+      <p class="muted" data-i18n-text="settings.users.passwordReset.description">Generate a one-time password reset link. The link will expire in 30 minutes.</p>
 
       <div class="dialog__footer">
         <div class="spacer"></div>
-        <button type="button" class="btn btn--ghost" id="passwordResetCancel">Cancel</button>
-        <button type="submit" class="btn" id="passwordResetGenerate">Generate Link</button>
+        <button type="button" class="btn btn--ghost" id="passwordResetCancel" data-i18n-text="settings.users.passwordReset.cancel">Cancel</button>
+        <button type="submit" class="btn" id="passwordResetGenerate" data-i18n-text="settings.users.passwordReset.generate">Generate Link</button>
       </div>
     </form>
   `;
   document.body.appendChild(dialog);
   (dialog as HTMLDialogElement).showModal();
+  const releaseLocale = bindDialogLocale(dialog);
 
   const closeBtn = document.getElementById("passwordResetDialogClose");
   const cancelBtn = document.getElementById("passwordResetCancel");
   const form = document.getElementById("passwordResetForm") as HTMLFormElement;
 
   const close = () => {
+    releaseLocale();
     document.body.removeChild(dialog);
   };
 
@@ -1942,19 +2352,19 @@ function showPasswordResetDialog(userId: string): void {
           { method: "POST" }
         );
         if (!res?.reset_url) {
-          showToast("Failed to generate reset link");
+          showToast(t("settings.users.passwordReset.generateFailed"));
           return;
         }
         try {
           await navigator.clipboard.writeText(res.reset_url);
-          showToast("Reset link copied to clipboard (expires in 30 minutes)");
+          showToast(t("settings.users.passwordReset.copied"));
           close();
         } catch {
           showPasswordResetFallbackDialog(res.reset_url);
           close();
         }
       } catch (err: any) {
-        showToast(err.message || "Failed to generate reset link");
+        showToast(err.message || t("settings.users.passwordReset.generateFailed"));
       }
     });
   }
@@ -1966,29 +2376,31 @@ function showPasswordResetFallbackDialog(resetUrl: string): void {
   dialog.innerHTML = `
     <div class="dialog__form">
       <div class="dialog__header">
-        <div class="dialog__title">Reset link generated</div>
-        <button class="btn btn--ghost" type="button" id="passwordResetFallbackClose" aria-label="Close">✕</button>
+        <div class="dialog__title" data-i18n-text="settings.users.passwordResetFallback.title">Reset link generated</div>
+        <button class="btn btn--ghost" type="button" id="passwordResetFallbackClose" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
       </div>
 
-      <p class="muted">Copy the link below and share it with the user. The link expires in 30 minutes.</p>
+      <p class="muted" data-i18n-text="settings.users.passwordResetFallback.description">Copy the link below and share it with the user. The link expires in 30 minutes.</p>
       <div class="field" style="margin: 12px 0;">
         <input type="text" id="passwordResetUrlDisplay" class="input" readonly value="${escapeHTML(resetUrl)}" style="font-size: 12px;" />
       </div>
 
       <div class="dialog__footer">
         <div class="spacer"></div>
-        <button type="button" class="btn" id="passwordResetFallbackCopy">Copy</button>
+        <button type="button" class="btn" id="passwordResetFallbackCopy" data-i18n-text="settings.users.passwordResetFallback.copy">Copy</button>
       </div>
     </div>
   `;
   document.body.appendChild(dialog);
   (dialog as HTMLDialogElement).showModal();
+  const releaseLocale = bindDialogLocale(dialog);
 
   const closeBtn = document.getElementById("passwordResetFallbackClose");
   const copyBtn = document.getElementById("passwordResetFallbackCopy");
   const urlInput = document.getElementById("passwordResetUrlDisplay") as HTMLInputElement;
 
   const close = () => {
+    releaseLocale();
     document.body.removeChild(dialog);
   };
 
@@ -2001,10 +2413,10 @@ function showPasswordResetFallbackDialog(resetUrl: string): void {
     copyBtn.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(urlInput.value);
-        showToast("Link copied to clipboard");
+        showToast(t("settings.users.passwordResetFallback.copied"));
       } catch {
         urlInput.select();
-        showToast("Select the link and copy manually (Ctrl+C)");
+        showToast(t("settings.users.passwordResetFallback.copyManual"));
       }
     });
   }
@@ -2016,17 +2428,18 @@ function showCreateUserDialog(): void {
   dialog.innerHTML = `
     <form method="dialog" class="dialog__form" id="createUserForm">
       <div class="dialog__header">
-        <div class="dialog__title">Create User</div>
-        <button class="btn btn--ghost" type="button" id="createUserDialogClose" aria-label="Close">✕</button>
+        <div class="dialog__title" data-i18n-text="settings.users.createUser.title">Create User</div>
+        <button class="btn btn--ghost" type="button" id="createUserDialogClose" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
       </div>
 
       <label class="field">
-        <div class="field__label">Email</div>
+        <div class="field__label" data-i18n-text="settings.users.createUser.emailLabel">Email</div>
         <input 
           type="email" 
           id="createUserEmail" 
           class="input" 
           placeholder="user@example.com" 
+          data-i18n-placeholder="settings.users.createUser.emailPlaceholder"
           maxlength="200" 
           autocomplete="email" 
           required 
@@ -2034,12 +2447,13 @@ function showCreateUserDialog(): void {
       </label>
 
       <label class="field">
-        <div class="field__label">Name</div>
+        <div class="field__label" data-i18n-text="settings.users.createUser.nameLabel">Name</div>
         <input 
           type="text" 
           id="createUserName" 
           class="input" 
           placeholder="User Name" 
+          data-i18n-placeholder="settings.users.createUser.namePlaceholder"
           maxlength="200" 
           autocomplete="name" 
           required 
@@ -2047,13 +2461,14 @@ function showCreateUserDialog(): void {
       </label>
 
       <label class="field">
-        <div class="field__label">Temporary Password</div>
+        <div class="field__label" data-i18n-text="settings.users.createUser.passwordLabel">Temporary Password</div>
         <div class="password-row">
           <input 
             type="password" 
             id="createUserPassword" 
             class="input" 
             placeholder="Password (min 8 characters)" 
+            data-i18n-placeholder="settings.users.createUser.passwordPlaceholder"
             maxlength="200" 
             autocomplete="new-password" 
             required 
@@ -2066,8 +2481,8 @@ function showCreateUserDialog(): void {
 
       <div class="dialog__footer">
         <div class="spacer"></div>
-        <button type="button" class="btn btn--ghost" id="createUserCancel">Cancel</button>
-        <button type="submit" class="btn" id="createUserSubmit">Create</button>
+        <button type="button" class="btn btn--ghost" id="createUserCancel" data-i18n-text="settings.users.createUser.cancel">Cancel</button>
+        <button type="submit" class="btn" id="createUserSubmit" data-i18n-text="settings.users.createUser.submit">Create</button>
       </div>
     </form>
   `;
@@ -2086,17 +2501,28 @@ function showCreateUserDialog(): void {
   const PATH_SHOW = "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z";
   const PATH_HIDE = "M2 5.27L3.28 4 20 20.72 18.73 22 15.65 18.92C14.5 19.3 13.28 19.5 12 19.5 7 19.5 2.73 16.39 1 12c.69-1.76 1.79-3.31 3.19-4.54L2 5.27zM12 9a3 3 0 0 1 3 3c0 .35-.06.69-.17 1l-3.83-3.83c.31-.06.65-.17 1-.17zM12 4.5c5 0 9.27 3.11 11 7.5-.82 2.08-2.21 3.88-4 5.19L17.58 15.76C18.94 14.82 20.06 13.54 20.82 12 19.17 8.64 15.76 6.5 12 6.5c-1.09 0-2.16.18-3.16.5L7.3 5.47C8.74 4.85 10.33 4.5 12 4.5zM3.18 12C4.83 15.36 8.24 17.5 12 17.5c.69 0 1.37-.07 2-.21L11.72 15c-1.43-.15-2.57-1.29-2.72-2.72L5.6 8.87C4.61 9.72 3.78 10.78 3.18 12z";
 
+  // Stateful: reflects current visibility, preserved across locale changes.
+  const syncPasswordToggleLabel = () => {
+    if (!passwordToggle) return;
+    const label = passwordInput && passwordInput.type === "text"
+      ? t("auth.password.hide")
+      : t("auth.password.show");
+    passwordToggle.setAttribute("aria-label", label);
+    passwordToggle.setAttribute("title", label);
+  };
+  const releaseLocale = bindDialogLocale(dialog, syncPasswordToggleLabel);
+
   if (passwordToggle && passwordInput && passwordIconPath) {
     passwordToggle.addEventListener("click", () => {
       const isPassword = passwordInput.type === "password";
       passwordInput.type = isPassword ? "text" : "password";
       passwordIconPath.setAttribute("d", isPassword ? PATH_HIDE : PATH_SHOW);
-      passwordToggle.setAttribute("aria-label", isPassword ? "Hide password" : "Show password");
-      passwordToggle.setAttribute("title", isPassword ? "Hide password" : "Show password");
+      syncPasswordToggleLabel();
     });
   }
 
   const close = () => {
+    releaseLocale();
     document.body.removeChild(dialog);
   };
 
@@ -2124,14 +2550,14 @@ function showCreateUserDialog(): void {
           method: "POST",
           body: JSON.stringify({ email, name, password }),
         });
-        showToast("User created successfully");
+        showToast(t("settings.users.createUser.created"));
         close();
         // Refresh the settings modal if Users tab is active
         if (getSettingsActiveTab() === "users") {
           await renderSettingsModal();
         }
       } catch (err: any) {
-        showToast(err.message || "Failed to create user");
+        showToast(err.message || t("settings.users.createUser.failed"));
       }
     });
   }
@@ -2144,7 +2570,7 @@ async function showEnable2FADialog(): Promise<void> {
       { method: "POST" }
     );
     if (!setup?.setupToken || !setup?.otpauthUri) {
-      showToast("2FA setup failed");
+      showToast(t("settings.profile.enable2fa.setupFailed"));
       return;
     }
 
@@ -2155,28 +2581,30 @@ async function showEnable2FADialog(): Promise<void> {
     dialog.innerHTML = `
       <form method="dialog" class="dialog__form" id="enable2FAForm">
         <div class="dialog__header">
-          <div class="dialog__title">Enable two-factor authentication</div>
-          <button class="btn btn--ghost" type="button" id="enable2FAClose" aria-label="Close">✕</button>
+          <div class="dialog__title" data-i18n-text="settings.profile.enable2fa.title">Enable two-factor authentication</div>
+          <button class="btn btn--ghost" type="button" id="enable2FAClose" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
         </div>
-        <div class="muted" style="margin-bottom: 12px;">Scan the QR code with your authenticator app, or enter the key manually.</div>
-        ${qrDataUrl ? `<div style="margin-bottom: 12px;"><img src="${escapeHTML(qrDataUrl)}" alt="QR code" width="192" height="192" style="display: block; margin: 0 auto;" /></div>` : ""}
+        <div class="muted" style="margin-bottom: 12px;" data-i18n-text="settings.profile.enable2fa.instructions">Scan the QR code with your authenticator app, or enter the key manually.</div>
+        ${qrDataUrl ? `<div style="margin-bottom: 12px;"><img src="${escapeHTML(qrDataUrl)}" alt="${escapeHTML(t("settings.profile.enable2fa.qrAlt"))}" width="192" height="192" style="display: block; margin: 0 auto;" /></div>` : ""}
         <div class="muted" style="margin-bottom: 8px; font-family: monospace; word-break: break-all;">${escapeHTML(setup.manualEntryKey)}</div>
         <label class="field">
-          <div class="field__label">Enter the 6-digit code from your app</div>
+          <div class="field__label" data-i18n-text="settings.profile.enable2fa.codeLabel">Enter the 6-digit code from your app</div>
           <input type="text" id="enable2FACode" class="input" placeholder="123456" maxlength="10" autocomplete="one-time-code" required />
           <div id="enable2FAError" class="field-error" style="display: none;" role="alert"></div>
         </label>
         <div class="dialog__footer">
           <div class="spacer"></div>
-          <button type="button" class="btn btn--ghost" id="enable2FACancel">Cancel</button>
-          <button type="submit" class="btn" id="enable2FASubmit">Enable</button>
+          <button type="button" class="btn btn--ghost" id="enable2FACancel" data-i18n-text="settings.profile.enable2fa.cancel">Cancel</button>
+          <button type="submit" class="btn" id="enable2FASubmit" data-i18n-text="settings.profile.enable2fa.submit">Enable</button>
         </div>
       </form>
     `;
     document.body.appendChild(dialog);
     (dialog as HTMLDialogElement).showModal();
+    const releaseLocale = bindDialogLocale(dialog);
 
     const close = () => {
+      releaseLocale();
       document.body.removeChild(dialog);
     };
 
@@ -2220,16 +2648,16 @@ async function showEnable2FADialog(): Promise<void> {
           if (res?.recoveryCodes?.length) {
             showRecoveryCodesDialog(res.recoveryCodes);
           }
-          showToast("2FA enabled");
+          showToast(t("settings.profile.toast.enabled"));
           await renderSettingsModal();
         } catch (err: any) {
-          const msg = err?.message || "Failed to enable 2FA";
+          const msg = err?.message || t("settings.profile.enable2fa.enableFailed");
           showError(msg);
         }
       });
     }
   } catch (err: any) {
-    showToast(err.message || "2FA setup failed");
+    showToast(err.message || t("settings.profile.enable2fa.setupFailed"));
   }
 }
 
@@ -2239,23 +2667,25 @@ function showRecoveryCodesDialog(codes: string[]): void {
   dialog.innerHTML = `
     <div class="dialog__form">
       <div class="dialog__header">
-        <div class="dialog__title">Recovery codes</div>
-        <button class="btn btn--ghost" type="button" id="recoveryCodesClose" aria-label="Close">✕</button>
+        <div class="dialog__title" data-i18n-text="settings.profile.recovery.title">Recovery codes</div>
+        <button class="btn btn--ghost" type="button" id="recoveryCodesClose" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
       </div>
-      <div class="muted" style="margin-bottom: 12px;">Save these codes in a secure place. Each can be used once to sign in if you lose access to your authenticator app.</div>
+      <div class="muted" style="margin-bottom: 12px;" data-i18n-text="settings.profile.recovery.description">Save these codes in a secure place. Each can be used once to sign in if you lose access to your authenticator app.</div>
       <div style="font-family: monospace; word-break: break-all; margin-bottom: 16px; padding: 12px; background: var(--panel); border-radius: 4px;">
         ${codes.map((c) => escapeHTML(c)).join(" &nbsp; ")}
       </div>
       <div class="dialog__footer">
         <div class="spacer"></div>
-        <button type="button" class="btn" id="recoveryCodesDone">Done</button>
+        <button type="button" class="btn" id="recoveryCodesDone" data-i18n-text="settings.profile.recovery.done">Done</button>
       </div>
     </div>
   `;
   document.body.appendChild(dialog);
   (dialog as HTMLDialogElement).showModal();
+  const releaseLocale = bindDialogLocale(dialog);
 
   const close = () => {
+    releaseLocale();
     document.body.removeChild(dialog);
   };
 
@@ -2272,25 +2702,27 @@ function showDisable2FADialog(): void {
   dialog.innerHTML = `
     <form method="dialog" class="dialog__form" id="disable2FAForm">
       <div class="dialog__header">
-        <div class="dialog__title">Disable two-factor authentication</div>
-        <button class="btn btn--ghost" type="button" id="disable2FAClose" aria-label="Close">✕</button>
+        <div class="dialog__title" data-i18n-text="settings.profile.disable2fa.title">Disable two-factor authentication</div>
+        <button class="btn btn--ghost" type="button" id="disable2FAClose" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
       </div>
-      <div class="muted" style="margin-bottom: 12px;">Enter your password to disable 2FA.</div>
+      <div class="muted" style="margin-bottom: 12px;" data-i18n-text="settings.profile.disable2fa.description">Enter your password to disable 2FA.</div>
       <label class="field">
-        <div class="field__label">Password</div>
-        <input type="password" id="disable2FAPassword" class="input" placeholder="Password" required />
+        <div class="field__label" data-i18n-text="settings.profile.disable2fa.passwordLabel">Password</div>
+        <input type="password" id="disable2FAPassword" class="input" placeholder="Password" data-i18n-placeholder="settings.profile.disable2fa.passwordPlaceholder" required />
       </label>
       <div class="dialog__footer">
         <div class="spacer"></div>
-        <button type="button" class="btn btn--ghost" id="disable2FACancel">Cancel</button>
-        <button type="submit" class="btn btn--danger" id="disable2FASubmit">Disable 2FA</button>
+        <button type="button" class="btn btn--ghost" id="disable2FACancel" data-i18n-text="settings.profile.disable2fa.cancel">Cancel</button>
+        <button type="submit" class="btn btn--danger" id="disable2FASubmit" data-i18n-text="settings.profile.disable2fa.submit">Disable 2FA</button>
       </div>
     </form>
   `;
   document.body.appendChild(dialog);
   (dialog as HTMLDialogElement).showModal();
+  const releaseLocale = bindDialogLocale(dialog);
 
   const close = () => {
+    releaseLocale();
     document.body.removeChild(dialog);
   };
 
@@ -2313,10 +2745,10 @@ function showDisable2FADialog(): void {
         close();
         const u = getUser();
         if (u) setUser({ ...u, twoFactorEnabled: false });
-        showToast("2FA disabled");
+        showToast(t("settings.profile.toast.disabled"));
         await renderSettingsModal();
       } catch (err: any) {
-        showToast(err.message || "Failed to disable 2FA");
+        showToast(err.message || t("settings.profile.disable2fa.failed"));
       }
     });
   }
@@ -2329,10 +2761,10 @@ async function showRegenerateRecoveryCodesDialog(): Promise<void> {
     });
     if (res?.recoveryCodes?.length) {
       showRecoveryCodesDialog(res.recoveryCodes);
-      showToast("Recovery codes regenerated");
+      showToast(t("settings.profile.toast.recoveryRegenerated"));
       await renderSettingsModal();
     }
   } catch (err: any) {
-    showToast(err.message || "Failed to regenerate recovery codes");
+    showToast(err.message || t("settings.profile.recovery.regenerateFailed"));
   }
 }

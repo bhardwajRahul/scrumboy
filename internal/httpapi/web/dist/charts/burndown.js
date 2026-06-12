@@ -1,3 +1,4 @@
+import { formatDate, t } from '../i18n/index.js';
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 function toNumeric(value) {
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -14,7 +15,7 @@ function toTimestampMs(value) {
     return Number.isFinite(ts) ? ts : null;
 }
 function formatShortDate(tsMs) {
-    return new Date(tsMs).toLocaleDateString('en-US', {
+    return formatDate(tsMs, {
         month: 'short',
         day: 'numeric',
         timeZone: 'UTC',
@@ -101,10 +102,10 @@ function countVisibleRealSamples(chartData, usePoints) {
 }
 function resolveFallbackMessage(data, chartData) {
     if (!Array.isArray(data) || data.length === 0) {
-        return 'No data available. Create some todos to see the burndown chart.';
+        return t('settings.charts.noData.noTodos');
     }
     if (chartData.length === 0) {
-        return 'No data for this sprint. Create some todos during the sprint to see the burndown chart.';
+        return t('settings.charts.noData.sprintEmpty');
     }
     const initialScopePoints = toNumeric(chartData[0]?.initialScopePoints) != null
         ? toNumeric(chartData[0]?.initialScopePoints)
@@ -112,10 +113,10 @@ function resolveFallbackMessage(data, chartData) {
     const usePoints = resolveUsePoints(chartData, initialScopePoints);
     const visibleRealSamples = countVisibleRealSamples(chartData, usePoints);
     if (visibleRealSamples === 0) {
-        return 'No usable burndown data available.';
+        return t('settings.charts.noData.unusable');
     }
     if (visibleRealSamples === 1) {
-        return 'Not enough burndown history yet. Check back after more sprint progress is recorded.';
+        return t('settings.charts.noData.insufficient');
     }
     return null;
 }
@@ -131,16 +132,16 @@ export function renderRealBurndownChart(data, currentSprint, sprintNav, dataIsSp
             : `${formatShortDate(domain.startMs)} - ${formatShortDate(domain.endMs)}`;
     }
     else if (currentSprint) {
-        dateRangeSubtitle = `${currentSprint.name} | No data`;
+        dateRangeSubtitle = `${currentSprint.name} | ${t('settings.charts.subtitle.noData')}`;
     }
     else {
-        dateRangeSubtitle = 'No data available';
+        dateRangeSubtitle = t('settings.charts.subtitle.noDataAvailable');
     }
     const subtitleWithNav = currentSprint && sprintNav
         ? `<div class="burndown-chart__subtitle-row">
-          <button class="burndown-chart__nav-arrow" id="burndown-prev" ${!sprintNav.canPrev ? 'disabled' : ''} type="button" aria-label="Previous sprint">&#9664;</button>
+          <button class="burndown-chart__nav-arrow" id="burndown-prev" ${!sprintNav.canPrev ? 'disabled' : ''} type="button" aria-label="${t('settings.charts.nav.previous')}">&#9664;</button>
           <div class="burndown-chart__subtitle muted">${dateRangeSubtitle}</div>
-          <button class="burndown-chart__nav-arrow" id="burndown-next" ${!sprintNav.canNext ? 'disabled' : ''} type="button" aria-label="Next sprint">&#9654;</button>
+          <button class="burndown-chart__nav-arrow" id="burndown-next" ${!sprintNav.canNext ? 'disabled' : ''} type="button" aria-label="${t('settings.charts.nav.next')}">&#9654;</button>
         </div>`
         : `<div class="burndown-chart__subtitle muted">${dateRangeSubtitle}</div>`;
     const mountContent = noDataMessage
@@ -150,7 +151,7 @@ export function renderRealBurndownChart(data, currentSprint, sprintNav, dataIsSp
     <div class="burndown-chart">
       <div class="burndown-chart__header">
         <div>
-          <div class="burndown-chart__title">Real Burndown</div>
+          <div class="burndown-chart__title">${t('settings.charts.title')}</div>
           ${subtitleWithNav}
         </div>
       </div>
@@ -269,7 +270,7 @@ function computeYExtents(alignedYSeries) {
 export function mountBurndownChart(container, data, currentSprint, dataIsSprintScoped) {
     const uPlot = window.uPlot;
     if (!uPlot) {
-        container.innerHTML = "<div class='muted'>Chart library not loaded.</div>";
+        container.innerHTML = `<div class='muted'>${t('settings.charts.error.libraryNotLoaded')}</div>`;
         return;
     }
     destroyBurndownChart();
@@ -302,8 +303,8 @@ export function mountBurndownChart(container, data, currentSprint, dataIsSprintS
     const durationDaysDisplay = durationDays > 0 ? String(durationDays) : '—';
     const remainingDisplay = remaining != null ? String(remaining) : '—';
     const idealLabel = idealPointsPerDay != null
-        ? `Ideal Pace: ${idealPointsPerDay.toFixed(1)}/day`
-        : 'Ideal Pace: —';
+        ? t('settings.charts.footer.idealPace', { pace: idealPointsPerDay.toFixed(1) })
+        : t('settings.charts.footer.idealPaceEmpty');
     // Remove existing footer to prevent duplicates on remount
     const chartRoot = container.closest('.burndown-chart');
     const existingFooter = chartRoot?.querySelector('.burndown-chart__footer');
@@ -313,8 +314,8 @@ export function mountBurndownChart(container, data, currentSprint, dataIsSprintS
     const footerEl = document.createElement('div');
     footerEl.className = 'burndown-chart__footer';
     footerEl.innerHTML = `
-    <span>Days: ${durationDaysDisplay}</span>
-    <span>Remaining: ${remainingDisplay}</span>
+    <span>${t('settings.charts.footer.days', { days: durationDaysDisplay })}</span>
+    <span>${t('settings.charts.footer.remaining', { remaining: remainingDisplay })}</span>
     <span>${idealLabel}</span>
   `;
     chartRoot?.appendChild(footerEl);
@@ -350,7 +351,7 @@ export function mountBurndownChart(container, data, currentSprint, dataIsSprintS
     const sameLength = lengths.every((len) => len === lengths[0]);
     if (!sameLength) {
         console.warn('Burndown alignedData length mismatch', lengths);
-        container.innerHTML = "<div class='muted'>Chart data is misaligned.</div>";
+        container.innerHTML = `<div class='muted'>${t('settings.charts.error.misaligned')}</div>`;
         return;
     }
     const xMin = x[0];
@@ -385,8 +386,7 @@ export function mountBurndownChart(container, data, currentSprint, dataIsSprintS
                 ticks: { show: true },
                 font: '12px system-ui, sans-serif',
                 values: (_u, vals) => vals.map((v) => {
-                    const d = new Date(v * 1000); // scale values are in seconds
-                    return d.toLocaleDateString('en-US', {
+                    return formatDate(v * 1000, {
                         month: 'short',
                         day: 'numeric',
                         timeZone: 'UTC',
@@ -419,6 +419,6 @@ export function mountBurndownChart(container, data, currentSprint, dataIsSprintS
     }
     catch (e) {
         console.error('uPlot init failed:', e);
-        container.innerHTML = "<div class='muted'>Chart failed to load.</div>";
+        container.innerHTML = `<div class='muted'>${t('settings.charts.error.failed')}</div>`;
     }
 }

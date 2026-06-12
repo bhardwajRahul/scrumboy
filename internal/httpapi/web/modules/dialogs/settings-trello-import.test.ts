@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import enCatalog from '../i18n/locales/en.json';
+import deCatalog from '../i18n/locales/de.json';
+
 const apiFetchMock = vi.fn();
 
 vi.mock('../api.js', () => ({
@@ -72,6 +75,7 @@ vi.mock('../core/keybindings.js', () => ({
 
 vi.mock('../core/assignmentNotify.js', () => ({
   requestDesktopNotificationPermission: vi.fn(),
+  getDesktopNotificationStatusKind: () => 'default',
   getDesktopNotificationStatusDescription: () => '',
 }));
 
@@ -108,9 +112,31 @@ vi.mock('./settings-sprints.js', () => ({
 
 function installBaseDOM(): void {
   document.body.innerHTML = `
-    <dialog id="settingsDialog"></dialog>
-    <button id="closeSettingsBtn" type="button"></button>
+    <dialog id="settingsDialog">
+      <div class="dialog__header">
+        <div class="dialog__title">
+          <span id="settingsDialogTitleLabel">Settings</span>
+          <span id="settingsDialogVersion"></span>
+        </div>
+        <button id="closeSettingsBtn" type="button"></button>
+      </div>
+      <div class="dialog__content"></div>
+    </dialog>
   `;
+}
+
+function loader() {
+  const catalogs: Record<string, Record<string, string>> = {
+    en: enCatalog as Record<string, string>,
+    de: deCatalog as Record<string, string>,
+  };
+  return vi.fn(async (locale: string) => catalogs[locale]);
+}
+
+async function initI18nFor(locale: 'en' | 'de' = 'en') {
+  const i18n = await import('../i18n/index.js');
+  await i18n.initI18n({ locale, loadLocale: loader() });
+  return i18n;
 }
 
 async function loadSettingsModule() {
@@ -124,12 +150,15 @@ async function loadStateMutations() {
 }
 
 describe('settings-trello-import', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.resetModules();
     installBaseDOM();
+    await initI18nFor('en');
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const i18n = await import('../i18n/index.js');
+    i18n.resetI18nForTests();
     document.body.innerHTML = '';
   });
 
@@ -267,6 +296,80 @@ describe('settings-trello-import', () => {
     const link = resultEl?.querySelector('a');
     expect(resultEl?.textContent).toContain('Import complete');
     expect(link?.getAttribute('href')).toBe('/sanitized-board');
+  });
+
+  it('localizes Trello preview/warnings/result labels while keeping raw payload values unchanged', async () => {
+    const mod = await loadSettingsModule();
+    const i18n = await import('../i18n/index.js');
+
+    const preview = {
+      boardName: 'Quarterly Roadmap',
+      openLists: 2,
+      closedLists: 1,
+      cards: 3,
+      archivedCards: 1,
+      labels: 2,
+      membersReferenced: 2,
+      checklists: 1,
+      checklistItems: 3,
+      commentCardActions: 2,
+      attachments: 1,
+      customFieldItems: 1,
+      detectedDoneColumn: 'Shipped',
+      detectedDoneReason: 'rightmost open list',
+      hardErrors: ['Missing list id list-x'],
+      warnings: ['Attachments import as links only'],
+    };
+    const result = {
+      project: { id: 7, name: 'Quarterly Roadmap', slug: 'quarterly-roadmap' },
+      summary: {
+        projects: 1,
+        todos: 3,
+        labels: 2,
+        openLists: 2,
+        closedLists: 1,
+        archivedCards: 1,
+        checklists: 1,
+        checklistItems: 3,
+        commentCardActions: 2,
+        attachments: 1,
+        customFieldItems: 1,
+      },
+      warnings: ['Attachments import as links only'],
+    };
+
+    document.body.innerHTML += mod.renderBackupTabHTML();
+    mod.renderTrelloPreview(preview);
+    mod.renderTrelloWarnings(preview);
+    mod.renderTrelloImportResult(result);
+
+    expect(document.getElementById('trelloImportPreview')?.textContent).toContain('Open lists: 2');
+    expect(document.getElementById('trelloImportWarnings')?.textContent).toContain('Hard errors');
+    expect(document.getElementById('trelloImportResult')?.textContent).toContain('Import complete');
+
+    await i18n.setLocale('de');
+    // Re-render from the same payload, mirroring the locale-change rebuild path.
+    mod.renderTrelloPreview(preview);
+    mod.renderTrelloWarnings(preview);
+    mod.renderTrelloImportResult(result);
+
+    const previewText = document.getElementById('trelloImportPreview')?.textContent ?? '';
+    const warningsText = document.getElementById('trelloImportWarnings')?.textContent ?? '';
+    const resultText = document.getElementById('trelloImportResult')?.textContent ?? '';
+
+    // Localized chrome changes...
+    expect(previewText).toContain('Offene Listen: 2');
+    expect(warningsText).toContain('Schwerwiegende Fehler');
+    expect(resultText).toContain('Import abgeschlossen');
+    // ...while raw backend/payload values stay exactly as provided.
+    expect(previewText).toContain('Quarterly Roadmap');
+    expect(previewText).toContain('Shipped');
+    expect(previewText).toContain('rightmost open list');
+    expect(warningsText).toContain('Missing list id list-x');
+    expect(warningsText).toContain('Attachments import as links only');
+    const link = document.getElementById('trelloImportResult')?.querySelector('a');
+    expect(link?.getAttribute('href')).toBe('/quarterly-roadmap');
+    expect(link?.textContent).toBe('Quarterly Roadmap');
   });
 
   it('sends the exact raw Trello JSON string to preview and import endpoints', async () => {

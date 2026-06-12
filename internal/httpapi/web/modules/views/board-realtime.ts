@@ -22,6 +22,7 @@ import { registerAnonymousSseRestart } from '../core/realtime.js';
 import { invalidateBoard } from '../orchestration/board-refresh.js';
 import { dragInProgress } from '../features/drag-drop.js';
 import { clearTodoMultiSelection, updateBulkEditBar } from './board-selection.js';
+import { t } from '../i18n/index.js';
 
 const DEBUG_BOARD_LOAD = typeof localStorage !== "undefined" && localStorage.getItem("scrumboy_debug_board_load") === "1";
 export function debugLog(msg: string, slug?: string | null): void {
@@ -334,10 +335,11 @@ export function connectBoardEvents(slug: string): void {
             return;
           }
           assignmentToastLastByTodoId.set(inner.todoId, now);
-          const t = typeof inner.title === "string" ? inner.title : "";
-          showToast(`Assigned: ${t || "Todo"}`);
+          const title = typeof inner.title === "string" ? inner.title : "";
+          const fallbackTitle = title || t("realtime.todoFallback");
+          showToast(t("realtime.assigned", { title: fallbackTitle }));
           playAssignmentSound();
-          showAssignmentDesktopNotification(t || "Todo");
+          showAssignmentDesktopNotification(fallbackTitle);
           return;
         }
         if (payload.type === "members_updated") {

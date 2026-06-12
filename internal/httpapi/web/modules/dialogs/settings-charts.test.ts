@@ -96,6 +96,7 @@ vi.mock('../core/keybindings.js', () => ({
 
 vi.mock('../core/assignmentNotify.js', () => ({
   requestDesktopNotificationPermission: vi.fn(),
+  getDesktopNotificationStatusKind: () => 'default',
   getDesktopNotificationStatusDescription: () => '',
 }));
 
@@ -133,10 +134,15 @@ vi.mock('./settings-sprints.js', () => ({
 function installBaseDOM(): void {
   document.body.innerHTML = `
     <dialog id="settingsDialog">
-      <div class="dialog__title"></div>
+      <div class="dialog__header">
+        <div class="dialog__title">
+          <span id="settingsDialogTitleLabel">Settings</span>
+          <span id="settingsDialogVersion"></span>
+        </div>
+        <button id="closeSettingsBtn" type="button"></button>
+      </div>
       <div class="dialog__content"></div>
     </dialog>
-    <button id="closeSettingsBtn" type="button"></button>
   `;
 }
 

@@ -1,5 +1,20 @@
 // Shared test helpers for the wall feature's interaction tests.
 import { ensureWallContent, initWallViewport, teardownWallViewport } from "./wall-viewport.js";
+/**
+ * Initialize the real i18n runtime with the provided catalogs so wall modules
+ * that resolve `wall.*` strings via `t()` do not throw on missing keys (strict
+ * mode in tests). Catalogs are passed in by the caller because JSON imports are
+ * only available in `*.test.ts` files (the main build tsconfig excludes them).
+ * Re-imports the i18n module dynamically so it picks up the current module
+ * registry after `vi.resetModules()`.
+ */
+export async function initWallTestI18n(catalogs, locale = "en") {
+    const i18n = await import("../i18n/index.js");
+    await i18n.initI18n({
+        locale,
+        loadLocale: async (loc) => catalogs[loc] ?? catalogs.en,
+    });
+}
 //
 // These helpers are **non-hoisted** by design: any `vi.hoisted` / `vi.mock`
 // call must stay in the test file itself so that vitest wires the module

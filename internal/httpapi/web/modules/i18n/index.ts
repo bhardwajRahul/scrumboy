@@ -1,0 +1,744 @@
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "pseudo"] as const;
+export type LocaleId = typeof SUPPORTED_LOCALES[number];
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt"] as const;
+export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
+export type MessageCatalog = Record<string, string>;
+export type MessageValues = Record<string, string | number | boolean | null | undefined>;
+
+export const LOCALE_STORAGE_KEY = "scrumboy.locale";
+export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
+export const LOCALE_LABELS: Record<LocaleId, string> = {
+  en: "English",
+  de: "Deutsch",
+  fr: "Français",
+  pt: "Português (Brasil)",
+  pseudo: "Pseudo",
+};
+
+const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
+  "common.add": "Add",
+  "common.apply": "Apply",
+  "common.cancel": "Cancel",
+  "common.close": "Close",
+  "common.confirm": "Confirm",
+  "common.delete": "Delete",
+  "common.prompt": "Prompt",
+  "common.remove": "Remove",
+  "common.save": "Save",
+  "common.value": "Value",
+  "auth.2fa.accountFallback": "your account",
+  "auth.2fa.failed": "Verification failed.",
+  "auth.2fa.helper": "Enter the 6-digit code from your authenticator app, or a recovery code.",
+  "auth.2fa.placeholder": "Code for {account}",
+  "auth.2fa.submit": "Verify",
+  "auth.2fa.title": "Two-factor authentication",
+  "auth.actions.bootstrap": "Bootstrap",
+  "auth.actions.login": "Login",
+  "auth.actions.resetPassword": "Reset Password",
+  "auth.bootstrap.failed": "Setup failed.",
+  "auth.bootstrap.title": "First-time setup",
+  "auth.fields.confirmPassword.label": "Confirm password",
+  "auth.fields.confirmPassword.placeholder": "Confirm new password",
+  "auth.fields.email.placeholder": "Email",
+  "auth.fields.name.placeholder": "Name",
+  "auth.fields.newPassword.label": "New password",
+  "auth.fields.newPassword.placeholder": "Min 8 characters",
+  "auth.fields.password.placeholder": "Password",
+  "auth.login.failed": "Login failed.",
+  "auth.oidc.button": "Continue with SSO",
+  "auth.oidc.error.email": "A verified email address is required.",
+  "auth.oidc.error.generic": "Authentication failed.",
+  "auth.oidc.error.provider": "The identity provider returned an error.",
+  "auth.oidc.error.state_invalid": "Login session expired or invalid. Please try again.",
+  "auth.oidc.error.token": "Authentication failed. Please try again.",
+  "auth.password.hide": "Hide password",
+  "auth.password.show": "Show password",
+  "auth.reset.helper": "Enter your new password. The link expires in 30 minutes.",
+  "auth.reset.invalidLink": "Invalid or missing reset link",
+  "auth.reset.invalidOrExpiredToken": "Invalid or expired reset token",
+  "auth.reset.passwordsMismatch": "Passwords do not match",
+  "auth.reset.success": "Password reset successfully. Please log in.",
+  "auth.reset.title": "Reset Password",
+  "auth.shared.helper": "Authentication is enabled for this instance. Anonymous boards remain shareable by URL; durable projects require sign-in.",
+  "auth.shared.or": "or",
+  "auth.signIn.title": "Sign in",
+  "board.actions.changeProjectImage": "Change project image",
+  "board.actions.clearSearch": "Clear search",
+  "board.actions.deleteProject": "Delete project",
+  "board.actions.manageMembers": "Members",
+  "board.actions.newTodo": "New Todo",
+  "board.actions.openWall": "Open wall",
+  "board.actions.renameProject": "Rename",
+  "board.actions.settings": "Settings",
+  "board.backToProjects": "\u2190 Projects",
+  "board.bulkEdit.editingMultiple": "Editing {count} todos.",
+  "board.bulkEdit.editingSingle": "Editing 1 todo.",
+  "board.bulkEdit.noTodosSelected": "No todos on the board to edit.",
+  "board.bulkEdit.nothingToUpdate": "Nothing to update.",
+  "board.bulkEdit.removeTag": "Remove tag",
+  "board.bulkEdit.title": "Bulk edit",
+  "board.bulkEdit.updatedMultiple": "Updated {count} todos",
+  "board.bulkEdit.updatedPartial": "Updated {success} of {total} todos ({failed} failed)",
+  "board.bulkEdit.updatedSingle": "Updated 1 todo",
+  "board.filters.all": "All",
+  "board.filters.label": "Tags:",
+  "board.filters.next": "Next tags",
+  "board.filters.previous": "Previous tags",
+  "board.filters.scheduled": "Scheduled",
+  "board.filters.unscheduled": "Unscheduled",
+  "board.loadMore": "Load more",
+  "board.loadMoreFailed": "Failed to load more",
+  "board.members.addFailed": "Failed to add member",
+  "board.members.addMember": "Add Member",
+  "board.members.addNewMember": "Add New Member",
+  "board.members.added": "Member added successfully",
+  "board.members.allUsersAreMembers": "All users are already members",
+  "board.members.close": "Close",
+  "board.members.currentMembers": "Current Members",
+  "board.members.demoteAction": "Demote",
+  "board.members.demoteConfirm": "Demote {name} to {role}?",
+  "board.members.demoteTitle": "Demote member?",
+  "board.members.dialogTitle": "Manage Members",
+  "board.members.dialogTitleReadOnly": "Members",
+  "board.members.loadFailed": "Failed to load members",
+  "board.members.noMembers": "No members yet",
+  "board.members.projectLabel": "Project: {name}",
+  "board.members.remove": "Remove",
+  "board.members.removeConfirm": "Remove {name} from this project?",
+  "board.members.removeFailed": "Failed to remove member",
+  "board.members.removeFromProject": "Remove from project",
+  "board.members.removeTitle": "Remove member?",
+  "board.members.removed": "Member removed from project",
+  "board.members.role": "Role",
+  "board.members.role.contributor": "Contributor",
+  "board.members.role.maintainer": "Maintainer",
+  "board.members.role.viewer": "Viewer",
+  "board.members.roleUpdated": "Role updated",
+  "board.members.selectUser": "Select a user...",
+  "board.members.thisMember": "this member",
+  "board.members.updateRoleFailed": "Failed to update role",
+  "board.members.user": "User",
+  "board.noResults": "No todos found matching \"{search}\"",
+  "board.openTodo.accessDenied": "You don't have access to this todo",
+  "board.openTodo.failed": "Failed to load todo",
+  "board.openTodo.notFound": "Todo not found",
+  "board.project.imageUpdated": "Project image updated",
+  "board.project.imageUploadFailed": "Upload failed",
+  "board.project.deleteFailed": "Failed to delete project",
+  "board.project.nameLabel": "Project Name",
+  "board.project.namePlaceholder": "Project name",
+  "board.project.renamed": "Project renamed",
+  "board.project.renameAction": "Rename",
+  "board.project.renameFailed": "Failed to rename project",
+  "board.project.renameTitle": "Rename Project",
+  "board.refreshFailed": "Failed to refresh board",
+  "board.search.placeholder.desktop": "Search todos...",
+  "board.search.placeholder.mobile": "Search",
+  "board.selection.multiple": "Edit {count} selected",
+  "board.selection.single": "Edit 1 selected",
+  "board.status.backlog": "Backlog",
+  "board.todo.dragToReorder": "Drag to reorder",
+  "board.todo.moveFailed": "Failed to move todo",
+  "board.todo.movedTo": "Todo moved to {lane}",
+  "board.voice.boardChanged": "The board changed before commands opened",
+  "board.voice.loadFailed": "Commands failed to load",
+  "board.voice.unavailable": "Commands are unavailable for this board",
+  "board.wallOpenFailed": "Could not open the wall",
+  "dashboard.empty.assignedTodos": "No todos assigned to you.",
+  "dashboard.loadMore.action": "Load more",
+  "dashboard.loadMore.loading": "Loading...",
+  "dashboard.loadMore.loadingAria": "Loading more",
+  "dashboard.loading.assignedTodos": "Loading assigned todos...",
+  "dashboard.project.openTitle": "Open {name}",
+  "dashboard.sort.activity": "Activity",
+  "dashboard.sort.board.long": "Board Order (per project)",
+  "dashboard.sort.board.short": "Board Order",
+  "dashboard.sort.hint": "Order matches each project's board: column, then drag order. Projects appear in a fixed order (not alphabetical or by activity).",
+  "dashboard.sort.label": "Sort",
+  "dashboard.sprint.unscheduled": "Unscheduled",
+  "dashboard.stats.assigned": "ASSIGNED",
+  "dashboard.stats.avgLeadTime": "Avg. lead time",
+  "dashboard.stats.currentSprint": "CURRENT SPRINT",
+  "dashboard.stats.inProgress": "In progress",
+  "dashboard.stats.leadTimeValue": "{days}d",
+  "dashboard.stats.oldestInProgress": "Oldest in progress",
+  "dashboard.stats.oldestWipValue": "#{localId} {title} — {ageDays}d ({projectName})",
+  "dashboard.stats.pointsOnly": "{points} pts",
+  "dashboard.stats.pointsTodos": "{points} pts · {todos} todos",
+  "dashboard.stats.storiesPoints": "Stories: {stories}% · Points: {points}%",
+  "dashboard.stats.teamCompletion": "TEAM COMPLETION",
+  "dashboard.stats.testing": "Testing",
+  "dashboard.stats.throughputLast4Weeks": "Throughput (last 4 weeks)",
+  "dashboard.stats.totalAssigned": "Total assigned",
+  "dashboard.stats.totalPrefix": "Total:",
+  "dashboard.stats.wip": "WIP",
+  "dashboard.stats.yourCompletion": "YOUR COMPLETION",
+  "dashboard.stats.yourFlow": "YOUR FLOW",
+  "dashboard.stats.yourWorkload": "YOUR WORKLOAD",
+  "dashboard.tabs.dashboard": "Dashboard",
+  "dashboard.tabs.projects": "Projects",
+  "dashboard.throughput.barTitle": "{weekStart}: {stories} stories, {points} pts",
+  "dashboard.title": "Dashboard",
+  "dashboard.todo.estimationPointsAria": "Estimation points",
+  "errors.BAD_REQUEST": "Bad request",
+  "errors.CONFLICT": "Conflict",
+  "errors.FORBIDDEN": "Forbidden",
+  "errors.INTERNAL": "Something went wrong.",
+  "errors.METHOD_NOT_ALLOWED": "Method not allowed",
+  "errors.NOT_FOUND": "Not found",
+  "errors.PAYLOAD_TOO_LARGE": "Upload is too large.",
+  "errors.RATE_LIMITED": "Too many attempts. Try again later.",
+  "errors.SERVICE_UNAVAILABLE": "Service unavailable.",
+  "errors.UNAUTHORIZED": "Unauthorized",
+  "errors.VALIDATION_ERROR": "Please check the request and try again.",
+  "errors.generic": "Something went wrong.",
+  "errors.httpStatus": "HTTP {status}",
+  "nav.temporaryBoards.long": "Temporary Boards",
+  "nav.temporaryBoards.short": "Temporary",
+  "projects.actions.create": "Create",
+  "projects.actions.createTemporaryBoard": "Create Temporary Board",
+  "projects.actions.delete": "Delete",
+  "projects.actions.rename": "Rename",
+  "projects.actions.renameProject": "Rename project",
+  "projects.actions.settings": "Settings",
+  "projects.create.failed": "Failed to create project",
+  "projects.delete.confirmMessage": "Delete this project and all its todos?",
+  "projects.delete.failed": "Failed to delete project",
+  "projects.empty.projects": "No projects yet.",
+  "projects.empty.temporary": "No temporary boards yet.",
+  "projects.fields.namePlaceholder": "New project name",
+  "projects.rename.confirmAction": "Rename",
+  "projects.rename.failed": "Failed to rename project",
+  "projects.rename.label": "Project Name",
+  "projects.rename.placeholder": "Project name",
+  "projects.rename.success": "Project renamed",
+  "projects.rename.title": "Rename Project",
+  "projects.tabs.dashboard": "Dashboard",
+  "projects.tabs.projects": "Projects",
+  "projects.title": "Projects",
+  "projects.validation.nameRequired": "Project name is required.",
+  "projects.view.grid": "Grid view",
+  "projects.view.list": "List view",
+  "projects.workflow.addLaneAction": "Add",
+  "projects.workflow.addLaneAriaLabel": "Add lane",
+  "projects.workflow.addLanePlaceholder": "Add lane...",
+  "projects.workflow.cancelAction": "Cancel",
+  "projects.workflow.confirmAction": "Confirm",
+  "projects.workflow.creating": "Creating...",
+  "projects.workflow.doneLabel": "Done",
+  "projects.workflow.helper": "Configure lanes before creating the project.",
+  "projects.workflow.laneColor": "Lane color for {name}",
+  "projects.workflow.reorderLane": "Reorder lane",
+  "projects.workflow.setDoneLane": "Set {name} as done lane",
+  "projects.workflow.title": "Customize Workflow",
+  "projects.workflow.validation.duplicateKey": "Duplicate lane keys. Rename lanes to fix.",
+  "projects.workflow.validation.emptyName": "Lane names cannot be empty.",
+  "projects.workflow.validation.exactlyOneDone": "Exactly one lane must be marked as Done.",
+  "projects.workflow.validation.invalidColor": "Lane colors must be valid hex colors.",
+  "projects.workflow.validation.invalidKey": "Lane keys must be snake_case (letters, numbers, underscore).",
+  "projects.workflow.validation.minLanes": "Workflow must have at least 2 lanes.",
+  "realtime.assigned": "Assigned: {title}",
+  "realtime.todoFallback": "Todo",
+  "shell.bulkEdit.addTags": "Add tags",
+  "shell.bulkEdit.assignSprint": "Assign sprint",
+  "shell.bulkEdit.assignTo": "Assign to",
+  "shell.bulkEdit.assignUser": "Assign user",
+  "shell.bulkEdit.changeStatus": "Change status",
+  "shell.bulkEdit.estimationPoints": "Estimation points",
+  "shell.bulkEdit.noEstimate": "No estimate",
+  "shell.bulkEdit.setEstimationPoints": "Set estimation points",
+  "shell.bulkEdit.sprint": "Sprint",
+  "shell.bulkEdit.status": "Status",
+  "shell.bulkEdit.tagsPlaceholder": "Type tag and press Enter",
+  "shell.contextMenu.newTodo": "New Todo",
+  "settings.language.description": "Choose the language used for Scrumboy on this browser.",
+  "settings.language.selectLabel": "Language",
+  "settings.language.title": "Language",
+  "todo.assignee.current": "Current: {name}",
+  "todo.assignee.me": "Me",
+  "todo.assignee.unassigned": "Unassigned",
+  "todo.confirm.deleteAction": "Delete",
+  "todo.confirm.deleteMessage": "Delete this todo?",
+  "todo.confirm.deleteTitle": "Delete",
+  "todo.confirm.discardAction": "Discard",
+  "todo.confirm.discardMessage": "You have unsaved changes. Discard them?",
+  "todo.confirm.discardTitle": "Unsaved changes",
+  "todo.created": "Todo created",
+  "todo.deleteFailed": "Failed to delete todo",
+  "todo.dialog.title.edit": "Edit Todo",
+  "todo.dialog.title.new": "New Todo",
+  "todo.dialog.title.view": "View Todo",
+  "todo.estimation.none": "No estimate",
+  "todo.fields.assignedTo": "Assigned to",
+  "todo.fields.estimationPoints": "Estimation Points",
+  "todo.fields.linkedStories": "Linked Stories",
+  "todo.fields.notes": "Notes",
+  "todo.fields.sprint": "Sprint",
+  "todo.fields.status": "Status",
+  "todo.fields.tags": "Tags",
+  "todo.fields.title": "Title",
+  "todo.links.addPrompt": "Type #id or title, then tap Add",
+  "todo.links.cannotShare": "Cannot share: no story in context",
+  "todo.links.copySuccess": "Link copied",
+  "todo.links.linkFailed": "Failed to link story",
+  "todo.links.remove": "Remove link",
+  "todo.links.removeFailed": "Failed to remove link",
+  "todo.links.searchFailed": "Failed to search stories",
+  "todo.links.searchPlaceholder": "Search by #id or title...",
+  "todo.links.shareAriaLabel": "Share story link",
+  "todo.links.shareFailed": "Share failed",
+  "todo.links.shareSuccess": "Link shared",
+  "todo.links.shareUnsupported": "Share not supported",
+  "todo.links.storyFallbackTitle": "Story #{id}",
+  "todo.loadLinkedFailed": "Failed to load linked stories",
+  "todo.notes.markdown": "markdown",
+  "todo.notes.modeLabel": "Notes editor mode",
+  "todo.notes.preview": "preview",
+  "todo.notes.previewUnavailable": "Markdown preview is unavailable",
+  "todo.saveFailed": "Failed to save todo",
+  "todo.sprint.state.ACTIVE": "Active",
+  "todo.sprint.state.CLOSED": "Closed",
+  "todo.sprint.state.PLANNED": "Planned",
+  "todo.status.backlog": "Backlog",
+  "todo.status.done": "Done",
+  "todo.status.inProgress": "In Progress",
+  "todo.status.notStarted": "Not Started",
+  "todo.status.testing": "Testing",
+  "todo.tags.placeholder": "Type tag and press Enter or Tab",
+  "todo.updated": "Todo updated",
+  "tooltips.boardSearch": "Search titles and notes. Combine with tag and sprint chips to narrow the board.",
+  "tooltips.doneLane": "Exactly one lane counts as done. Stories there get a completion timestamp used for dashboard stats and burndown, even if the lane is named Shipped instead of Done.",
+  "tooltips.estimationPoints": "Relative effort, not hours. Uses a modified Fibonacci scale (1\u201340). Compare to similar work on this board.",
+  "tooltips.linkedStories": "Link related stories (dependencies, parent/child, duplicates). Search by local ID (#12) or title. Links are informational \u2014 they do not move cards automatically.",
+  "tooltips.memberRole": "Viewer: read-only. Contributor: edit notes when assigned. Maintainer: create, move, assign, sprints, and settings.",
+  "tooltips.sprintDefaultWeeks": "When you create a sprint, the end date defaults to this many weeks after the start date.",
+  "tooltips.sprintEnd": "Planned end of this sprint. Burndown and dashboard completion stats use the sprint date range.",
+  "tooltips.sprintFilterActive": "Currently active iteration \u2014 only one sprint can be active at a time.",
+  "tooltips.sprintFilterScheduled": "Stories assigned to any sprint.",
+  "tooltips.sprintFilterUnscheduled": "Stories not in a sprint yet (often your backlog).",
+  "tooltips.sprintName": "A label for this iteration, e.g. Sprint 12 or 2026 Q1 Sprint 1.",
+  "tooltips.sprintStart": "Planned start of this sprint. Burndown and dashboard completion stats use the sprint date range.",
+  "tooltips.sprintTodo": "Which time-boxed iteration this story belongs to. Leave empty if not scheduled yet.",
+  "tooltips.status": "Which workflow lane this story is in. Done is whichever lane is marked as done in Settings \u2192 Workflow; that lane drives dashboard completion stats.",
+  "tooltips.tags": "Free-form labels for filtering and grouping. On shared boards, tag colors are the same for everyone; your personal tag colors apply across your projects.",
+  "tooltips.voiceCommand": "Story and todo mean the same thing. Use a local ID (12, #12) or a title phrase. One clear command per line \u2014 no pronouns like it or that.",
+  "tooltips.workflowAddLane": "Adds a new column before the done lane. Lane names can be renamed later; internal keys stay fixed.",
+};
+
+type LocaleLoader = (locale: LocaleId) => Promise<MessageCatalog>;
+
+export interface InitI18nOptions {
+  locale?: string | null;
+  storage?: Storage | null;
+  languages?: readonly string[];
+  documentElement?: HTMLElement | null;
+  loadLocale?: LocaleLoader;
+  persist?: boolean;
+}
+
+export interface DetectLocaleOptions {
+  storage?: Storage | null;
+  languages?: readonly string[];
+}
+
+export interface ApiErrorMessageOptions {
+  fallbackKey?: string;
+}
+
+type ApiErrorBody = {
+  error?: {
+    code?: string;
+    message?: string;
+    details?: Record<string, unknown> | null;
+  };
+};
+
+const HYDRATION_BINDINGS = [
+  ["data-i18n-text", "textContent"],
+  ["data-i18n-aria-label", "aria-label"],
+  ["data-i18n-placeholder", "placeholder"],
+  ["data-i18n-title", "title"],
+] as const;
+
+let activeLocale: LocaleId = "en";
+let activeCatalog: MessageCatalog = BOOTSTRAP_EN_CATALOG;
+let englishCatalog: MessageCatalog = BOOTSTRAP_EN_CATALOG;
+let loader: LocaleLoader = defaultLoadLocale;
+const catalogCache = new Map<LocaleId, MessageCatalog>();
+const warnedMissingKeys = new Set<string>();
+
+function getNodeEnv(): string {
+  return String(((globalThis as unknown as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV) || "");
+}
+
+function getDefaultStorage(): Storage | null {
+  try {
+    return globalThis.localStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+function getDefaultLanguages(): readonly string[] {
+  const nav = globalThis.navigator;
+  if (Array.isArray(nav?.languages) && nav.languages.length > 0) {
+    return nav.languages;
+  }
+  return nav?.language ? [nav.language] : [];
+}
+
+function getDefaultDocumentElement(): HTMLElement | null {
+  return globalThis.document?.documentElement || null;
+}
+
+export function normalizeLocale(value: string | null | undefined): LocaleId | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase().replace("_", "-");
+  if (normalized === "pseudo") return "pseudo";
+  if (normalized === "de" || normalized.startsWith("de-")) return "de";
+  if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
+  if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
+  if (normalized === "en" || normalized.startsWith("en-")) return "en";
+  return null;
+}
+
+export function isPublicLocale(locale: string): locale is PublicLocaleId {
+  return (PUBLIC_LOCALES as readonly string[]).includes(locale);
+}
+
+export function publicLocaleOptions(): Array<{ id: PublicLocaleId; label: string }> {
+  return PUBLIC_LOCALES.map((id) => ({ id, label: LOCALE_LABELS[id] }));
+}
+
+export function detectLocale(options: DetectLocaleOptions = {}): LocaleId {
+  const storage = options.storage === undefined ? getDefaultStorage() : options.storage;
+  try {
+    const stored = normalizeLocale(storage?.getItem(LOCALE_STORAGE_KEY));
+    if (stored) return stored;
+  } catch {
+    // localStorage may be blocked; fall through to browser language.
+  }
+
+  const languages = options.languages ?? getDefaultLanguages();
+  for (const language of languages) {
+    const locale = normalizeLocale(language);
+    if (locale) return locale;
+  }
+  return "en";
+}
+
+function getAppVersion(): string {
+  const meta = globalThis.document?.querySelector?.('meta[name="app-version"]');
+  return meta?.getAttribute("content") || "";
+}
+
+async function defaultLoadLocale(locale: LocaleId): Promise<MessageCatalog> {
+  if (typeof fetch !== "function") {
+    throw new Error("Cannot load i18n catalog: fetch is unavailable");
+  }
+  const version = getAppVersion();
+  const suffix = version ? `?v=${encodeURIComponent(version)}` : "";
+  const res = await fetch(`/dist/i18n/locales/${locale}.json${suffix}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to load i18n catalog ${locale}: HTTP ${res.status}`);
+  }
+  return normalizeCatalog(await res.json(), locale);
+}
+
+function normalizeCatalog(raw: unknown, locale: LocaleId): MessageCatalog {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`Invalid i18n catalog ${locale}: expected object`);
+  }
+  const catalog: MessageCatalog = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== "string") {
+      throw new Error(`Invalid i18n catalog ${locale}: ${key} must be a string`);
+    }
+    catalog[key] = value;
+  }
+  return catalog;
+}
+
+async function ensureLocaleLoaded(locale: LocaleId): Promise<MessageCatalog> {
+  const cached = catalogCache.get(locale);
+  if (cached) return cached;
+  const catalog = await loader(locale);
+  catalogCache.set(locale, catalog);
+  if (locale === "en") englishCatalog = catalog;
+  return catalog;
+}
+
+function updateDocumentLang(locale: LocaleId, element = getDefaultDocumentElement()): void {
+  if (!element) return;
+  element.lang = locale === "pseudo" ? "en" : intlLocale(locale);
+  element.setAttribute("data-locale", locale);
+}
+
+function persistLocale(locale: LocaleId, storage = getDefaultStorage()): void {
+  try {
+    storage?.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Storage is best effort; the active in-memory locale still changes.
+  }
+}
+
+function dispatchLocaleChanged(locale: LocaleId): void {
+  const eventTarget = globalThis.document;
+  if (!eventTarget || typeof eventTarget.dispatchEvent !== "function") return;
+  eventTarget.dispatchEvent(new CustomEvent(I18N_LOCALE_CHANGED, { detail: { locale } }));
+}
+
+export async function initI18n(options: InitI18nOptions = {}): Promise<LocaleId> {
+  if (options.loadLocale) {
+    loader = options.loadLocale;
+    catalogCache.clear();
+    activeLocale = "en";
+    englishCatalog = BOOTSTRAP_EN_CATALOG;
+    activeCatalog = BOOTSTRAP_EN_CATALOG;
+  }
+
+  const storage = options.storage === undefined ? getDefaultStorage() : options.storage;
+  const desiredLocale =
+    normalizeLocale(options.locale) ||
+    detectLocale({ storage, languages: options.languages });
+
+  const en = await ensureLocaleLoaded("en");
+  let nextLocale = desiredLocale;
+  let nextCatalog = en;
+
+  if (desiredLocale !== "en") {
+    try {
+      nextCatalog = await ensureLocaleLoaded(desiredLocale);
+    } catch (err) {
+      console.warn(`Falling back to English because locale "${desiredLocale}" failed to load.`, err);
+      nextLocale = "en";
+      nextCatalog = en;
+    }
+  }
+
+  activeLocale = nextLocale;
+  activeCatalog = nextCatalog;
+  updateDocumentLang(activeLocale, options.documentElement ?? getDefaultDocumentElement());
+
+  if (options.persist === true && storage) {
+    persistLocale(activeLocale, storage);
+  }
+
+  return activeLocale;
+}
+
+export async function setLocale(locale: string): Promise<LocaleId> {
+  const previousLocale = activeLocale;
+  const previousCatalog = activeCatalog;
+  const nextLocale = normalizeLocale(locale) || "en";
+  const en = await ensureLocaleLoaded("en");
+  let nextCatalog = en;
+  let resolvedLocale = nextLocale;
+
+  if (nextLocale !== "en") {
+    try {
+      nextCatalog = await ensureLocaleLoaded(nextLocale);
+    } catch (err) {
+      console.warn(`Falling back to English because locale "${nextLocale}" failed to load.`, err);
+      resolvedLocale = "en";
+    }
+  }
+
+  activeLocale = resolvedLocale;
+  activeCatalog = nextCatalog;
+  persistLocale(activeLocale);
+  updateDocumentLang(activeLocale);
+  if (previousLocale !== activeLocale || previousCatalog !== activeCatalog) {
+    dispatchLocaleChanged(activeLocale);
+  }
+  return activeLocale;
+}
+
+export function getLocale(): LocaleId {
+  return activeLocale;
+}
+
+function hasOwnMessage(catalog: MessageCatalog, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(catalog, key);
+}
+
+function strictMissingKeyMode(): "throw" | "warn" | "off" {
+  const env = getNodeEnv();
+  if (env === "test") return "throw";
+  if (env === "development") return "warn";
+  if (env === "production") return "off";
+  const hostname = globalThis.location?.hostname || "";
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+    return "warn";
+  }
+  return "off";
+}
+
+function reportMissingKey(locale: LocaleId, key: string): void {
+  const message = `Missing i18n key "${key}" for locale "${locale}"`;
+  const mode = strictMissingKeyMode();
+  if (mode === "throw") {
+    throw new Error(message);
+  }
+  if (mode === "warn" && !warnedMissingKeys.has(message)) {
+    warnedMissingKeys.add(message);
+    console.warn(message);
+  }
+}
+
+function resolveMessage(key: string): string {
+  if (hasOwnMessage(activeCatalog, key)) {
+    return activeCatalog[key];
+  }
+  const fallback = englishCatalog[key];
+  reportMissingKey(activeLocale, key);
+  return fallback || key;
+}
+
+function interpolate(message: string, values: MessageValues): string {
+  return message.replace(/\{([a-zA-Z0-9_.-]+)\}/g, (match, name) => {
+    const value = values[name];
+    return value == null ? match : String(value);
+  });
+}
+
+export function t(key: string, values: MessageValues = {}): string {
+  return interpolate(resolveMessage(key), values);
+}
+
+function elementsForAttribute(root: ParentNode, attributeName: string): Element[] {
+  const elements: Element[] = [];
+  if (typeof Element !== "undefined" && root instanceof Element && root.hasAttribute(attributeName)) {
+    elements.push(root);
+  }
+  root.querySelectorAll?.(`[${attributeName}]`).forEach((element) => elements.push(element));
+  return elements;
+}
+
+export function hydrateI18n(root: ParentNode | null | undefined = globalThis.document): void {
+  if (!root) return;
+  for (const [sourceAttribute, targetAttribute] of HYDRATION_BINDINGS) {
+    for (const element of elementsForAttribute(root, sourceAttribute)) {
+      const key = element.getAttribute(sourceAttribute);
+      if (!key) continue;
+      const message = t(key);
+      if (targetAttribute === "textContent") {
+        element.textContent = message;
+      } else {
+        element.setAttribute(targetAttribute, message);
+      }
+    }
+  }
+}
+
+export function hasI18nKey(key: string): boolean {
+  return hasOwnMessage(activeCatalog, key) || hasOwnMessage(englishCatalog, key);
+}
+
+function intlLocale(locale = activeLocale): string {
+  if (locale === "pseudo") return "en";
+  if (locale === "pt") return "pt-BR";
+  return locale;
+}
+
+export function formatDate(
+  value: string | number | Date,
+  options?: Intl.DateTimeFormatOptions,
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat(intlLocale(), options).format(date);
+}
+
+function ordinalSuffix(n: number): string {
+  const s = n % 100;
+  if (s >= 11 && s <= 13) return "th";
+  switch (n % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
+  }
+}
+
+export function formatLongDateWithWeekday(
+  value: string | number | Date,
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (intlLocale() === "en") {
+    return `${formatDate(date, { weekday: "long" })}, ${formatDate(date, { month: "long" })} ${date.getDate()}${ordinalSuffix(date.getDate())} ${date.getFullYear()}`;
+  }
+  return formatDate(date, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+export function formatNumber(
+  value: number,
+  options?: Intl.NumberFormatOptions,
+): string {
+  return new Intl.NumberFormat(intlLocale(), options).format(value);
+}
+
+function extractErrorBody(err: unknown): ApiErrorBody | null {
+  const maybe = err as { data?: unknown };
+  const data = maybe?.data ?? err;
+  return data && typeof data === "object" ? (data as ApiErrorBody) : null;
+}
+
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+export function apiErrorMessage(err: unknown, options: ApiErrorMessageOptions = {}): string {
+  const body = extractErrorBody(err);
+  const error = body?.error;
+  const details = error?.details || undefined;
+  const reason = typeof details?.reason === "string" ? details.reason : "";
+  const code = typeof error?.code === "string" ? error.code : "";
+
+  if (code) {
+    const reasonKey = reason ? `errors.${code}.${reason}` : "";
+    if (reasonKey && hasI18nKey(reasonKey)) {
+      return t(reasonKey, details as MessageValues);
+    }
+    const codeKey = `errors.${code}`;
+    if (hasI18nKey(codeKey)) {
+      return t(codeKey, (details || {}) as MessageValues);
+    }
+  }
+
+  if (options.fallbackKey && hasI18nKey(options.fallbackKey)) {
+    return t(options.fallbackKey, (details || {}) as MessageValues);
+  }
+
+  const rawApiMessage = nonEmptyString(error?.message);
+  if (rawApiMessage) {
+    return rawApiMessage;
+  }
+
+  const rawMessage = nonEmptyString((err as { message?: unknown })?.message);
+  if (rawMessage) {
+    return rawMessage;
+  }
+
+  const status = (err as { status?: unknown })?.status;
+  if (typeof status === "number" && Number.isFinite(status)) {
+    return t("errors.httpStatus", { status });
+  }
+
+  return t("errors.generic");
+}
+
+export function resetI18nForTests(): void {
+  activeLocale = "en";
+  activeCatalog = BOOTSTRAP_EN_CATALOG;
+  englishCatalog = BOOTSTRAP_EN_CATALOG;
+  loader = defaultLoadLocale;
+  catalogCache.clear();
+  warnedMissingKeys.clear();
+}

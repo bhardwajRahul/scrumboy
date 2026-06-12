@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const showPromptDialogMock = vi.hoisted(() => vi.fn());
+const showToastMock = vi.hoisted(() => vi.fn());
 const settingsDialogMock = vi.hoisted(() => document.createElement("dialog"));
 
 vi.mock("../dom/elements.js", () => ({
@@ -20,7 +21,7 @@ vi.mock("../router.js", () => ({
 
 vi.mock("../utils.js", () => ({
   escapeHTML: (s: string) => s,
-  showToast: vi.fn(),
+  showToast: showToastMock,
   renderUserAvatar: () => "",
   confirmDelete: vi.fn(),
   showPromptDialog: showPromptDialogMock,
@@ -50,6 +51,7 @@ vi.mock("../core/notifications.js", () => ({
 
 vi.mock("../nav-labels.js", () => ({
   temporaryBoardsNavLabel: () => "Temporary",
+  temporaryBoardsNavLabelKey: () => "nav.temporaryBoards.short",
 }));
 
 async function flushPromises(count = 6): Promise<void> {
@@ -64,6 +66,7 @@ describe("projects rename dialog", () => {
     localStorage.clear();
     apiFetchMock.mockReset();
     showPromptDialogMock.mockReset();
+    showToastMock.mockReset();
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === "/api/projects") {
         return [{ id: 99, slug: "alpha", name: "Alpha", role: "maintainer" }];
@@ -108,5 +111,28 @@ describe("projects rename dialog", () => {
       method: "PATCH",
       body: JSON.stringify({ name: "Beta" }),
     });
+  });
+
+  it("uses the localized rename fallback when the patch request fails", async () => {
+    showPromptDialogMock.mockResolvedValue("Beta");
+    apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === "/api/projects" && !init) {
+        return [{ id: 99, slug: "alpha", name: "Alpha", role: "maintainer" }];
+      }
+      if (url === "/api/projects/99" && init?.method === "PATCH") {
+        throw new Error("rename raw failure");
+      }
+      return {};
+    });
+
+    const mod = await import("./projects.js");
+    await mod.renderProjects();
+
+    const renameBtn = document.querySelector("[data-rename='99']");
+    if (!(renameBtn instanceof HTMLElement)) throw new Error("missing rename button");
+    renameBtn.click();
+    await flushPromises(10);
+
+    expect(showToastMock).toHaveBeenCalledWith("Failed to rename project");
   });
 });

@@ -3,6 +3,7 @@ import { apiFetch } from '../api.js';
 import { getEditingTodo, getSlug } from '../state/selectors.js';
 import { escapeHTML, showToast } from '../utils.js';
 import { recordLocalMutation } from '../realtime/guard.js';
+import { apiErrorMessage, t } from '../i18n/index.js';
 import { getTodoFormPermissions } from './todo-permissions.js';
 const BOUND_FLAG = Symbol('bound');
 let linksSearchDebounce = null;
@@ -147,7 +148,7 @@ function renderLinksChips(slug, currentLocalId, onNavigateToLinkedTodo) {
     const outbound = currentLinks.outbound
         .map((item) => {
         const removeBtn = getTodoFormPermissions().canEditLinks
-            ? `<button type="button" class="tag-chip-remove" data-link-remove="${item.localId}" aria-label="Remove link">×</button>`
+            ? `<button type="button" class="tag-chip-remove" data-link-remove="${item.localId}" aria-label="${escapeHTML(t("todo.links.remove"))}">×</button>`
             : "";
         return `
     <span class="tag-chip" data-link-local-id="${item.localId}" data-link-direction="outbound">
@@ -197,7 +198,7 @@ function renderLinksChips(slug, currentLocalId, onNavigateToLinkedTodo) {
                     renderLinksChips(slug, currentLocalId, onNavigateToLinkedTodo);
                 }
                 catch (err) {
-                    showToast(err.message || "Failed to remove link");
+                    showToast(apiErrorMessage(err, { fallbackKey: "todo.links.removeFailed" }));
                 }
             });
         }
@@ -234,7 +235,6 @@ function setupLinkedStoriesSearch(slug, currentLocalId, onNavigateToLinkedTodo) 
     clearLinkSearchInFlight();
     if (!getTodoFormPermissions().canEditLinks) {
         input.disabled = true;
-        input.placeholder = "";
         if (addBtn)
             addBtn.disabled = true;
         return;
@@ -243,7 +243,7 @@ function setupLinkedStoriesSearch(slug, currentLocalId, onNavigateToLinkedTodo) 
         const directLocalID = parseLocalIDFromLinkInput(input.value);
         const target = linkAutocompleteSuggestion?.localId ?? directLocalID;
         if (!target) {
-            showToast("Type #id or title, then tap Add");
+            showToast(t("todo.links.addPrompt"));
             return;
         }
         try {
@@ -254,7 +254,7 @@ function setupLinkedStoriesSearch(slug, currentLocalId, onNavigateToLinkedTodo) 
             clearLinkSearchInFlight();
         }
         catch (err) {
-            showToast(err.message || "Failed to link story");
+            showToast(apiErrorMessage(err, { fallbackKey: "todo.links.linkFailed" }));
         }
     };
     const updateAutocomplete = () => {
@@ -284,7 +284,7 @@ function setupLinkedStoriesSearch(slug, currentLocalId, onNavigateToLinkedTodo) 
             catch (err) {
                 if (err?.name === "AbortError")
                     return;
-                showToast(err.message || "Failed to search stories");
+                showToast(apiErrorMessage(err, { fallbackKey: "todo.links.searchFailed" }));
             }
             finally {
                 linksSearchController = null;
@@ -349,33 +349,33 @@ export function bindShareTodoButton() {
         const slug = getSlug();
         const editing = getEditingTodo();
         if (!slug || !editing?.localId) {
-            showToast("Cannot share: no story in context");
+            showToast(t("todo.links.cannotShare"));
             return;
         }
         const url = `${window.location.origin}/${slug}/t/${editing.localId}`;
-        const title = editing.title ? `${editing.title} (#${editing.localId})` : `Story #${editing.localId}`;
+        const title = editing.title ? `${editing.title} (#${editing.localId})` : t("todo.links.storyFallbackTitle", { id: editing.localId });
         if (typeof navigator.share === "function") {
             try {
                 await navigator.share({
                     url,
-                    title: title,
+                    title,
                     text: editing.title || undefined,
                 });
-                showToast("Link shared");
+                showToast(t("todo.links.shareSuccess"));
             }
             catch (err) {
                 if (err?.name !== "AbortError") {
-                    showToast(err?.message || "Share failed");
+                    showToast(apiErrorMessage(err, { fallbackKey: "todo.links.shareFailed" }));
                 }
             }
         }
         else {
             try {
                 await navigator.clipboard.writeText(url);
-                showToast("Link copied");
+                showToast(t("todo.links.copySuccess"));
             }
             catch {
-                showToast("Share not supported");
+                showToast(t("todo.links.shareUnsupported"));
             }
         }
     });

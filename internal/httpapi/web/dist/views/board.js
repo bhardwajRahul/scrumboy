@@ -5,6 +5,7 @@ import { fetchProjectMembers, invalidateMembersCache } from '../members-cache.js
 import { navigate } from '../router.js';
 import { escapeHTML, showToast, renderAvatarContent, processImageFile, confirmDelete, showConfirmDialog, showPromptDialog } from '../utils.js';
 import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
+import { apiErrorMessage, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 import { getBoard, getMobileTab, getSlug, getTag, getSearch, getSprintIdFromUrl, getEditingTodo, getProjectId, getTagColors, getUser, getBoardLaneMeta, getLaneDisplayCount, getBoardMembers, getWallEnabled, } from '../state/selectors.js';
 import { setProjectId, setBoard, setOpenTodoSegment, setMobileTab, setTagColors, setSettingsActiveTab, setBoardMembers, setLaneLoading, appendLaneTodos, } from '../state/mutations.js';
 import { isAnonymousBoard, isTemporaryBoard } from '../utils.js';
@@ -68,6 +69,13 @@ function canShowVoiceCommandsForBoard(projectId, board) {
         isAnonymous: isAnonymousBoard(board),
     });
 }
+function memberRoleLabel(role) {
+    const normalized = String(role || "").toLowerCase();
+    if (normalized === "viewer" || normalized === "contributor" || normalized === "maintainer") {
+        return t(`board.members.role.${normalized}`);
+    }
+    return role;
+}
 function bindVoiceCommandButton() {
     const voiceCommandBtn = document.getElementById("voiceCommandBtn");
     if (!voiceCommandBtn || voiceCommandBtn[BOUND_FLAG])
@@ -75,7 +83,7 @@ function bindVoiceCommandButton() {
     voiceCommandBtn.addEventListener("click", async () => {
         const openingContext = getVoiceCommandContext();
         if (!canUseVoiceCommandContext(openingContext)) {
-            showToast("Commands are unavailable for this board");
+            showToast(t("board.voice.unavailable"));
             return;
         }
         const initialProjectId = openingContext.projectId;
@@ -86,7 +94,7 @@ function bindVoiceCommandButton() {
             if (!canUseVoiceCommandContext(latestContext)
                 || latestContext.projectId !== initialProjectId
                 || latestContext.projectSlug !== initialProjectSlug) {
-                showToast("The board changed before commands opened");
+                showToast(t("board.voice.boardChanged"));
                 return;
             }
             openVoiceCommandDialog({
@@ -110,7 +118,7 @@ function bindVoiceCommandButton() {
             });
         }
         catch (err) {
-            showToast(err?.message || "Commands failed to load");
+            showToast(apiErrorMessage(err, { fallbackKey: "board.voice.loadFailed" }));
         }
     });
     voiceCommandBtn[BOUND_FLAG] = true;
@@ -190,6 +198,9 @@ let lastUpdateBoardContentBoard = null;
 let lastUpdateBoardContentTag = "";
 let lastUpdateBoardContentSearch = "";
 let lastUpdateBoardContentSprintId = null;
+let lastBoardRenderProjectId = null;
+let lastBoardRenderOptions = {};
+let boardI18nBound = false;
 // Runtime access to renderProjects from projects view (after Step 2)
 // For now, we'll use a dynamic import that will work once projects.js exists
 async function getRenderProjects() {
@@ -201,6 +212,28 @@ async function getRenderProjects() {
     catch {
         return window.renderProjects || renderProjects;
     }
+}
+function ensureBoardI18nBinding() {
+    if (boardI18nBound)
+        return;
+    boardI18nBound = true;
+    document.addEventListener(I18N_LOCALE_CHANGED, () => {
+        rerenderBoardForLocaleChange();
+    });
+}
+function rerenderBoardForLocaleChange() {
+    if (!document.querySelector(".board"))
+        return;
+    const board = getBoard();
+    const projectId = getProjectId() ?? lastBoardRenderProjectId;
+    if (!board || projectId == null)
+        return;
+    resetBoardFilterUiState();
+    lastUpdateBoardContentBoard = null;
+    renderBoardFromData(board, projectId, getTag(), getSearch(), getSprintIdFromUrl(), {
+        ...lastBoardRenderOptions,
+        forceFullRender: true,
+    });
 }
 export function stopBoardEvents() {
     disconnectBoardEvents();
@@ -462,7 +495,7 @@ async function handleLoadMore(status) {
         updateMobileTabs();
     }
     catch (err) {
-        showToast(err.message || "Failed to load more");
+        showToast(apiErrorMessage(err, { fallbackKey: "board.loadMoreFailed" }));
     }
     finally {
         setLaneLoading(status, false);
@@ -667,10 +700,10 @@ async function handleProjectImageUpload(projectId) {
                 const renderProjects = await getRenderProjects();
                 await renderProjects();
             }
-            showToast("Project image updated");
+            showToast(t("board.project.imageUpdated"));
         }
         catch (err) {
-            showToast(err?.message ?? String(err) ?? "Upload failed");
+            showToast(apiErrorMessage(err, { fallbackKey: "board.project.imageUploadFailed" }));
         }
     };
     input.click();
@@ -775,12 +808,21 @@ function updateBoardContent(board, tag, search, sprintId) {
     lastUpdateBoardContentSprintId = sprintId;
 }
 function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {}) {
+    lastBoardRenderProjectId = projectId;
+    lastBoardRenderOptions = {
+        backLabel: opts.backLabel,
+        backLabelKey: opts.backLabelKey,
+        backHref: opts.backHref,
+        minimalTopbar: opts.minimalTopbar,
+    };
     const boardCols = getBoardColumns(board);
     setDnDColumns(boardCols.map((c) => ({ key: c.key, title: c.title, color: c.color })));
     // Detect mobile view for placeholder text
     const isMobile = window.innerWidth <= 620;
-    const searchPlaceholder = isMobile ? "Search" : "Search todos...";
-    const backLabel = opts.backLabel || "← Projects";
+    const searchPlaceholderKey = isMobile ? "board.search.placeholder.mobile" : "board.search.placeholder.desktop";
+    const searchPlaceholder = t(searchPlaceholderKey);
+    const backLabelKey = opts.backLabel != null ? null : (opts.backLabelKey ?? "board.backToProjects");
+    const backLabel = opts.backLabel ?? t(backLabelKey);
     const backHref = opts.backHref || "";
     const minimalTopbar = !!opts.minimalTopbar;
     setProjectId(projectId);
@@ -808,7 +850,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     // Check if we're already on a board page - if so, only update board content
     // We check for the board container, not just the topbar, because projects page also has a topbar
     const existingBoardContainer = document.querySelector(".board");
-    if (existingBoardContainer) {
+    if (existingBoardContainer && !opts.forceFullRender) {
         updateBoardContent(board, tag, search, sprintId);
         syncTopbarFromBoard(board);
         return;
@@ -831,12 +873,14 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
         minimalTopbar,
         search,
         searchPlaceholder,
+        searchPlaceholderKey,
         isMobile,
         isAnonymousTempBoard,
         currentUserProjectRole,
         showVoiceCommands,
         user: getUser(),
         backLabel,
+        backLabelKey,
         wallEnabled: getWallEnabled(),
     });
     const membersByUserId = getMembersByUserId();
@@ -923,11 +967,11 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     if (renameProjectBtn && !renameProjectBtn[BOUND_FLAG]) {
         renameProjectBtn.addEventListener("click", async () => {
             const nextName = await showPromptDialog({
-                title: "Rename Project",
-                label: "Project Name",
+                title: t("board.project.renameTitle"),
+                label: t("board.project.nameLabel"),
                 initialValue: board.project.name,
-                confirmLabel: "Rename",
-                placeholder: "Project name",
+                confirmLabel: t("board.project.renameAction"),
+                placeholder: t("board.project.namePlaceholder"),
                 maxLength: 200,
             });
             const newName = nextName?.trim() ?? "";
@@ -959,10 +1003,10 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                     currentBoard.project.name = newName;
                     setBoard(currentBoard);
                 }
-                showToast("Project renamed");
+                showToast(t("board.project.renamed"));
             }
             catch (err) {
-                showToast(err.message);
+                showToast(apiErrorMessage(err, { fallbackKey: "board.project.renameFailed" }));
             }
         });
         renameProjectBtn[BOUND_FLAG] = true;
@@ -1009,7 +1053,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                     const isAuthorityRole = (r) => authorityRoles.includes(roleLower(r));
                     const renderMembersList = () => {
                         if (members.length === 0) {
-                            return '<div class="muted" style="padding: 12px; text-align: center;">No members yet</div>';
+                            return `<div class="muted" style="padding: 12px; text-align: center;">${escapeHTML(t("board.members.noMembers"))}</div>`;
                         }
                         const maintainerCount = members.filter((m) => authorityRoles.includes(roleLower(m.role))).length;
                         return `
@@ -1018,7 +1062,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                             const role = roleLower(m.role);
                             const canRemove = isMaintainer && (isRemovableRole(role) || (isAuthorityRole(role) && maintainerCount > 1));
                             const removeBtn = canRemove
-                                ? `<button type="button" class="btn btn--ghost btn--small" data-member-id="${m.userId}" data-member-name="${escapeHTML(m.name)}" title="Remove from project">Remove</button>`
+                                ? `<button type="button" class="btn btn--ghost btn--small" data-member-id="${m.userId}" data-member-name="${escapeHTML(m.name)}" title="${escapeHTML(t("board.members.removeFromProject"))}">${escapeHTML(t("board.members.remove"))}</button>`
                                 : "";
                             const isSelf = Number(m.userId) === Number(currentUserId);
                             const isLastMaintainer = isAuthorityRole(role) && maintainerCount === 1;
@@ -1026,11 +1070,11 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                             const demoteDisabled = isLastMaintainer || !canDemoteSelf;
                             const roleControl = isMaintainer
                                 ? `<select class="member-role-select input" data-member-id="${m.userId}" style="min-width: 120px; font-size: 0.875rem;">
-                      <option value="viewer" ${role === "viewer" ? "selected" : ""} ${demoteDisabled ? "disabled" : ""}>Viewer</option>
-                      <option value="contributor" ${role === "contributor" ? "selected" : ""} ${demoteDisabled ? "disabled" : ""}>Contributor</option>
-                      <option value="maintainer" ${role === "maintainer" ? "selected" : ""}>Maintainer</option>
+                      <option value="viewer" ${role === "viewer" ? "selected" : ""} ${demoteDisabled ? "disabled" : ""}>${escapeHTML(memberRoleLabel("viewer"))}</option>
+                      <option value="contributor" ${role === "contributor" ? "selected" : ""} ${demoteDisabled ? "disabled" : ""}>${escapeHTML(memberRoleLabel("contributor"))}</option>
+                      <option value="maintainer" ${role === "maintainer" ? "selected" : ""}>${escapeHTML(memberRoleLabel("maintainer"))}</option>
                     </select>`
-                                : `<span style="text-transform: capitalize; font-size: 0.875rem; color: var(--text-muted, #6b7280);">${escapeHTML(m.role)}</span>`;
+                                : `<span style="font-size: 0.875rem; color: var(--text-muted, #6b7280);">${escapeHTML(memberRoleLabel(m.role))}</span>`;
                             return `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border, #e5e7eb);">
                   <div>
@@ -1049,42 +1093,42 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                     dialog.innerHTML = `
           <form method="dialog" class="dialog__form" id="addMemberForm">
             <div class="dialog__header">
-              <div class="dialog__title">${isMaintainer ? "Manage Members" : "Members"}</div>
-              ${projectName ? `<div class="muted" style="font-size: 0.875rem; margin-top: 4px;">Project: ${escapeHTML(projectName)}</div>` : ""}
-              <button class="btn btn--ghost" type="button" id="addMemberDialogClose" aria-label="Close">✕</button>
+              <div class="dialog__title">${escapeHTML(isMaintainer ? t("board.members.dialogTitle") : t("board.members.dialogTitleReadOnly"))}</div>
+              ${projectName ? `<div class="muted" style="font-size: 0.875rem; margin-top: 4px;">${escapeHTML(t("board.members.projectLabel", { name: projectName }))}</div>` : ""}
+              <button class="btn btn--ghost" type="button" id="addMemberDialogClose" aria-label="${escapeHTML(t("board.members.close"))}">✕</button>
             </div>
 
             <div style="margin-bottom: 20px;">
-              <div style="font-weight: 500; margin-bottom: 8px;">Current Members</div>
+              <div style="font-weight: 500; margin-bottom: 8px;">${escapeHTML(t("board.members.currentMembers"))}</div>
               <div id="currentMembersList">${renderMembersList()}</div>
             </div>
 
             ${isMaintainer ? (available.length > 0 ? `
               <div style="border-top: 1px solid var(--border, #e5e7eb); padding-top: 20px; margin-top: 20px;">
-                <div style="font-weight: 500; margin-bottom: 12px;">Add New Member</div>
+                <div style="font-weight: 500; margin-bottom: 12px;">${escapeHTML(t("board.members.addNewMember"))}</div>
                 <label class="field">
-                  <div class="field__label">User</div>
+                  <div class="field__label">${escapeHTML(t("board.members.user"))}</div>
                   <select id="addMemberUser" class="input" required>
-                    <option value="">Select a user...</option>
+                    <option value="">${escapeHTML(t("board.members.selectUser"))}</option>
                     ${available.map((u) => `<option value="${u.id}">${escapeHTML(u.name)} (${escapeHTML(u.email)})</option>`).join('')}
                   </select>
                 </label>
 
                 <label class="field">
-                  ${fieldLabelHTML('Role', FIELD_TOOLTIPS.memberRole)}
+                  ${fieldLabelHTML(t("board.members.role"), FIELD_TOOLTIPS.memberRole)}
                   <select id="addMemberRole" class="input" required${titleAttr(FIELD_TOOLTIPS.memberRole)}>
-                    <option value="viewer">Viewer</option>
-                    <option value="contributor" selected>Contributor</option>
-                    <option value="maintainer">Maintainer</option>
+                    <option value="viewer">${escapeHTML(memberRoleLabel("viewer"))}</option>
+                    <option value="contributor" selected>${escapeHTML(memberRoleLabel("contributor"))}</option>
+                    <option value="maintainer">${escapeHTML(memberRoleLabel("maintainer"))}</option>
                   </select>
                 </label>
               </div>
-            ` : '<div class="muted" style="padding: 12px; text-align: center; border-top: 1px solid var(--border, #e5e7eb); margin-top: 20px; padding-top: 20px;">All users are already members</div>') : ''}
+            ` : `<div class="muted" style="padding: 12px; text-align: center; border-top: 1px solid var(--border, #e5e7eb); margin-top: 20px; padding-top: 20px;">${escapeHTML(t("board.members.allUsersAreMembers"))}</div>`) : ''}
 
             <div class="dialog__footer">
               <div class="spacer"></div>
-              <button type="button" class="btn btn--ghost" id="addMemberCancel">Close</button>
-              ${isMaintainer && available.length > 0 ? `<button type="submit" class="btn" id="addMemberSubmit">Add Member</button>` : ''}
+              <button type="button" class="btn btn--ghost" id="addMemberCancel">${escapeHTML(t("board.members.close"))}</button>
+              ${isMaintainer && available.length > 0 ? `<button type="submit" class="btn" id="addMemberSubmit">${escapeHTML(t("board.members.addMember"))}</button>` : ''}
             </div>
           </form>
         `;
@@ -1161,7 +1205,10 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                             if (newRole === previousRole)
                                 return; // No-op
                             if (previousRole === "maintainer" && (newRole === "contributor" || newRole === "viewer")) {
-                                const confirmed = await showConfirmDialog(`Demote ${member.name || "this member"} to ${newRole}?`, "Demote member?", "Demote");
+                                const confirmed = await showConfirmDialog(t("board.members.demoteConfirm", {
+                                    name: member.name || t("board.members.thisMember"),
+                                    role: memberRoleLabel(newRole),
+                                }), t("board.members.demoteTitle"), t("board.members.demoteAction"));
                                 if (!confirmed) {
                                     select.value = previousRole;
                                     return;
@@ -1182,11 +1229,11 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                                 if (currentMembersList) {
                                     currentMembersList.innerHTML = renderMembersList();
                                 }
-                                showToast("Role updated");
+                                showToast(t("board.members.roleUpdated"));
                             }
                             catch (err) {
                                 select.value = previousRole;
-                                showToast(err.message || "Failed to update role");
+                                showToast(apiErrorMessage(err, { fallbackKey: "board.members.updateRoleFailed" }));
                             }
                         });
                     }
@@ -1197,8 +1244,8 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                             if (!removeBtn)
                                 return;
                             const targetUserId = parseInt(removeBtn.getAttribute("data-member-id"), 10);
-                            const name = removeBtn.getAttribute("data-member-name") || "this member";
-                            const confirmed = await showConfirmDialog(`Remove ${name} from this project?`, "Remove member?", "Remove");
+                            const name = removeBtn.getAttribute("data-member-name") || t("board.members.thisMember");
+                            const confirmed = await showConfirmDialog(t("board.members.removeConfirm", { name }), t("board.members.removeTitle"), t("board.members.remove"));
                             if (!confirmed)
                                 return;
                             try {
@@ -1226,7 +1273,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                                     const addMemberSelect = dialog.querySelector("#addMemberUser");
                                     if (addMemberSelect) {
                                         addMemberSelect.innerHTML = `
-                    <option value="">Select a user...</option>
+                    <option value="">${escapeHTML(t("board.members.selectUser"))}</option>
                     ${available.map((u) => `<option value="${u.id}">${escapeHTML(u.name)} (${escapeHTML(u.email)})</option>`).join("")}
                   `;
                                     }
@@ -1234,10 +1281,10 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                                 catch {
                                     // Ignore refetch errors
                                 }
-                                showToast("Member removed from project");
+                                showToast(t("board.members.removed"));
                             }
                             catch (err) {
-                                showToast(err.message || "Failed to remove member");
+                                showToast(apiErrorMessage(err, { fallbackKey: "board.members.removeFailed" }));
                             }
                         });
                     }
@@ -1275,7 +1322,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                                 // Update the user select dropdown
                                 if (userSelect) {
                                     userSelect.innerHTML = `
-                  <option value="">Select a user...</option>
+                  <option value="">${escapeHTML(t("board.members.selectUser"))}</option>
                   ${available.map((u) => `<option value="${u.id}">${escapeHTML(u.name)} (${escapeHTML(u.email)})</option>`).join('')}
                 `;
                                 }
@@ -1283,23 +1330,23 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                                 if (available.length === 0) {
                                     const addSection = form.querySelector('div[style*="border-top"]');
                                     if (addSection) {
-                                        addSection.outerHTML = '<div class="muted" style="padding: 12px; text-align: center; border-top: 1px solid var(--border, #e5e7eb); margin-top: 20px; padding-top: 20px;">All users are already members</div>';
+                                        addSection.outerHTML = `<div class="muted" style="padding: 12px; text-align: center; border-top: 1px solid var(--border, #e5e7eb); margin-top: 20px; padding-top: 20px;">${escapeHTML(t("board.members.allUsersAreMembers"))}</div>`;
                                     }
                                     const submitBtn = document.getElementById("addMemberSubmit");
                                     if (submitBtn) {
                                         submitBtn.remove();
                                     }
                                 }
-                                showToast("Member added successfully");
+                                showToast(t("board.members.added"));
                             }
                             catch (err) {
-                                showToast(err.message || "Failed to add member");
+                                showToast(apiErrorMessage(err, { fallbackKey: "board.members.addFailed" }));
                             }
                         });
                     }
                 }
                 catch (err) {
-                    showToast(err.message || "Failed to load members");
+                    showToast(apiErrorMessage(err, { fallbackKey: "board.members.loadFailed" }));
                 }
             });
             btn[BOUND_FLAG] = true;
@@ -1309,7 +1356,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
     const deleteProjectBtn = document.getElementById("deleteProjectBtn");
     if (deleteProjectBtn && !deleteProjectBtn[BOUND_FLAG]) {
         deleteProjectBtn.addEventListener("click", async () => {
-            if (!await confirmDelete("Delete this project and all its todos?"))
+            if (!await confirmDelete(t("projects.delete.confirmMessage")))
                 return;
             try {
                 recordLocalMutation();
@@ -1317,7 +1364,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                 navigate("/");
             }
             catch (err) {
-                showToast(err.message);
+                showToast(apiErrorMessage(err, { fallbackKey: "board.project.deleteFailed" }));
             }
         });
         deleteProjectBtn[BOUND_FLAG] = true;
@@ -1344,7 +1391,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
             }
             catch (err) {
                 console.error('wall load failed', err);
-                showToast('Could not open the wall');
+                showToast(t("board.wallOpenFailed"));
             }
         });
         wallBtn[BOUND_FLAG] = true;
@@ -1379,6 +1426,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
 }
 // Load board by slug
 export async function loadBoardBySlug(slug, tag, search, sprintId = null) {
+    ensureBoardI18nBinding();
     if (!slug) {
         throw new Error("Slug is required");
     }
@@ -1546,13 +1594,13 @@ async function openTodoFromPath(slug, openTodoSegment) {
         if (err?.name === "AbortError")
             return;
         if (err?.status === 404) {
-            showToast("Todo not found");
+            showToast(t("board.openTodo.notFound"));
         }
         else if (err?.status === 403) {
-            showToast("You don't have access to this todo");
+            showToast(t("board.openTodo.accessDenied"));
         }
         else {
-            showToast("Failed to load todo");
+            showToast(apiErrorMessage(err, { fallbackKey: "board.openTodo.failed" }));
         }
         replaceBoardPath(slug);
         setOpenTodoSegment(null);
@@ -1560,6 +1608,7 @@ async function openTodoFromPath(slug, openTodoSegment) {
 }
 // Main render function for board view
 export async function renderBoard(slug, tag, search, sprintId, openTodoId = null, openTodoSegment = null, opts = {}) {
+    ensureBoardI18nBinding();
     if (!slug)
         throw new Error("Slug is required");
     debugLog("renderBoard start", slug);

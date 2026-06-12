@@ -8,7 +8,6 @@
     <link rel="icon" href="/favicon.ico" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
-    <meta name="google" content="notranslate" />
     <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
     <link rel="apple-touch-icon" href="/icon-512.png" />
     <link rel="stylesheet" href="/styles.css?v={{VERSION}}" />
@@ -39,27 +38,27 @@
     <dialog id="bulkEditDialog" class="dialog">
       <form method="dialog" class="dialog__form" id="bulkEditForm">
         <div class="dialog__header">
-          <div class="dialog__title" id="bulkEditDialogTitle">Bulk edit</div>
-          <button class="btn btn--ghost" type="button" id="closeBulkEditBtn" aria-label="Close">✕</button>
+          <div class="dialog__title" id="bulkEditDialogTitle" data-i18n-text="board.bulkEdit.title">Bulk edit</div>
+          <button class="btn btn--ghost" type="button" id="closeBulkEditBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
         </div>
         <p class="muted bulk-edit-dialog__hint" id="bulkEditHint"></p>
 
         <div class="bulk-edit-field" id="bulkEditAssigneeRow" style="display: none;">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplyAssignee" />
-            <span>Assign user</span>
+            <span data-i18n-text="shell.bulkEdit.assignUser">Assign user</span>
           </label>
-          <select class="select" id="bulkAssignee" aria-label="Assign to">
-            <option value="">Unassigned</option>
+          <select class="select" id="bulkAssignee" aria-label="Assign to" data-i18n-aria-label="shell.bulkEdit.assignTo">
+            <option value="" data-i18n-text="todo.assignee.unassigned">Unassigned</option>
           </select>
         </div>
 
         <div class="bulk-edit-field" id="bulkEditSprintRow" style="display: none;">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplySprint" />
-            <span>Assign sprint</span>
+            <span data-i18n-text="shell.bulkEdit.assignSprint">Assign sprint</span>
           </label>
-          <select class="select" id="bulkSprint" aria-label="Sprint">
+          <select class="select" id="bulkSprint" aria-label="Sprint" data-i18n-aria-label="shell.bulkEdit.sprint">
             <option value="">—</option>
           </select>
         </div>
@@ -67,20 +66,20 @@
         <div class="bulk-edit-field">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplyStatus" />
-            <span>Change status</span>
+            <span data-i18n-text="shell.bulkEdit.changeStatus">Change status</span>
           </label>
-          <select class="select" id="bulkStatus" aria-label="Status"></select>
+          <select class="select" id="bulkStatus" aria-label="Status" data-i18n-aria-label="shell.bulkEdit.status"></select>
         </div>
 
         <div class="bulk-edit-field" id="bulkEditTagsRow" style="display: none;">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplyTags" />
-            <span>Add tags</span>
+            <span data-i18n-text="shell.bulkEdit.addTags">Add tags</span>
           </label>
           <div class="tags-input-container">
             <div class="tags-input-row">
-              <input class="input tags-input" id="bulkTagsInput" autocomplete="off" placeholder="Type tag and press Enter" />
-              <button class="btn tags-add-btn" type="button" id="bulkAddTagBtn">Add</button>
+              <input class="input tags-input" id="bulkTagsInput" autocomplete="off" placeholder="Type tag and press Enter" data-i18n-placeholder="shell.bulkEdit.tagsPlaceholder" />
+              <button class="btn tags-add-btn" type="button" id="bulkAddTagBtn" data-i18n-text="common.add">Add</button>
             </div>
             <div class="tags-chips" id="bulkTagsChips"></div>
           </div>
@@ -89,10 +88,10 @@
         <div class="bulk-edit-field" id="bulkEditEstimationRow" style="display: none;">
           <label class="bulk-edit-field__check">
             <input type="checkbox" id="bulkApplyEstimation" />
-            <span>Set estimation points</span>
+            <span data-i18n-text="shell.bulkEdit.setEstimationPoints">Set estimation points</span>
           </label>
-          <select class="select" id="bulkEstimation" aria-label="Estimation points">
-            <option value="">No estimate</option>
+          <select class="select" id="bulkEstimation" aria-label="Estimation points" data-i18n-aria-label="shell.bulkEdit.estimationPoints">
+            <option value="" data-i18n-text="shell.bulkEdit.noEstimate">No estimate</option>
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -105,8 +104,8 @@
         </div>
 
         <div class="dialog__footer">
-          <button class="btn btn--ghost" type="button" id="cancelBulkEditBtn">Cancel</button>
-          <button class="btn" type="submit" id="saveBulkEditBtn" disabled>Apply</button>
+          <button class="btn btn--ghost" type="button" id="cancelBulkEditBtn" data-i18n-text="common.cancel">Cancel</button>
+          <button class="btn" type="submit" id="saveBulkEditBtn" disabled data-i18n-text="common.apply">Apply</button>
         </div>
       </form>
     </dialog>
@@ -114,25 +113,25 @@
     <dialog id="todoDialog" class="dialog">
       <form method="dialog" class="dialog__form" id="todoForm">
         <div class="dialog__header">
-          <div class="dialog__title" id="todoDialogTitle">Todo</div>
+          <div class="dialog__title" id="todoDialogTitle" data-i18n-text="todo.dialog.title.view">Todo</div>
           <div class="dialog__header-right">
             <span class="todo-dialog-updated muted" id="todoDialogUpdated" aria-hidden="true"><span class="todo-dialog-datetime-value"></span></span>
-            <button class="btn btn--ghost" type="button" id="closeTodoBtn" aria-label="Close">✕</button>
+            <button class="btn btn--ghost" type="button" id="closeTodoBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
           </div>
         </div>
 
         <div class="todo-dialog__body">
         <label class="field">
-          <div class="field__label">Title</div>
+          <div class="field__label" data-i18n-text="todo.fields.title">Title</div>
           <input class="input" id="todoTitle" name="title" required maxlength="200" autocomplete="off" />
         </label>
 
         <div class="field todo-notes-field">
           <div class="field__label-row">
-            <label class="field__label" for="todoBody">Notes</label>
-            <div class="todo-notes-tabs" id="todoBodyToggle" hidden role="tablist" aria-label="Notes editor mode">
-              <button class="todo-notes-tab is-active" type="button" id="todoBodyWriteTab" role="tab" aria-pressed="true">markdown</button>
-              <button class="todo-notes-tab" type="button" id="todoBodyPreviewTab" role="tab" aria-pressed="false">preview</button>
+            <label class="field__label" for="todoBody" data-i18n-text="todo.fields.notes">Notes</label>
+            <div class="todo-notes-tabs" id="todoBodyToggle" hidden role="tablist" aria-label="Notes editor mode" data-i18n-aria-label="todo.notes.modeLabel">
+              <button class="todo-notes-tab is-active" type="button" id="todoBodyWriteTab" role="tab" aria-pressed="true" data-i18n-text="todo.notes.markdown">markdown</button>
+              <button class="todo-notes-tab" type="button" id="todoBodyPreviewTab" role="tab" aria-pressed="false" data-i18n-text="todo.notes.preview">preview</button>
             </div>
           </div>
           <div class="todo-notes-editor">
@@ -142,56 +141,56 @@
         </div>
 
         <label class="field">
-          <div class="field__label">Tags</div>
+          <div class="field__label" data-i18n-text="todo.fields.tags">Tags</div>
           <div class="tags-input-container">
             <div class="tags-input-row">
-              <input class="input tags-input" id="todoTags" name="tags" autocomplete="off" placeholder="Type tag and press Enter or Tab" />
-              <button class="btn tags-add-btn" type="button" id="addTagBtn">Add</button>
+              <input class="input tags-input" id="todoTags" name="tags" autocomplete="off" placeholder="Type tag and press Enter or Tab" data-i18n-placeholder="todo.tags.placeholder" />
+              <button class="btn tags-add-btn" type="button" id="addTagBtn" data-i18n-text="common.add">Add</button>
             </div>
             <div class="tags-chips" id="tagsChips"></div>
           </div>
         </label>
 
         <label class="field" id="todoLinksField" style="display: none;">
-          <div class="field__label">Linked Stories</div>
+          <div class="field__label" data-i18n-text="todo.fields.linkedStories">Linked Stories</div>
           <div class="tags-input-container">
             <div class="tags-input-row">
-              <input class="input tags-input" id="linksSearchInput" autocomplete="off" placeholder="Search by #id or title..." />
-              <button class="btn tags-add-btn" type="button" id="addLinkBtn">Add</button>
+              <input class="input tags-input" id="linksSearchInput" autocomplete="off" placeholder="Search by #id or title..." data-i18n-placeholder="todo.links.searchPlaceholder" />
+              <button class="btn tags-add-btn" type="button" id="addLinkBtn" data-i18n-text="common.add">Add</button>
             </div>
             <div class="tags-chips" id="linksChips"></div>
           </div>
         </label>
 
         <label class="field" id="todoAssigneeField" style="display: none;">
-          <div class="field__label">Assigned to</div>
+          <div class="field__label" data-i18n-text="todo.fields.assignedTo">Assigned to</div>
           <select class="select" id="todoAssignee" name="assigneeUserId">
-            <option value="">Unassigned</option>
+            <option value="" data-i18n-text="todo.assignee.unassigned">Unassigned</option>
           </select>
         </label>
 
         <label class="field" id="todoSprintField" style="display: none;">
-          <div class="field__label">Sprint</div>
+          <div class="field__label" data-i18n-text="todo.fields.sprint">Sprint</div>
           <select class="select" id="todoSprint" name="sprintId">
             <option value="">—</option>
           </select>
         </label>
 
         <label class="field">
-          <div class="field__label">Status</div>
+          <div class="field__label" data-i18n-text="todo.fields.status">Status</div>
           <select class="select" id="todoStatus" name="status">
-            <option value="BACKLOG">Backlog</option>
-            <option value="NOT_STARTED">Not Started</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="TESTING">Testing</option>
-            <option value="DONE">Done</option>
+            <option value="BACKLOG" data-i18n-text="todo.status.backlog">Backlog</option>
+            <option value="NOT_STARTED" data-i18n-text="todo.status.notStarted">Not Started</option>
+            <option value="IN_PROGRESS" data-i18n-text="todo.status.inProgress">In Progress</option>
+            <option value="TESTING" data-i18n-text="todo.status.testing">Testing</option>
+            <option value="DONE" data-i18n-text="todo.status.done">Done</option>
           </select>
         </label>
 
         <label class="field" id="todoEstimationField">
-          <div class="field__label">Estimation Points</div>
+          <div class="field__label" data-i18n-text="todo.fields.estimationPoints">Estimation Points</div>
           <select class="select" id="todoEstimationPoints" name="estimationPoints">
-            <option value="">No estimate</option>
+            <option value="" data-i18n-text="todo.estimation.none">No estimate</option>
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
@@ -205,10 +204,10 @@
         </div>
 
         <div class="dialog__footer">
-          <button class="btn btn--danger" type="button" id="deleteTodoBtn">Delete</button>
+          <button class="btn btn--danger" type="button" id="deleteTodoBtn" data-i18n-text="common.delete">Delete</button>
           <div class="todo-dialog-dates muted" id="todoDialogCreated" aria-hidden="true"><span class="todo-dialog-datetime-value"></span></div>
-          <button class="btn" type="submit" value="save" id="saveTodoBtn">Save</button>
-          <button class="btn btn--ghost todo-share-btn" type="button" id="shareTodoBtn" aria-label="Share story link">↗</button>
+          <button class="btn" type="submit" value="save" id="saveTodoBtn" data-i18n-text="common.save">Save</button>
+          <button class="btn btn--ghost todo-share-btn" type="button" id="shareTodoBtn" aria-label="Share story link" data-i18n-aria-label="todo.links.shareAriaLabel">↗</button>
         </div>
       </form>
     </dialog>
@@ -224,28 +223,28 @@
         />
         <div class="wall-shortcuts" aria-hidden="true">
           <br>
-          create note: <i>right-click on canvas</i>
+          <span data-i18n-text="wall.shortcuts.createNote.label">create note:</span> <i data-i18n-text="wall.shortcuts.createNote.hint">right-click on canvas</i>
           <br>
-          change color: <i>single-click note</i>
+          <span data-i18n-text="wall.shortcuts.changeColor.label">change color:</span> <i data-i18n-text="wall.shortcuts.changeColor.hint">single-click note</i>
           <br>
-          edit note: <i>double-click note</i>
+          <span data-i18n-text="wall.shortcuts.editNote.label">edit note:</span> <i data-i18n-text="wall.shortcuts.editNote.hint">double-click note</i>
           <br>
-          delete note: <i>right-click note or drag to trash</i>
+          <span data-i18n-text="wall.shortcuts.deleteNote.label">delete note:</span> <i data-i18n-text="wall.shortcuts.deleteNote.hint">right-click note or drag to trash</i>
           <br>
-          draw lines: <i>shift + drag from note to note</i>
+          <span data-i18n-text="wall.shortcuts.drawLines.label">draw lines:</span> <i data-i18n-text="wall.shortcuts.drawLines.hint">shift + drag from note to note</i>
           <br>
-          multiple select: <i>ctrl/cmd + left-click note or click-drag on canvas to box-select notes</i>
+          <span data-i18n-text="wall.shortcuts.multiSelect.label">multiple select:</span> <i data-i18n-text="wall.shortcuts.multiSelect.hint">ctrl/cmd + left-click note or click-drag on canvas to box-select notes</i>
           <br>
-          canvas mode: <i>dashed square = select; hand = pan / swipe / pinch</i>
+          <span data-i18n-text="wall.shortcuts.canvasMode.label">canvas mode:</span> <i data-i18n-text="wall.shortcuts.canvasMode.hint">dashed square = select; hand = pan / swipe / pinch</i>
           <br>
-          pan canvas: <i>scroll wheel, middle-drag, Pan mode drag, or space + drag</i>
+          <span data-i18n-text="wall.shortcuts.panCanvas.label">pan canvas:</span> <i data-i18n-text="wall.shortcuts.panCanvas.hint">scroll wheel, middle-drag, Pan mode drag, or space + drag</i>
           <br>
-          zoom: <i>ctrl/cmd + scroll; Pan mode also supports two-finger pinch; fit view: F or ⊡ button</i>
+          <span data-i18n-text="wall.shortcuts.zoom.label">zoom:</span> <i data-i18n-text="wall.shortcuts.zoom.hint">ctrl/cmd + scroll; Pan mode also supports two-finger pinch; fit view: F or ⊡ button</i>
         </div>
-        <div id="wallSurface" class="wall-surface" aria-label="Sticky note wall"></div>
-        <button class="wall-mode-toggle-btn" type="button" id="wallModeToggleBtn" aria-label="Canvas mode: Select" aria-pressed="false" title="Canvas mode: Select — drag empty canvas to select notes"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-dashed-icon lucide-square-dashed"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg></button>
-        <button class="wall-fit-btn" type="button" id="wallFitViewBtn" aria-label="Fit view to notes" title="Fit view (F)">⊡</button>
-        <button class="wall-close-btn" type="button" id="closeWallBtn" aria-label="Close">✕</button>
+        <div id="wallSurface" class="wall-surface" aria-label="Sticky note wall" data-i18n-aria-label="wall.shell.surfaceLabel"></div>
+        <button class="wall-mode-toggle-btn" type="button" id="wallModeToggleBtn" aria-label="Canvas mode: Select" aria-pressed="false" title="Canvas mode: Select — drag empty canvas to select notes" data-i18n-aria-label="wall.mode.select.label" data-i18n-title="wall.mode.select.title"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-dashed-icon lucide-square-dashed"><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></svg></button>
+        <button class="wall-fit-btn" type="button" id="wallFitViewBtn" aria-label="Fit view to notes" title="Fit view (F)" data-i18n-aria-label="wall.shell.fitView.label" data-i18n-title="wall.shell.fitView.title">⊡</button>
+        <button class="wall-close-btn" type="button" id="closeWallBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
         <img
           id="wallTrash"
           class="wall-trash"
@@ -259,8 +258,11 @@
     <dialog id="settingsDialog" class="dialog">
       <div class="dialog__form">
         <div class="dialog__header">
-          <div class="dialog__title">Settings</div>
-          <button class="btn btn--ghost" type="button" id="closeSettingsBtn" aria-label="Close">✕</button>
+          <div class="dialog__title">
+            <span id="settingsDialogTitleLabel" data-i18n-text="settings.shell.title">Settings</span>
+            <span id="settingsDialogVersion" style="font-size: 0.75em; color: var(--muted); opacity: 0.6; font-weight: normal;"></span>
+          </div>
+          <button class="btn btn--ghost" type="button" id="closeSettingsBtn" aria-label="Close" data-i18n-aria-label="common.close">✕</button>
         </div>
         <div class="dialog__content">
           <!-- Settings content will go here -->
@@ -271,7 +273,7 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <div id="contextMenu" class="context-menu" style="display: none;">
-      <button class="context-menu__item" id="contextMenuNewTodo">New Todo</button>
+      <button class="context-menu__item" id="contextMenuNewTodo" data-i18n-text="shell.contextMenu.newTodo">New Todo</button>
     </div>
 
     <script src="/vendor/sortable.min.js"></script>

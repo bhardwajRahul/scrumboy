@@ -1,5 +1,6 @@
 import { app, settingsDialog } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
+import { formatDate, formatLongDateWithWeekday, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 import { navigate } from '../router.js';
 import { escapeHTML, renderUserAvatar, sanitizeHexColor } from '../utils.js';
 import {
@@ -25,12 +26,19 @@ import {
 import { ingestProjectsFromApp } from '../core/notifications.js';
 import { renderSettingsModal } from '../dialogs/settings.js';
 import { DashboardProject, DashboardSummary, DashboardTodo, DashboardTodosResponse, Project, SprintSectionInfo } from '../types.js';
-import { temporaryBoardsNavLabel } from '../nav-labels.js';
+import { temporaryBoardsNavLabelKey } from '../nav-labels.js';
 
 const BOUND_FLAG = Symbol('bound');
+const DASHBOARD_MOBILE_BREAKPOINT = 767;
+let dashboardI18nBound = false;
 
-const DASHBOARD_SORT_HINT =
-  "Order matches each project's board: column, then drag order. Projects appear in a fixed order (not alphabetical or by activity).";
+function dashboardBoardOrderLabelKey(
+  width = typeof window !== 'undefined' ? window.innerWidth : DASHBOARD_MOBILE_BREAKPOINT + 1,
+): 'dashboard.sort.board.short' | 'dashboard.sort.board.long' {
+  return width <= DASHBOARD_MOBILE_BREAKPOINT
+    ? 'dashboard.sort.board.short'
+    : 'dashboard.sort.board.long';
+}
 
 function dashboardTodosQueryString(): string {
   let q = 'limit=20';
@@ -40,43 +48,67 @@ function dashboardTodosQueryString(): string {
   return q;
 }
 
-/** Narrow viewports use a shorter board option label so the select can stay compact. */
-function boardOrderOptionText(): string {
-  return typeof window !== 'undefined' && window.innerWidth <= 767 ? 'Board Order' : 'Board Order (per project)';
+function isDashboardLoadingShell(): boolean {
+  return getDashboardLoading() && !getDashboardSummary() && getDashboardTodos().length === 0;
+}
+
+function rerenderDashboardForLocaleChange(): void {
+  if (!document.querySelector('.page--dashboard')) {
+    return;
+  }
+  if (isDashboardLoadingShell()) {
+    renderLoadingShell();
+    return;
+  }
+  renderDashboardContent();
+}
+
+function ensureDashboardI18nBinding(): void {
+  if (dashboardI18nBound) {
+    return;
+  }
+  dashboardI18nBound = true;
+  document.addEventListener(I18N_LOCALE_CHANGED, () => {
+    rerenderDashboardForLocaleChange();
+  });
+}
+
+function formatSprintDateRange(startAt: number, endAt: number): string {
+  return `${formatDate(startAt, { month: "short", day: "numeric" })} – ${formatDate(endAt, { month: "short", day: "numeric" })}`;
 }
 
 function renderDashboardPanelHeader(): string {
   const sort = getDashboardTodoSort();
-  const hint = escapeHTML(DASHBOARD_SORT_HINT);
-  const titleAttr = escapeHTML(DASHBOARD_SORT_HINT);
-  const boardLabel = escapeHTML(boardOrderOptionText());
+  const boardLabelKey = dashboardBoardOrderLabelKey();
   return `
           <div class="panel__header panel__header--dashboard">
-            <div class="panel__title">Dashboard</div>
+            <div class="panel__title" data-i18n-text="dashboard.title">${escapeHTML(t("dashboard.title"))}</div>
             <div class="dashboard-sort">
-              <label class="dashboard-sort__label" for="dashboardTodoSort">Sort</label>
-              <select id="dashboardTodoSort" class="dashboard-sort__select" aria-describedby="dashboardSortHint" title="${titleAttr}">
-                <option value="activity" ${sort === 'activity' ? 'selected' : ''}>Activity</option>
-                <option value="board" ${sort === 'board' ? 'selected' : ''}>${boardLabel}</option>
+              <label class="dashboard-sort__label" for="dashboardTodoSort" data-i18n-text="dashboard.sort.label">${escapeHTML(t("dashboard.sort.label"))}</label>
+              <select id="dashboardTodoSort" class="dashboard-sort__select" aria-describedby="dashboardSortHint" title="${escapeHTML(t("dashboard.sort.hint"))}" data-i18n-title="dashboard.sort.hint">
+                <option value="activity" ${sort === 'activity' ? 'selected' : ''} data-i18n-text="dashboard.sort.activity">${escapeHTML(t("dashboard.sort.activity"))}</option>
+                <option value="board" ${sort === 'board' ? 'selected' : ''} data-i18n-text="${boardLabelKey}">${escapeHTML(t(boardLabelKey))}</option>
               </select>
             </div>
           </div>
-          <p id="dashboardSortHint" class="dashboard-sort__hint muted">${hint}</p>`;
+          <p id="dashboardSortHint" class="dashboard-sort__hint muted" data-i18n-text="dashboard.sort.hint">${escapeHTML(t("dashboard.sort.hint"))}</p>`;
 }
 
 function renderTopTabs(): string {
   const projects = getProjects() || [];
   const durableProjects = projects.filter((p: any) => !p.expiresAt);
   const temporaryBoards = projects.filter((p: any) => !!p.expiresAt);
-  const temporaryLabel = temporaryBoardsNavLabel();
+  const temporaryLabelKey = temporaryBoardsNavLabelKey();
   return `
     <div class="chips" style="margin-top: 10px;">
-      <button class="chip chip--active" id="dashboardTabBtn" type="button">Dashboard</button>
+      <button class="chip chip--active" id="dashboardTabBtn" type="button" data-i18n-text="dashboard.tabs.dashboard">${escapeHTML(t("dashboard.tabs.dashboard"))}</button>
       <button class="chip" id="projectsTabBtn" type="button">
-        Projects <span class="chip__count">${durableProjects.length}</span>
+        <span class="dashboard-tab__label" data-i18n-text="dashboard.tabs.projects">${escapeHTML(t("dashboard.tabs.projects"))}</span>
+        <span class="chip__count">${durableProjects.length}</span>
       </button>
       <button class="chip" id="temporaryTabBtn" type="button">
-        ${temporaryLabel} <span class="chip__count">${temporaryBoards.length}</span>
+        <span class="dashboard-tab__label" data-i18n-text="${temporaryLabelKey}">${escapeHTML(t(temporaryLabelKey))}</span>
+        <span class="chip__count">${temporaryBoards.length}</span>
       </button>
     </div>
   `;
@@ -110,9 +142,9 @@ function renderLoadingShell(): void {
           ${renderDashboardPanelHeader()}
           ${renderTopTabs()}
           <div class="list">
-            <div class="list__item"><div class="muted">Loading assigned todos...</div></div>
-            <div class="list__item"><div class="muted">Loading assigned todos...</div></div>
-            <div class="list__item"><div class="muted">Loading assigned todos...</div></div>
+            <div class="list__item"><div class="muted" data-i18n-text="dashboard.loading.assignedTodos">${escapeHTML(t("dashboard.loading.assignedTodos"))}</div></div>
+            <div class="list__item"><div class="muted" data-i18n-text="dashboard.loading.assignedTodos">${escapeHTML(t("dashboard.loading.assignedTodos"))}</div></div>
+            <div class="list__item"><div class="muted" data-i18n-text="dashboard.loading.assignedTodos">${escapeHTML(t("dashboard.loading.assignedTodos"))}</div></div>
           </div>
         </div>
       </div>
@@ -150,13 +182,13 @@ function renderDashboardContent(): void {
          nextCursor
            ? `<div class="dashboard-load-more" data-dashboard-load-more>
                 <button class="btn btn--ghost btn--small dashboard-load-more__desktop" id="dashboardLoadMoreBtn" type="button" ${loading ? 'disabled' : ''}>
-                  ${loading ? 'Loading...' : 'Load more'}
+                  <span data-i18n-text="${loading ? 'dashboard.loadMore.loading' : 'dashboard.loadMore.action'}">${escapeHTML(t(loading ? 'dashboard.loadMore.loading' : 'dashboard.loadMore.action'))}</span>
                 </button>
-                <span class="dashboard-load-more__mobile" id="dashboardLoadMoreMobile" role="button" tabindex="0" aria-busy="${loading ? 'true' : 'false'}" aria-label="${loading ? 'Loading more' : 'Load more'}" ${loading ? 'data-loading="1"' : ''}>\u25BC</span>
+                <span class="dashboard-load-more__mobile" id="dashboardLoadMoreMobile" role="button" tabindex="0" aria-busy="${loading ? 'true' : 'false'}" aria-label="${escapeHTML(t(loading ? 'dashboard.loadMore.loadingAria' : 'dashboard.loadMore.action'))}" data-i18n-aria-label="${loading ? 'dashboard.loadMore.loadingAria' : 'dashboard.loadMore.action'}" ${loading ? 'data-loading="1"' : ''}>\u25BC</span>
               </div>`
            : ''
        }`
-    : `<div class="muted" style="margin-top: 48px;">No todos assigned to you.</div>`;
+    : `<div class="muted" style="margin-top: 48px;" data-i18n-text="dashboard.empty.assignedTodos">${escapeHTML(t("dashboard.empty.assignedTodos"))}</div>`;
 
   const storiesPct = sprintCompletion && sprintCompletion.totalStories > 0
     ? Math.round((sprintCompletion.doneStories / sprintCompletion.totalStories) * 100)
@@ -176,20 +208,20 @@ function renderDashboardContent(): void {
   const throughputBars = weeklyThroughput
     .map((p) => {
       const h = maxThroughput > 0 ? (Math.max(p.stories, p.points) / maxThroughput) * 100 : 0;
-      return `<div class="dashboard-throughput__bar" style="--bar-height: ${h}%" title="${escapeHTML(p.weekStart)}: ${p.stories} stories, ${p.points} pts"></div>`;
+      return `<div class="dashboard-throughput__bar" style="--bar-height: ${h}%" title="${escapeHTML(t("dashboard.throughput.barTitle", { weekStart: p.weekStart, stories: p.stories, points: p.points }))}"></div>`;
     })
     .join('');
   const sprintAssignedRow = assignedSplit != null
     ? `<div class="dashboard-stats__row">
-        <span class="dashboard-stats__label">ASSIGNED</span>
-        <span class="dashboard-stats__value">${assignedSplit.sprintPoints} pts · ${assignedSplit.sprintStories} todos</span>
+        <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.assigned"))}</span>
+        <span class="dashboard-stats__value">${escapeHTML(t("dashboard.stats.pointsTodos", { points: assignedSplit.sprintPoints, todos: assignedSplit.sprintStories }))}</span>
       </div>`
     : '';
 
   const completionRateRow = sprintCompletion && (sprintCompletion.totalStories > 0 || sprintCompletion.totalPoints > 0)
     ? `<div class="dashboard-stats__row dashboard-stats__row--progress">
-        <span class="dashboard-stats__label">YOUR COMPLETION</span>
-        <span class="dashboard-stats__value">Stories: ${storiesPct}% · Points: ${pointsPct}%</span>
+        <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.yourCompletion"))}</span>
+        <span class="dashboard-stats__value">${escapeHTML(t("dashboard.stats.storiesPoints", { stories: storiesPct, points: pointsPct }))}</span>
         <div class="dashboard-stats__progress-wrap">
           <div class="dashboard-stats__progress-bar" role="progressbar" aria-valuenow="${sprintCompletion.doneStories}" aria-valuemin="0" aria-valuemax="${sprintCompletion.totalStories}" style="--progress: ${sprintCompletion.totalStories > 0 ? (sprintCompletion.doneStories / sprintCompletion.totalStories) * 100 : 0}%"></div>
         </div>
@@ -198,8 +230,8 @@ function renderDashboardContent(): void {
 
   const completionRateAllUsersRow = sprintCompletionAllUsers && (sprintCompletionAllUsers.totalStories > 0 || sprintCompletionAllUsers.totalPoints > 0)
     ? `<div class="dashboard-stats__row dashboard-stats__row--progress dashboard-stats__row--progress-team">
-        <span class="dashboard-stats__label">TEAM COMPLETION</span>
-        <span class="dashboard-stats__value">Stories: ${storiesPctAll}% · Points: ${pointsPctAll}%</span>
+        <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.teamCompletion"))}</span>
+        <span class="dashboard-stats__value">${escapeHTML(t("dashboard.stats.storiesPoints", { stories: storiesPctAll, points: pointsPctAll }))}</span>
         <div class="dashboard-stats__progress-wrap">
           <div class="dashboard-stats__progress-bar" role="progressbar" aria-valuenow="${sprintCompletionAllUsers.doneStories}" aria-valuemin="0" aria-valuemax="${sprintCompletionAllUsers.totalStories}" style="--progress: ${sprintCompletionAllUsers.totalStories > 0 ? (sprintCompletionAllUsers.doneStories / sprintCompletionAllUsers.totalStories) * 100 : 0}%"></div>
         </div>
@@ -208,37 +240,37 @@ function renderDashboardContent(): void {
 
   const workloadAssignedRow = assignedSplit != null
     ? `<div class="dashboard-stats__row">
-        <span class="dashboard-stats__label">Total assigned</span>
-        <span class="dashboard-stats__value dashboard-stats__value--assigned"><span class="dashboard-stats__value--total">Total:</span> ${assignedSplit.backlogPoints + assignedSplit.sprintPoints} pts · ${assignedSplit.backlogStories + assignedSplit.sprintStories} todos</span>
+        <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.totalAssigned"))}</span>
+        <span class="dashboard-stats__value dashboard-stats__value--assigned"><span class="dashboard-stats__value--total">${escapeHTML(t("dashboard.stats.totalPrefix"))}</span> ${escapeHTML(t("dashboard.stats.pointsTodos", { points: assignedSplit.backlogPoints + assignedSplit.sprintPoints, todos: assignedSplit.backlogStories + assignedSplit.sprintStories }))}</span>
       </div>`
     : `<div class="dashboard-stats__row">
-        <span class="dashboard-stats__label">Total assigned</span>
-        <span class="dashboard-stats__value">${totalStoryPoints} pts</span>
+        <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.totalAssigned"))}</span>
+        <span class="dashboard-stats__value">${escapeHTML(t("dashboard.stats.pointsOnly", { points: totalStoryPoints }))}</span>
       </div>`;
 
   const showLegacyWipSplit = wipInProgressCount > 0 || wipTestingCount > 0;
   const wipRow = `<div class="dashboard-stats__row">
-    <span class="dashboard-stats__label">WIP</span>
-    <span class="dashboard-stats__value">${showLegacyWipSplit ? `<span class="dashboard-stats__wip-in-progress">In progress</span>: ${wipInProgressCount} · <span class="dashboard-stats__wip-testing">Testing</span>: ${wipTestingCount}` : wipCount}</span>
+    <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.wip"))}</span>
+    <span class="dashboard-stats__value">${showLegacyWipSplit ? `<span class="dashboard-stats__wip-in-progress">${escapeHTML(t("dashboard.stats.inProgress"))}</span>: ${wipInProgressCount} · <span class="dashboard-stats__wip-testing">${escapeHTML(t("dashboard.stats.testing"))}</span>: ${wipTestingCount}` : wipCount}</span>
   </div>`;
 
   const oldestWipRow = oldestWip
     ? `<div class="dashboard-stats__row dashboard-stats__row--wip ${oldestWip.ageDays > 7 ? 'dashboard-stats__row--wip-warning' : ''}">
-        <span class="dashboard-stats__label">Oldest in progress</span>
+        <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.oldestInProgress"))}</span>
         <div class="dashboard-stats__wip-link list__item list__item--clickable" data-open-board="${escapeHTML(oldestWip.projectSlug)}" data-open-todo-local-id="${oldestWip.localId}" role="button" tabindex="0">
-          #${oldestWip.localId} ${escapeHTML(oldestWip.title)} — ${oldestWip.ageDays}d (${escapeHTML(oldestWip.projectName)})
+          ${escapeHTML(t("dashboard.stats.oldestWipValue", { localId: oldestWip.localId, title: oldestWip.title, ageDays: oldestWip.ageDays, projectName: oldestWip.projectName }))}
         </div>
       </div>`
     : '';
 
   const leadTimeRow = `<div class="dashboard-stats__row">
-    <span class="dashboard-stats__label">Avg. lead time</span>
-    <span class="dashboard-stats__value dashboard-stats__value--num">${avgLeadTimeDays != null ? avgLeadTimeDays.toFixed(1) + 'd' : '—'}</span>
+    <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.avgLeadTime"))}</span>
+    <span class="dashboard-stats__value dashboard-stats__value--num">${avgLeadTimeDays != null ? escapeHTML(t("dashboard.stats.leadTimeValue", { days: avgLeadTimeDays.toFixed(1) })) : '—'}</span>
   </div>`;
 
   const throughputRow = weeklyThroughput.length > 0
     ? `<div class="dashboard-stats__row">
-        <span class="dashboard-stats__label">Throughput (last 4 weeks)</span>
+        <span class="dashboard-stats__label">${escapeHTML(t("dashboard.stats.throughputLast4Weeks"))}</span>
         <div class="dashboard-throughput">${throughputBars}</div>
       </div>`
     : '';
@@ -254,15 +286,15 @@ function renderDashboardContent(): void {
       </div>
       <div class="dashboard-stats">
         <div class="dashboard-stats__section">
-          <span class="dashboard-stats__label">CURRENT SPRINT</span>
+          <span class="dashboard-stats__label" data-i18n-text="dashboard.stats.currentSprint">${escapeHTML(t("dashboard.stats.currentSprint"))}</span>
           <div class="dashboard-stats__section-card">${currentSprintCardRows}</div>
         </div>
         <div class="dashboard-stats__section dashboard-stats__section--spaced">
-          <span class="dashboard-stats__label">YOUR WORKLOAD</span>
+          <span class="dashboard-stats__label" data-i18n-text="dashboard.stats.yourWorkload">${escapeHTML(t("dashboard.stats.yourWorkload"))}</span>
           <div class="dashboard-stats__section-card">${workloadCardRows}</div>
         </div>
         <div class="dashboard-stats__section dashboard-stats__section--spaced">
-          <span class="dashboard-stats__label">YOUR FLOW</span>
+          <span class="dashboard-stats__label" data-i18n-text="dashboard.stats.yourFlow">${escapeHTML(t("dashboard.stats.yourFlow"))}</span>
           <div class="dashboard-stats__section-card">${flowCardRows}</div>
         </div>
       </div>
@@ -318,29 +350,8 @@ function groupTodosByProject(todos: DashboardTodo[]): { projectId: number; proje
   });
 }
 
-function formatSprintDateRange(startAt: number, endAt: number): string {
-  const start = new Date(startAt);
-  const end = new Date(endAt);
-  return `${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
-}
-
-function ordinal(n: number): string {
-  const s = n % 100;
-  if (s >= 11 && s <= 13) return "th";
-  switch (n % 10) {
-    case 1: return "st";
-    case 2: return "nd";
-    case 3: return "rd";
-    default: return "th";
-  }
-}
-
 function formatSprintTooltipDateRange(startAt: number, endAt: number): string {
-  const start = new Date(startAt);
-  const end = new Date(endAt);
-  const fmt = (d: Date) =>
-    `${d.toLocaleDateString(undefined, { weekday: "long" })}, ${d.toLocaleDateString(undefined, { month: "long" })} ${d.getDate()}${ordinal(d.getDate())} ${d.getFullYear()}`;
-  return `${fmt(start)} - ${fmt(end)}`;
+  return `${formatLongDateWithWeekday(startAt)} - ${formatLongDateWithWeekday(endAt)}`;
 }
 
 function renderDashboardTodoGroups(todos: DashboardTodo[], projectsByProjectId?: Map<number, DashboardProject>): string {
@@ -351,7 +362,7 @@ function renderDashboardTodoGroups(todos: DashboardTodo[], projectsByProjectId?:
     .map(
       (group) => {
         const project = projectsByProjectId?.get(group.projectId);
-        const sprintSections: SprintSectionInfo[] = project?.sprintSections ?? [{ name: "Unscheduled" }];
+        const sprintSections: SprintSectionInfo[] = project?.sprintSections ?? [{ name: t("dashboard.sprint.unscheduled") }];
         const sectionIdSet = new Set<number>(sprintSections.filter((s) => s.id != null).map((s) => s.id!));
         const todosBySection = new Map<number | null, DashboardTodo[]>();
         for (const todo of group.todos) {
@@ -393,7 +404,7 @@ function renderDashboardTodoGroups(todos: DashboardTodo[], projectsByProjectId?:
         const tint = hexToRgba(group.dominantColor || "#888888", alpha);
         return `
     <div class="dashboard-project-group" style="background: ${tint};">
-      <div class="dashboard-project-group__tab list__item--clickable" data-open-board="${escapeHTML(group.projectSlug)}" role="button" tabindex="0" title="Open ${escapeHTML(group.projectName)}">${namePart}</div>
+      <div class="dashboard-project-group__tab list__item--clickable" data-open-board="${escapeHTML(group.projectSlug)}" role="button" tabindex="0" title="${escapeHTML(t("dashboard.project.openTitle", { name: group.projectName }))}">${namePart}</div>
       ${sectionParts.join("")}
     </div>
   `;
@@ -403,7 +414,14 @@ function renderDashboardTodoGroups(todos: DashboardTodo[], projectsByProjectId?:
 }
 
 function renderDashboardTodo(todo: DashboardTodo): string {
-  const updatedAt = new Date(todo.updatedAt).toLocaleString();
+  const updatedAt = formatDate(todo.updatedAt, {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
   const pillLabel = escapeHTML(todo.statusName);
   const pillColor = sanitizeHexColor(todo.statusColor, "#64748b");
   // Match board's tag styling: border + 12.5% alpha background + text all same color
@@ -415,7 +433,7 @@ function renderDashboardTodo(todo: DashboardTodo): string {
         <div class="dashboard-todo__title-row">
           <span class="card__id-inline">#${todo.localId}</span>
           <span class="dashboard-todo__title">${escapeHTML(todo.title)}</span>
-          ${showPoints ? `<span class="dashboard-todo__points" aria-label="Estimation points">${todo.estimationPoints}</span>` : ''}
+          ${showPoints ? `<span class="dashboard-todo__points" aria-label="${escapeHTML(t("dashboard.todo.estimationPointsAria"))}">${todo.estimationPoints}</span>` : ''}
         </div>
       </div>
       <div class="spacer"></div>
@@ -542,6 +560,7 @@ function bindLoadMore(): void {
 }
 
 export async function renderDashboard(): Promise<void> {
+  ensureDashboardI18nBinding();
   renderLoadingShell();
   setDashboardLoading(true);
   try {

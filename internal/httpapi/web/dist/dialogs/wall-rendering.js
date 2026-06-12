@@ -13,7 +13,8 @@
 //
 // This file is DOM-only: no network, no state mutations. wall.ts owns
 // orchestration, event wiring, and teardown.
-import { HEX_COLOR_RE, sanitizeHexColor } from "../utils.js";
+import { escapeHTML, HEX_COLOR_RE, sanitizeHexColor } from "../utils.js";
+import { t } from "../i18n/index.js";
 import { colorIndexFromHex } from "./wall-postbaby-constants.js";
 import { screenToCanvas } from "./wall-viewport.js";
 const DEFAULT_NOTE_COLOR = "#ffd966";
@@ -55,7 +56,7 @@ export function buildNoteElement(note, canEdit) {
     if (canEdit) {
         const handle = document.createElement("div");
         handle.className = "wall-note__resize-handle";
-        handle.setAttribute("aria-label", "Resize note");
+        handle.setAttribute("aria-label", t("wall.note.resize"));
         handle.setAttribute("role", "slider");
         el.appendChild(handle);
     }
@@ -76,7 +77,7 @@ export function enterEditMode(noteEl, initialText) {
     ta.value = initialText;
     ta.maxLength = 5000;
     ta.spellcheck = true;
-    ta.setAttribute("aria-label", "Edit note text");
+    ta.setAttribute("aria-label", t("wall.note.edit"));
     // Insert before the resize handle so the handle stays on top.
     const handle = noteEl.querySelector(".wall-note__resize-handle");
     if (handle) {
@@ -113,9 +114,9 @@ export function isEditing(noteEl) {
 }
 export function renderEmptyWallHtml(canEdit) {
     const hint = canEdit
-        ? "Right-click the canvas to add your first sticky note. Hold Shift and drag from one note to another to draw a connection."
-        : "Waiting for a contributor to add one.";
-    return `<div class="wall-empty" role="status">No notes yet.<br/><span class="muted">${hint}</span></div>`;
+        ? t("wall.empty.hintEditable")
+        : t("wall.empty.hintReadonly");
+    return `<div class="wall-empty" role="status">${escapeHTML(t("wall.empty.title"))}<br/><span class="muted">${escapeHTML(hint)}</span></div>`;
 }
 // =====================================================================
 // EDGE OVERLAY (Postbaby parity: Shift+drag draws lines between notes)

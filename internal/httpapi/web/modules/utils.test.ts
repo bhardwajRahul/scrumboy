@@ -1,6 +1,27 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
+import { initI18n, resetI18nForTests } from "./i18n/index.js";
 import { confirmDelete, showConfirmDialog, showPromptDialog } from "./utils.js";
+
+const enCatalog = {
+  "common.cancel": "Cancel",
+  "common.close": "Close",
+  "common.confirm": "Confirm",
+  "common.delete": "Delete",
+  "common.prompt": "Prompt",
+  "common.save": "Save",
+  "common.value": "Value",
+};
+
+const pseudoCatalog = {
+  "common.cancel": "[!! Cancel !!]",
+  "common.close": "[!! Close !!]",
+  "common.confirm": "[!! Confirm !!]",
+  "common.delete": "[!! Delete !!]",
+  "common.prompt": "[!! Prompt !!]",
+  "common.save": "[!! Save !!]",
+  "common.value": "[!! Value !!]",
+};
 
 function installDialogPolyfill(): void {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", {
@@ -20,9 +41,14 @@ function installDialogPolyfill(): void {
 }
 
 describe("confirmDelete", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     document.body.innerHTML = "";
     installDialogPolyfill();
+    resetI18nForTests();
+    await initI18n({
+      locale: "en",
+      loadLocale: async (locale) => locale === "pseudo" ? pseudoCatalog : enCatalog,
+    });
   });
 
   it("uses default delete title and label", async () => {
@@ -64,9 +90,14 @@ describe("confirmDelete", () => {
 });
 
 describe("showConfirmDialog lifecycle", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     document.body.innerHTML = "";
     installDialogPolyfill();
+    resetI18nForTests();
+    await initI18n({
+      locale: "en",
+      loadLocale: async (locale) => locale === "pseudo" ? pseudoCatalog : enCatalog,
+    });
   });
 
   it("resolves true exactly once even on double-click confirm", async () => {
@@ -77,6 +108,29 @@ describe("showConfirmDialog lifecycle", () => {
     await expect(resultPromise).resolves.toBe(true);
     // Dialog DOM cleaned up after settle.
     expect(document.getElementById("confirmDialogConfirm")).toBeNull();
+  });
+
+  it("uses active-locale defaults for shared dialog chrome", async () => {
+    resetI18nForTests();
+    await initI18n({
+      locale: "pseudo",
+      loadLocale: async (locale) => locale === "pseudo" ? pseudoCatalog : enCatalog,
+    });
+
+    const resultPromise = showConfirmDialog("Proceed?");
+    const title = document.querySelector(".dialog__title");
+    const cancelBtn = document.getElementById("confirmDialogCancel");
+    const confirmBtn = document.getElementById("confirmDialogConfirm");
+    if (!(title instanceof HTMLElement)) throw new Error("missing confirm title");
+    if (!(cancelBtn instanceof HTMLButtonElement)) throw new Error("missing cancel button");
+    if (!(confirmBtn instanceof HTMLButtonElement)) throw new Error("missing confirm button");
+
+    expect(title.textContent).toBe("[!! Confirm !!]");
+    expect(cancelBtn.textContent).toBe("[!! Cancel !!]");
+    expect(confirmBtn.textContent).toBe("[!! Confirm !!]");
+
+    cancelBtn.click();
+    await expect(resultPromise).resolves.toBe(false);
   });
 
   it("resolves false when the close (x) button is pressed", async () => {
@@ -124,9 +178,14 @@ describe("showConfirmDialog lifecycle", () => {
 });
 
 describe("showPromptDialog lifecycle", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     document.body.innerHTML = "";
     installDialogPolyfill();
+    resetI18nForTests();
+    await initI18n({
+      locale: "en",
+      loadLocale: async (locale) => locale === "pseudo" ? pseudoCatalog : enCatalog,
+    });
   });
 
   it("resolves the entered value on submit", async () => {

@@ -6,10 +6,11 @@
 // per-note field values, and falls back to a full rebuild for any
 // structural change (add/remove note or edge, reorder edge endpoints).
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   dispatchPointer,
   flushPromises,
+  initWallTestI18n,
   installDialogPolyfill,
   makeNote,
   makeWallDoc,
@@ -17,6 +18,7 @@ import {
   type TestEdge,
   type TestNote,
 } from "./wall-test-harness.js";
+import enCatalog from "../i18n/locales/en.json";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const onMock = vi.hoisted(() => vi.fn());
@@ -188,6 +190,12 @@ describe("Phase 3 · diffWallDoc pure helper", () => {
 });
 
 describe("Phase 3 · refetchDoc fast path counters", () => {
+  beforeAll(async () => {
+    // wall.js is statically imported, so initialize the i18n instance it
+    // already bound (before vi.resetModules() swaps the registry below).
+    await initWallTestI18n({ en: enCatalog as Record<string, string> });
+  });
+
   beforeEach(() => {
     vi.resetModules();
     installDialogPolyfill();
