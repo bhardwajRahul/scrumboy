@@ -1,6 +1,22 @@
 # Changelog
 
-> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** unless noted below.
+> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
+
+## [3.18.0] - 2026-06-12
+
+### Added
+
+- **Multi-language UI (i18n)** - Frontend translation layer with locale catalogs for English, German, French, and Portuguese (Brazil), plus a pseudo-locale for QA. Language can be chosen in Settings or inferred from the browser; preference is persisted locally.
+- **Localized surfaces** - User-facing copy across auth/login, dashboard, projects, board, settings (profile, 2FA, users, backup/Trello import, charts, workflow, sprints, tag colors, push/PWA, VoiceFlow), todo and bulk-edit dialogs, field tooltips, nav labels, and the sticky-note wall.
+
+### Improvements
+
+- **Locale-aware formatting** - Shared date/number helpers replace ad hoc `toLocaleString` usage (e.g. dashboard long dates, burndown charts).
+- **i18n build checks** - Locale copy scripts verify catalog parity and sync `dist/` bundles during the web build.
+
+### Fixed
+
+- **OIDC settings drift** - Restored missing localized OIDC provider labels after settings refactor.
 
 ## [3.17.8] - 2026-06-08
 
