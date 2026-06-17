@@ -9,6 +9,12 @@ export const LOCALE_LABELS = {
     pt: "Português (Brasil)",
     pseudo: "Pseudo",
 };
+export const PUBLIC_LOCALE_FLAG_PATHS = {
+    en: "/assets/flags/us.svg",
+    de: "/assets/flags/de.svg",
+    fr: "/assets/flags/fr.svg",
+    pt: "/assets/flags/br.svg",
+};
 const BOOTSTRAP_EN_CATALOG = {
     "common.add": "Add",
     "common.apply": "Apply",
@@ -465,7 +471,11 @@ export function isPublicLocale(locale) {
     return PUBLIC_LOCALES.includes(locale);
 }
 export function publicLocaleOptions() {
-    return PUBLIC_LOCALES.map((id) => ({ id, label: LOCALE_LABELS[id] }));
+    return PUBLIC_LOCALES.map((id) => ({
+        id,
+        label: LOCALE_LABELS[id],
+        flagSrc: PUBLIC_LOCALE_FLAG_PATHS[id],
+    }));
 }
 export function detectLocale(options = {}) {
     const storage = options.storage === undefined ? getDefaultStorage() : options.storage;

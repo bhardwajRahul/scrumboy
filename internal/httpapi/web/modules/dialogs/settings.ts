@@ -394,7 +394,7 @@ function applySettingsLocaleToOpenDialog(): void {
   if (activeTab === "customization") {
     const customizationEl = document.getElementById("settingsCustomizationContent");
     if (!customizationEl) return;
-    syncPublicLocaleSelect(document.getElementById("settingsLocaleSelect") as HTMLSelectElement | null);
+    syncPublicLocaleSelect(document.getElementById("settingsLocaleSelect") as HTMLButtonElement | null);
     syncWallpaperLocaleState();
     syncDesktopNotificationLocaleState();
     hydrateI18n(customizationEl);
@@ -2055,7 +2055,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
   }
 
   if (getSettingsActiveTab() === "customization") {
-    const localeSelect = document.getElementById("settingsLocaleSelect") as HTMLSelectElement | null;
+    const localeSelect = document.getElementById("settingsLocaleSelect") as HTMLButtonElement | null;
     bindPublicLocaleSelect(localeSelect, { signal });
 
     const voiceFlowEnabledToggle = document.getElementById("voiceFlowEnabledToggle") as HTMLInputElement | null;

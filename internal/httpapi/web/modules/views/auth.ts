@@ -57,8 +57,8 @@ type AuthGlobal = typeof globalThis & {
 let authViewState: AuthViewState | null = null;
 let authLocaleListenerBound = false;
 
-function getAuthLocaleSelect(): HTMLSelectElement | null {
-  return document.getElementById("authLocaleSelect") as HTMLSelectElement | null;
+function getAuthLocaleSelect(): HTMLButtonElement | null {
+  return document.getElementById("authLocaleSelect") as HTMLButtonElement | null;
 }
 
 function bindAuthLocaleSelect(): void {

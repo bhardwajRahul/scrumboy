@@ -276,18 +276,46 @@ async function flushPromises(count = 8): Promise<void> {
   }
 }
 
-function getAuthLocaleSelect(): HTMLSelectElement {
-  const select = document.getElementById("authLocaleSelect") as HTMLSelectElement | null;
-  if (!select) throw new Error("missing auth locale selector");
-  return select;
+function getAuthLocaleSelect(): HTMLButtonElement {
+  const button = document.getElementById("authLocaleSelect") as HTMLButtonElement | null;
+  if (!button) throw new Error("missing auth locale selector");
+  return button;
+}
+
+function authLocaleOptionDetails(): Array<{ locale: string; label: string; flagSrc: string }> {
+  const list = getAuthLocaleSelect().closest(".locale-picker")?.querySelector(".locale-picker__list");
+  return Array.from(list?.querySelectorAll('[role="option"]') ?? []).map((option) => ({
+    locale: option.getAttribute("data-locale") ?? "",
+    label: option.querySelector(".locale-picker__label")?.textContent ?? "",
+    flagSrc: (option.querySelector(".locale-picker__flag") as HTMLImageElement | null)?.getAttribute("src") ?? "",
+  }));
 }
 
 function authLocaleOptionValues(): string[] {
-  return Array.from(getAuthLocaleSelect().options).map((option) => option.value);
+  return authLocaleOptionDetails().map((option) => option.locale);
 }
 
-function authLocaleOptionText(): string[] {
-  return Array.from(getAuthLocaleSelect().options).map((option) => option.textContent || "");
+const EXPECTED_LOCALE_FLAG_PATHS = [
+  "/assets/flags/us.svg",
+  "/assets/flags/de.svg",
+  "/assets/flags/fr.svg",
+  "/assets/flags/br.svg",
+];
+
+async function selectAuthLocale(locale: string): Promise<void> {
+  const button = getAuthLocaleSelect();
+  button.click();
+  const option = button.closest(".locale-picker")?.querySelector(`[role="option"][data-locale="${locale}"]`) as HTMLElement | null;
+  if (!option) throw new Error(`missing auth locale option: ${locale}`);
+  option.click();
+  await flushPromises();
+}
+
+function getAuthLocalePickerSelectedLocale(): string {
+  const selected = getAuthLocaleSelect()
+    .closest(".locale-picker")
+    ?.querySelector('[role="option"][aria-selected="true"]');
+  return selected?.getAttribute("data-locale") ?? "";
 }
 
 describe("auth view i18n", () => {
@@ -334,7 +362,13 @@ describe("auth view i18n", () => {
 
     auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
     expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
-    expect(authLocaleOptionText()).toEqual(["🌐 English", "🇩🇪 Deutsch", "🇫🇷 Français", "🇧🇷 Português (Brasil)"]);
+    expect(authLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
+    expect(authLocaleOptionDetails().map((option) => option.label)).toEqual([
+      "English",
+      "Deutsch",
+      "Français",
+      "Português (Brasil)",
+    ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
 
@@ -372,15 +406,12 @@ describe("auth view i18n", () => {
     emailEl.dispatchEvent(new Event("input", { bubbles: true }));
     pwEl.dispatchEvent(new Event("input", { bubbles: true }));
 
-    const select = getAuthLocaleSelect();
-    select.value = "de";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    await flushPromises();
+    await selectAuthLocale("de");
 
     expect(i18n.getLocale()).toBe("de");
     expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("de");
-    expect(select.value).toBe("de");
-    expect(select.getAttribute("aria-label")).toBe("Sprache");
+    expect(getAuthLocalePickerSelectedLocale()).toBe("de");
+    expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Sprache");
     expect(document.querySelector(".panel__title")?.textContent).toBe("Anmelden");
     expect(document.getElementById("authSsoBtn")?.textContent).toBe("Mit SSO fortfahren");
     expect((document.getElementById("authEmail") as HTMLInputElement).value).toBe("user@example.com");
@@ -402,14 +433,12 @@ describe("auth view i18n", () => {
     emailEl.dispatchEvent(new Event("input", { bubbles: true }));
     pwEl.dispatchEvent(new Event("input", { bubbles: true }));
 
-    const select = getAuthLocaleSelect();
-    select.value = "fr";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await selectAuthLocale("fr");
     await flushPromises();
 
     expect(i18n.getLocale()).toBe("fr");
     expect(document.querySelector(".panel__title")?.textContent).toBe("Configuration initiale");
-    expect(getAuthLocaleSelect().value).toBe("fr");
+    expect(getAuthLocalePickerSelectedLocale()).toBe("fr");
     expect((document.getElementById("authName") as HTMLInputElement).value).toBe("Admin");
     expect((document.getElementById("authEmail") as HTMLInputElement).value).toBe("admin@example.com");
     expect((document.getElementById("authPassword") as HTMLInputElement).value).toBe("bootstrap-secret");
@@ -424,9 +453,9 @@ describe("auth view i18n", () => {
     expect(i18n.getLocale()).toBe("pseudo");
     expect(document.querySelector(".panel__title")?.textContent).toBe("[!! Sign in !!]");
     expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
-    expect(authLocaleOptionText()).toEqual(["🌐 English", "🇩🇪 Deutsch", "🇫🇷 Français", "🇧🇷 Português (Brasil)"]);
+    expect(authLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
-    expect(getAuthLocaleSelect().value).toBe("en");
+    expect(getAuthLocalePickerSelectedLocale()).toBe("en");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("[!! Language !!]");
   });
 

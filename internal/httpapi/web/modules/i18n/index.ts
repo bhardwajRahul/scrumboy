@@ -2,7 +2,7 @@ export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
 export const PUBLIC_LOCALES = ["en", "de", "fr", "pt"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
-export type PublicLocaleOption = { id: PublicLocaleId; label: string; icon: string };
+export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
 export type MessageValues = Record<string, string | number | boolean | null | undefined>;
 
@@ -16,11 +16,11 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   pseudo: "Pseudo",
 };
 
-export const PUBLIC_LOCALE_ICONS: Record<PublicLocaleId, string> = {
-  en: "🌐",
-  de: "🇩🇪",
-  fr: "🇫🇷",
-  pt: "🇧🇷",
+export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
+  en: "/assets/flags/us.svg",
+  de: "/assets/flags/de.svg",
+  fr: "/assets/flags/fr.svg",
+  pt: "/assets/flags/br.svg",
 };
 
 const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
@@ -508,12 +508,12 @@ export function isPublicLocale(locale: string): locale is PublicLocaleId {
   return (PUBLIC_LOCALES as readonly string[]).includes(locale);
 }
 
-export function publicLocaleOptionText(option: PublicLocaleOption): string {
-  return `${option.icon} ${option.label}`;
-}
-
 export function publicLocaleOptions(): PublicLocaleOption[] {
-  return PUBLIC_LOCALES.map((id) => ({ id, label: LOCALE_LABELS[id], icon: PUBLIC_LOCALE_ICONS[id] }));
+  return PUBLIC_LOCALES.map((id) => ({
+    id,
+    label: LOCALE_LABELS[id],
+    flagSrc: PUBLIC_LOCALE_FLAG_PATHS[id],
+  }));
 }
 
 export function detectLocale(options: DetectLocaleOptions = {}): LocaleId {

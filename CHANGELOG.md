@@ -2,6 +2,22 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.2] - 2026-06-17
+
+### Added
+
+- **Pre-auth language selector** - Public locale picker on the auth shell (sign-in, bootstrap, 2FA, password reset) using the same shared helper as Settings.
+- **SVG flag icons for language selectors** - Auth and Settings language pickers now show vendored 3x2 SVG flags (from `country-flag-icons`, MIT) instead of emoji that degrade to regional letter codes on Windows/Chromium.
+
+### Improvements
+
+- **Custom locale picker** - Replaced native `<select>` with a small accessible listbox (keyboard navigation, click-outside close, flag + autonym labels).
+- **Browser translation opt-out** - App shell marks the document as non-translatable so Chrome/Google Translate does not double-translate Scrumboy’s own i18n UI.
+
+### Fixed
+
+- **Wallpaper import errors** - Preserve raw backend decode error text on wallpaper upload failures instead of replacing it with a generic localized fallback.
+
 ## [3.18.1] - 2026-06-12
 
 ### Fixed

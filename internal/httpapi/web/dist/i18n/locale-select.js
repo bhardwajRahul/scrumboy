@@ -8,52 +8,213 @@ function escapeHTML(value) {
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
 }
+function renderFlagImg(flagSrc) {
+    return `<img class="locale-picker__flag" src="${escapeHTML(flagSrc)}" alt="" aria-hidden="true" />`;
+}
+function renderOptionHTML(option, selected) {
+    const selectedAttr = selected ? ' aria-selected="true"' : ' aria-selected="false"';
+    return `<li class="locale-picker__option" role="option" data-locale="${escapeHTML(option.id)}"${selectedAttr} tabindex="-1">${renderFlagImg(option.flagSrc)}<span class="locale-picker__label">${escapeHTML(option.label)}</span></li>`;
+}
+function getPickerRoot(button) {
+    return button?.closest(".locale-picker") ?? null;
+}
+function getPickerList(button) {
+    const root = getPickerRoot(button);
+    return root?.querySelector(".locale-picker__list");
+}
+function getPickerOptions(button) {
+    const list = getPickerList(button);
+    if (!list)
+        return [];
+    return Array.from(list.querySelectorAll('[role="option"]'));
+}
+function getSelectedOption(button) {
+    return getPickerOptions(button).find((option) => option.getAttribute("aria-selected") === "true") ?? null;
+}
+function getHighlightedOption(button) {
+    const list = getPickerList(button);
+    if (!list || list.hidden)
+        return null;
+    return list.querySelector(".locale-picker__option--highlight");
+}
+function setHighlightedOption(button, option) {
+    for (const item of getPickerOptions(button)) {
+        item.classList.toggle("locale-picker__option--highlight", item === option);
+    }
+}
+function isPickerOpen(button) {
+    const list = getPickerList(button);
+    return !!list && !list.hidden;
+}
+function setPickerOpen(button, open) {
+    const list = getPickerList(button);
+    if (!button || !list)
+        return;
+    list.hidden = !open;
+    button.setAttribute("aria-expanded", open ? "true" : "false");
+    if (!open) {
+        setHighlightedOption(button, null);
+        return;
+    }
+    setHighlightedOption(button, getSelectedOption(button));
+}
+function syncButtonFromOption(button, option) {
+    const flag = button.querySelector(".locale-picker__flag");
+    const label = button.querySelector(".locale-picker__label");
+    if (flag)
+        flag.src = option.flagSrc;
+    if (label)
+        label.textContent = option.label;
+}
 export function getSelectedPublicLocale() {
     const currentLocale = getLocale();
     return isPublicLocale(currentLocale) ? currentLocale : "en";
 }
 export function renderPublicLocaleSelectHTML(options) {
     const labelKey = options.labelKey || DEFAULT_LABEL_KEY;
-    const classNames = ["select", options.className].filter(Boolean).join(" ");
+    const buttonClassNames = ["locale-picker__button", "select", options.className].filter(Boolean).join(" ");
     const styleAttr = options.style ? ` style="${escapeHTML(options.style)}"` : "";
     const selectedLocale = getSelectedPublicLocale();
-    const optionHTML = publicLocaleOptions()
-        .map((option) => {
-        const selectedAttr = option.id === selectedLocale ? " selected" : "";
-        return `<option value="${escapeHTML(option.id)}"${selectedAttr}>${escapeHTML(option.label)}</option>`;
-    })
+    const localeOptions = publicLocaleOptions();
+    const selectedOption = localeOptions.find((option) => option.id === selectedLocale) ?? localeOptions[0];
+    const optionHTML = localeOptions
+        .map((option) => renderOptionHTML(option, option.id === selectedLocale))
         .join("");
-    return `<select class="${escapeHTML(classNames)}" id="${escapeHTML(options.id)}" aria-label="${escapeHTML(t(labelKey))}" data-i18n-aria-label="${escapeHTML(labelKey)}"${styleAttr}>${optionHTML}</select>`;
+    return `<div class="locale-picker"><button type="button" class="${escapeHTML(buttonClassNames)}" id="${escapeHTML(options.id)}" aria-haspopup="listbox" aria-expanded="false" aria-label="${escapeHTML(t(labelKey))}" data-i18n-aria-label="${escapeHTML(labelKey)}"${styleAttr}>${renderFlagImg(selectedOption.flagSrc)}<span class="locale-picker__label">${escapeHTML(selectedOption.label)}</span></button><ul class="locale-picker__list" role="listbox" hidden>${optionHTML}</ul></div>`;
 }
-export function syncPublicLocaleSelect(select) {
-    if (!select)
+export function syncPublicLocaleSelect(button) {
+    if (!button)
         return;
-    const options = publicLocaleOptions();
-    const needsRebuild = select.options.length !== options.length ||
-        options.some((option, index) => {
-            const existing = select.options[index];
-            return !existing || existing.value !== option.id || existing.textContent !== option.label;
-        });
-    if (needsRebuild) {
-        select.innerHTML = options
-            .map((option) => `<option value="${escapeHTML(option.id)}">${escapeHTML(option.label)}</option>`)
-            .join("");
+    const localeOptions = publicLocaleOptions();
+    const selectedLocale = getSelectedPublicLocale();
+    const selectedOption = localeOptions.find((option) => option.id === selectedLocale) ?? localeOptions[0];
+    const list = getPickerList(button);
+    const labelKey = button.getAttribute("data-i18n-aria-label") || DEFAULT_LABEL_KEY;
+    button.setAttribute("aria-label", t(labelKey));
+    if (list) {
+        const needsRebuild = getPickerOptions(button).length !== localeOptions.length ||
+            localeOptions.some((option, index) => {
+                const existing = getPickerOptions(button)[index];
+                return (!existing ||
+                    existing.getAttribute("data-locale") !== option.id ||
+                    existing.querySelector(".locale-picker__label")?.textContent !== option.label);
+            });
+        if (needsRebuild) {
+            list.innerHTML = localeOptions
+                .map((option) => renderOptionHTML(option, option.id === selectedLocale))
+                .join("");
+        }
+        else {
+            for (const option of localeOptions) {
+                const existing = getPickerOptions(button).find((item) => item.getAttribute("data-locale") === option.id);
+                if (!existing)
+                    continue;
+                existing.setAttribute("aria-selected", option.id === selectedLocale ? "true" : "false");
+                const flag = existing.querySelector(".locale-picker__flag");
+                const label = existing.querySelector(".locale-picker__label");
+                if (flag)
+                    flag.src = option.flagSrc;
+                if (label)
+                    label.textContent = option.label;
+            }
+        }
     }
-    const labelKey = select.getAttribute("data-i18n-aria-label") || DEFAULT_LABEL_KEY;
-    select.setAttribute("aria-label", t(labelKey));
-    select.value = getSelectedPublicLocale();
+    syncButtonFromOption(button, selectedOption);
+    if (!isPickerOpen(button)) {
+        button.setAttribute("aria-expanded", "false");
+    }
 }
-export function bindPublicLocaleSelect(select, options = {}) {
-    if (!select)
+async function selectLocaleOption(button, locale) {
+    if (!isPublicLocale(locale)) {
+        syncPublicLocaleSelect(button);
         return;
-    syncPublicLocaleSelect(select);
-    select.addEventListener("change", async () => {
-        const nextLocale = select.value;
-        if (!isPublicLocale(nextLocale)) {
-            syncPublicLocaleSelect(select);
+    }
+    await setLocale(locale);
+    setPickerOpen(button, false);
+    syncPublicLocaleSelect(button);
+}
+function moveHighlight(button, delta) {
+    const options = getPickerOptions(button);
+    if (options.length === 0)
+        return;
+    const current = getHighlightedOption(button) ?? getSelectedOption(button) ?? options[0];
+    const currentIndex = options.indexOf(current);
+    const nextIndex = currentIndex === -1 ? 0 : (currentIndex + delta + options.length) % options.length;
+    setHighlightedOption(button, options[nextIndex]);
+    options[nextIndex]?.scrollIntoView({ block: "nearest" });
+}
+export function bindPublicLocaleSelect(button, options = {}) {
+    if (!button)
+        return;
+    syncPublicLocaleSelect(button);
+    const signal = options.signal;
+    const onAbort = signal ? () => setPickerOpen(button, false) : undefined;
+    onAbort && signal?.addEventListener("abort", onAbort, { once: true });
+    button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setPickerOpen(button, !isPickerOpen(button));
+    }, signal ? { signal } : undefined);
+    button.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            if (!isPickerOpen(button)) {
+                setPickerOpen(button, true);
+                return;
+            }
+            moveHighlight(button, 1);
             return;
         }
-        await setLocale(nextLocale);
-        syncPublicLocaleSelect(select);
-    }, options);
+        if (event.key === "ArrowUp") {
+            event.preventDefault();
+            if (!isPickerOpen(button)) {
+                setPickerOpen(button, true);
+                return;
+            }
+            moveHighlight(button, -1);
+            return;
+        }
+        if (event.key === "Escape") {
+            if (!isPickerOpen(button))
+                return;
+            event.preventDefault();
+            setPickerOpen(button, false);
+            return;
+        }
+        if (event.key === "Enter" || event.key === " ") {
+            if (!isPickerOpen(button)) {
+                event.preventDefault();
+                setPickerOpen(button, true);
+                return;
+            }
+            const highlighted = getHighlightedOption(button) ?? getSelectedOption(button);
+            const locale = highlighted?.getAttribute("data-locale");
+            if (!locale || !isPublicLocale(locale))
+                return;
+            event.preventDefault();
+            void selectLocaleOption(button, locale);
+        }
+    }, signal ? { signal } : undefined);
+    const list = getPickerList(button);
+    list?.addEventListener("click", (event) => {
+        const target = event.target?.closest('[role="option"]');
+        const locale = target?.getAttribute("data-locale");
+        if (!locale || !isPublicLocale(locale))
+            return;
+        event.preventDefault();
+        void selectLocaleOption(button, locale);
+    }, signal ? { signal } : undefined);
+    document.addEventListener("click", (event) => {
+        if (!isPickerOpen(button))
+            return;
+        const root = getPickerRoot(button);
+        if (root && event.target instanceof Node && root.contains(event.target))
+            return;
+        setPickerOpen(button, false);
+    }, signal ? { signal } : undefined);
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !isPickerOpen(button))
+            return;
+        setPickerOpen(button, false);
+        button.focus();
+    }, signal ? { signal } : undefined);
 }

@@ -258,6 +258,37 @@ async function setupCustomizationSettings() {
   return { i18n, settings, cleanup: () => document.removeEventListener(i18n.I18N_LOCALE_CHANGED, hydrateOnLocaleChange) };
 }
 
+const EXPECTED_LOCALE_FLAG_PATHS = [
+  '/assets/flags/us.svg',
+  '/assets/flags/de.svg',
+  '/assets/flags/fr.svg',
+  '/assets/flags/br.svg',
+];
+
+function getSettingsLocalePicker(): HTMLButtonElement {
+  const button = document.getElementById('settingsLocaleSelect') as HTMLButtonElement | null;
+  if (!button) throw new Error('missing settings locale selector');
+  return button;
+}
+
+function settingsLocaleOptionDetails(): Array<{ locale: string; label: string; flagSrc: string }> {
+  const list = getSettingsLocalePicker().closest('.locale-picker')?.querySelector('.locale-picker__list');
+  return Array.from(list?.querySelectorAll('[role="option"]') ?? []).map((option) => ({
+    locale: option.getAttribute('data-locale') ?? '',
+    label: option.querySelector('.locale-picker__label')?.textContent ?? '',
+    flagSrc: (option.querySelector('.locale-picker__flag') as HTMLImageElement | null)?.getAttribute('src') ?? '',
+  }));
+}
+
+async function selectSettingsLocale(locale: string): Promise<void> {
+  const button = getSettingsLocalePicker();
+  button.click();
+  const option = button.closest('.locale-picker')?.querySelector(`[role="option"][data-locale="${locale}"]`) as HTMLElement | null;
+  if (!option) throw new Error(`missing settings locale option: ${locale}`);
+  option.click();
+  await flushPromises();
+}
+
 describe('settings language selector', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -293,15 +324,16 @@ describe('settings language selector', () => {
     try {
       await settings.renderSettingsModal();
 
-      const select = document.getElementById('settingsLocaleSelect') as HTMLSelectElement | null;
-      expect(select).toBeTruthy();
-      expect(Array.from(select?.options ?? []).map((option) => [option.value, option.textContent])).toEqual([
-        ['en', '🌐 English'],
-        ['de', '🇩🇪 Deutsch'],
-        ['fr', '🇫🇷 Français'],
-        ['pt', '🇧🇷 Português (Brasil)'],
+      const button = getSettingsLocalePicker();
+      expect(button).toBeTruthy();
+      expect(settingsLocaleOptionDetails().map((option) => [option.locale, option.label])).toEqual([
+        ['en', 'English'],
+        ['de', 'Deutsch'],
+        ['fr', 'Français'],
+        ['pt', 'Português (Brasil)'],
       ]);
-      expect(Array.from(select?.options ?? []).some((option) => option.value === 'pseudo')).toBe(false);
+      expect(settingsLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
+      expect(settingsLocaleOptionDetails().some((option) => option.locale === 'pseudo')).toBe(false);
       expect(document.querySelector('label[for="settingsLocaleSelect"]')?.textContent).toBe('Language');
     } finally {
       cleanup();
@@ -315,11 +347,7 @@ describe('settings language selector', () => {
       i18n.hydrateI18n(document.body);
       expect(document.getElementById('shellProbe')?.textContent).toBe('Shell text');
 
-      const select = document.getElementById('settingsLocaleSelect') as HTMLSelectElement | null;
-      if (!select) throw new Error('missing locale selector');
-      select.value = 'de';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      await flushPromises();
+      await selectSettingsLocale('de');
 
       expect(i18n.getLocale()).toBe('de');
       expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe('de');
@@ -346,9 +374,8 @@ describe('settings language selector', () => {
       await settings.renderSettingsModal();
 
       expect(i18n.getLocale()).toBe('pseudo');
-      const select = document.getElementById('settingsLocaleSelect') as HTMLSelectElement | null;
-      expect(Array.from(select?.options ?? []).map((option) => option.value)).toEqual(['en', 'de', 'fr', 'pt']);
-      expect(Array.from(select?.options ?? []).some((option) => option.value === 'pseudo')).toBe(false);
+      expect(settingsLocaleOptionDetails().map((option) => option.locale)).toEqual(['en', 'de', 'fr', 'pt']);
+      expect(settingsLocaleOptionDetails().some((option) => option.locale === 'pseudo')).toBe(false);
     } finally {
       cleanup();
     }
