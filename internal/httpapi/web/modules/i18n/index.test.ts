@@ -427,6 +427,77 @@ describe("i18n catalog loading", () => {
     expect(i18n.apiErrorMessage({ data: { error: { code: "UNMAPPED", message: "   " } } })).toBe("Something went wrong.");
   });
 
+  it("apiErrorMessageOrRaw returns a localized reason-specific message when the reason key exists", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+          details: { reason: "name_required" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe(deCatalog["errors.VALIDATION_ERROR.name_required"]);
+  });
+
+  it("apiErrorMessageOrRaw preserves raw API messages for unknown or missing reasons", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw unknown reason",
+          details: { reason: "unknown_reason" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("raw unknown reason");
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw missing reason",
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("raw missing reason");
+  });
+
+  it("apiErrorMessageOrRaw uses raw thrown messages before localized fallbacks", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    const err = new Error("top-level raw fallback") as Error & { data?: unknown };
+    err.data = { error: { code: "VALIDATION_ERROR", details: { reason: "unknown_reason" } } };
+
+    expect(i18n.apiErrorMessageOrRaw(err, { fallbackKey: "todo.saveFailed" })).toBe("top-level raw fallback");
+  });
+
+  it("apiErrorMessageOrRaw uses explicit and default localized fallbacks only when no raw message exists", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          details: { reason: "unknown_reason" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe(deCatalog["todo.saveFailed"]);
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          details: { reason: "unknown_reason" },
+        },
+      },
+    })).toBe(deCatalog["errors.generic"]);
+  });
+
   it("hydrates text and safe attributes within only the provided root", async () => {
     const i18n = await loadModule();
     await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });

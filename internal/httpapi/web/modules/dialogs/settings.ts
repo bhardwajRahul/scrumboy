@@ -81,7 +81,7 @@ import {
   loadTagSettingsContent,
 } from './settings-tags.js';
 import { bindSprintsTabInteractions, refreshSprintDateLabels, renderSprintsTabContent } from './settings-sprints.js';
-import { apiErrorMessage, getLocale, hasI18nKey, hydrateI18n, I18N_LOCALE_CHANGED, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, getLocale, hydrateI18n, I18N_LOCALE_CHANGED, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
 
 export { invalidateTagsCache } from './settings-tags.js';
 
@@ -91,21 +91,6 @@ declare function renderProjects(): Promise<void>;
 type SettingsGlobal = typeof globalThis & {
   __scrumboySettingsLocaleListener?: EventListener;
 };
-
-function apiReasonOrRawMessage(err: unknown, fallbackKey: string): string {
-  const apiError = (err as { data?: { error?: { code?: unknown; details?: { reason?: unknown }; message?: unknown } } })?.data?.error;
-  const code = typeof apiError?.code === "string" ? apiError.code : "";
-  const reason = typeof apiError?.details?.reason === "string" ? apiError.details.reason : "";
-  if (code && reason && hasI18nKey(`errors.${code}.${reason}`)) {
-    return apiErrorMessage(err, { fallbackKey });
-  }
-  const rawApiMessage = typeof apiError?.message === "string" && apiError.message.trim() ? apiError.message : "";
-  if (rawApiMessage) return rawApiMessage;
-  const rawMessage = typeof (err as { message?: unknown })?.message === "string" && String((err as { message?: unknown }).message).trim()
-    ? String((err as { message?: unknown }).message)
-    : "";
-  return rawMessage || t(fallbackKey);
-}
 
 /** Active keybinding capture listener (settings customization); removed when starting a new capture or on abort. */
 let keybindingCaptureKeydown: ((e: KeyboardEvent) => void) | null = null;
@@ -737,7 +722,7 @@ async function handleBackupExport(): Promise<void> {
     });
     if (!response.ok) {
       const err = await response.json();
-      showToast(apiReasonOrRawMessage({ data: err }, "settings.backup.toast.exportFailed"));
+      showToast(apiErrorMessageOrRaw({ data: err }, { fallbackKey: "settings.backup.toast.exportFailed" }));
       return;
     }
     const blob = await response.blob();
@@ -759,7 +744,7 @@ async function handleBackupExport(): Promise<void> {
     window.URL.revokeObjectURL(url);
     showToast(t("settings.backup.toast.exported"));
   } catch (err: any) {
-    showToast(apiReasonOrRawMessage(err, "settings.backup.toast.exportFailed"));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.toast.exportFailed" }));
   }
 }
 
@@ -800,7 +785,7 @@ async function handleBackupFileSelect(e: Event): Promise<void> {
     renderBackupWarnings(preview.warnings);
     updateBackupUI();
   } catch (err: any) {
-    showToast(apiReasonOrRawMessage(err, "settings.backup.toast.readFailed"));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.toast.readFailed" }));
     setBackupData(null);
     setBackupPreview(null);
     renderBackupPreview(null);
@@ -956,7 +941,7 @@ async function handleBackupImport(): Promise<void> {
       data: err.data,
       stack: err.stack
     });
-    const errorMsg = apiReasonOrRawMessage(err, "settings.backup.toast.importFailed");
+    const errorMsg = apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.toast.importFailed" });
     console.error("handleBackupImport: Showing toast with message:", errorMsg);
     showToast(errorMsg);
     // Re-enable button on error - use stored reference if available
@@ -1125,7 +1110,7 @@ export async function handleTrelloPreview(): Promise<void> {
     renderTrelloImportResult(null);
     updateTrelloImportUI();
   } catch (err: any) {
-    showToast(apiReasonOrRawMessage(err, "settings.backup.trello.toast.previewFailed"));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.trello.toast.previewFailed" }));
     setTrelloImportPreview(null);
     renderTrelloPreview(null);
     renderTrelloWarnings(null);
@@ -1169,7 +1154,7 @@ export async function handleTrelloImport(): Promise<void> {
     renderTrelloWarnings(preview);
     showToast(t("settings.backup.trello.toast.imported", { name: result.project.name }));
   } catch (err: any) {
-    showToast(apiReasonOrRawMessage(err, "settings.backup.trello.toast.importFailed"));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.trello.toast.importFailed" }));
   } finally {
     if (importBtn) {
       importBtn.textContent = t("settings.backup.trello.importAction");
@@ -1845,7 +1830,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
           await renderSettingsModal({ skipProfileRefetch: true });
           showToast(t("settings.profile.toast.avatarUpdated"));
         } catch (err: any) {
-          const msg = apiReasonOrRawMessage(err, "settings.profile.toast.uploadFailed");
+          const msg = apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.toast.uploadFailed" });
           showToast(msg);
           if (profileAvatarError) {
             profileAvatarError.textContent = msg;
@@ -1872,7 +1857,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         await renderSettingsModal({ skipProfileRefetch: true });
         showToast(t("settings.profile.toast.avatarRemoved"));
       } catch (err: any) {
-        showToast(apiReasonOrRawMessage(err, "settings.profile.toast.uploadFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.toast.uploadFailed" }));
       }
     }, { signal });
   }
@@ -1915,7 +1900,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
           showToast(t("settings.users.toast.promoted"));
           await renderSettingsModal();
         } catch (err: any) {
-          showToast(apiReasonOrRawMessage(err, "settings.users.toast.promoteFailed"));
+          showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.toast.promoteFailed" }));
         }
       }, { signal });
     });
@@ -1943,7 +1928,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
           showToast(t("settings.users.toast.demoted"));
           await renderSettingsModal();
         } catch (err: any) {
-          showToast(apiReasonOrRawMessage(err, "settings.users.toast.demoteFailed"));
+          showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.toast.demoteFailed" }));
         }
       }, { signal });
     });
@@ -1965,7 +1950,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
           showToast(t("settings.users.toast.deleted"));
           await renderSettingsModal();
         } catch (err: any) {
-          showToast(apiReasonOrRawMessage(err, "settings.users.toast.deleteFailed"));
+          showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.toast.deleteFailed" }));
         }
       }, { signal });
     });
@@ -2019,7 +2004,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         await uploadWallpaperImage(blob);
         showToast(t("settings.customization.wallpaper.toast.updated"));
       } catch (err: any) {
-        showToast(apiReasonOrRawMessage(err, "settings.customization.wallpaper.toast.uploadFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.customization.wallpaper.toast.uploadFailed" }));
       }
       await renderSettingsModal();
     };
@@ -2386,7 +2371,7 @@ function showPasswordResetDialog(userId: string): void {
           close();
         }
       } catch (err: any) {
-        showToast(apiReasonOrRawMessage(err, "settings.users.passwordReset.generateFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.passwordReset.generateFailed" }));
       }
     });
   }
@@ -2579,7 +2564,7 @@ function showCreateUserDialog(): void {
           await renderSettingsModal();
         }
       } catch (err: any) {
-        showToast(apiReasonOrRawMessage(err, "settings.users.createUser.failed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.createUser.failed" }));
       }
     });
   }
@@ -2673,13 +2658,13 @@ async function showEnable2FADialog(): Promise<void> {
           showToast(t("settings.profile.toast.enabled"));
           await renderSettingsModal();
         } catch (err: any) {
-          const msg = apiReasonOrRawMessage(err, "settings.profile.enable2fa.enableFailed");
+          const msg = apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.enable2fa.enableFailed" });
           showError(msg);
         }
       });
     }
   } catch (err: any) {
-    showToast(apiReasonOrRawMessage(err, "settings.profile.enable2fa.setupFailed"));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.enable2fa.setupFailed" }));
   }
 }
 
@@ -2770,7 +2755,7 @@ function showDisable2FADialog(): void {
         showToast(t("settings.profile.toast.disabled"));
         await renderSettingsModal();
       } catch (err: any) {
-        showToast(apiReasonOrRawMessage(err, "settings.profile.disable2fa.failed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.disable2fa.failed" }));
       }
     });
   }
@@ -2787,6 +2772,6 @@ async function showRegenerateRecoveryCodesDialog(): Promise<void> {
       await renderSettingsModal();
     }
   } catch (err: any) {
-    showToast(apiReasonOrRawMessage(err, "settings.profile.recovery.regenerateFailed"));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.recovery.regenerateFailed" }));
   }
 }

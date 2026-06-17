@@ -828,6 +828,34 @@ export function apiErrorMessage(err: unknown, options: ApiErrorMessageOptions = 
   return t("errors.generic");
 }
 
+export function apiErrorMessageOrRaw(
+  err: unknown,
+  options: ApiErrorMessageOptions = {},
+): string {
+  const body = extractErrorBody(err);
+  const error = body?.error;
+  const details = error?.details || undefined;
+  const reason = typeof details?.reason === "string" ? details.reason : "";
+  const code = typeof error?.code === "string" ? error.code : "";
+  const reasonKey = code && reason ? `errors.${code}.${reason}` : "";
+
+  if (reasonKey && hasI18nKey(reasonKey)) {
+    return apiErrorMessage(err, options);
+  }
+
+  const rawApiMessage = nonEmptyString(error?.message);
+  if (rawApiMessage) {
+    return rawApiMessage;
+  }
+
+  const rawMessage = nonEmptyString((err as { message?: unknown })?.message);
+  if (rawMessage) {
+    return rawMessage;
+  }
+
+  return t(options.fallbackKey || "errors.generic");
+}
+
 export function resetI18nForTests(): void {
   activeLocale = "en";
   activeCatalog = BOOTSTRAP_EN_CATALOG;
