@@ -4,7 +4,7 @@ import { recordLocalMutation } from '../realtime/guard.js';
 import { getSearch, getSettingsProjectId, getSlug, getSprintIdFromUrl, getTag, getTagColors, getUser, } from '../state/selectors.js';
 import { setTagColors } from '../state/mutations.js';
 import { escapeHTML, sanitizeHexColor, showConfirmDialog, showToast } from '../utils.js';
-import { t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, t } from '../i18n/index.js';
 let cachedTags = null;
 let cachedTagsHTML = null;
 let cachedTagsURL = null;
@@ -45,7 +45,7 @@ async function applyTagColorSuccess(tagName, color) {
         showToast(t('settings.tagColors.toast.colorUpdated'));
     }
     catch (err) {
-        showToast(err.message);
+        showToast(apiErrorMessageOrRaw(err));
     }
 }
 async function updateTagColor(tagName, tagId, color) {
@@ -67,7 +67,7 @@ async function updateTagColor(tagName, tagId, color) {
             await applyTagColorSuccess(tagName, color);
         }
         catch (err) {
-            showToast(err.message);
+            showToast(apiErrorMessageOrRaw(err));
         }
         return;
     }
@@ -88,7 +88,7 @@ async function updateTagColor(tagName, tagId, color) {
             await applyTagColorSuccess(tagName, color);
         }
         catch (err) {
-            showToast(err.message);
+            showToast(apiErrorMessageOrRaw(err));
         }
         return;
     }
@@ -139,7 +139,7 @@ async function deleteTag(tagName, tagId, rerender) {
         showToast(t('settings.tagColors.toast.deleted', { name: tagName }));
     }
     catch (err) {
-        showToast(err.message);
+        showToast(apiErrorMessageOrRaw(err));
     }
 }
 export async function loadTagSettingsContent(tagsURL) {

@@ -5,10 +5,14 @@
 import { apiFetch } from "../api.js";
 import { navigate } from "../router.js";
 import { showToast } from "../utils.js";
+import { hasI18nKey, t } from "../i18n/index.js";
 import { settingsDialog, todoDialog } from "../dom/elements.js";
 import { setProjectsTab } from "../state/mutations.js";
 import { getAuthStatusAvailable, getBoard, getProjectsTab, getRoute, getUser } from "../state/selectors.js";
 export const KEYBINDINGS_STORAGE_KEY = "scrumboy.keybindings";
+function keybindingText(key, fallback) {
+    return hasI18nKey(key) ? t(key) : fallback;
+}
 const DASHBOARD_PROJECT_IDS = [
     "dashboardProject1",
     "dashboardProject2",
@@ -155,12 +159,12 @@ export function getResolvedChordForAction(actionId) {
 export function saveKeybindingOverride(actionId, chord) {
     const normalized = normalizeChordString(chord);
     if (!normalized) {
-        showToast("Invalid key");
+        showToast(keybindingText("settings.customization.keybindings.toast.invalidKey", "Invalid key"));
         return false;
     }
     const next = { ...storedOverrides, [actionId]: normalized };
     if (hasConflict(actionId, next)) {
-        showToast("That key is already used");
+        showToast(keybindingText("settings.customization.keybindings.toast.duplicateKey", "That key is already used"));
         return false;
     }
     storedOverrides = next;
@@ -174,7 +178,7 @@ export function saveKeybindingOverride(actionId, chord) {
         localStorage.setItem(KEYBINDINGS_STORAGE_KEY, JSON.stringify(obj));
     }
     catch {
-        showToast("Could not save keybindings");
+        showToast(keybindingText("settings.customization.keybindings.toast.saveFailed", "Could not save keybindings"));
         return false;
     }
     return true;
@@ -499,7 +503,7 @@ export function executeAction(actionId) {
             const idx = DASHBOARD_PROJECT_IDS.indexOf(actionId);
             const tabs = document.querySelectorAll(".dashboard-project-group > .dashboard-project-group__tab[data-open-board]");
             if (tabs.length === 0) {
-                showToast("No projects available");
+                showToast(keybindingText("settings.customization.keybindings.toast.noProjectsAvailable", "No projects available"));
                 return;
             }
             const el = tabs[idx];
@@ -522,7 +526,7 @@ export function executeAction(actionId) {
             const idx = PROJECTS_LIST_IDS.indexOf(actionId);
             const els = getProjectsListJumpElements();
             if (els.length === 0) {
-                showToast("No projects available");
+                showToast(keybindingText("settings.customization.keybindings.toast.noProjectsAvailable", "No projects available"));
                 return;
             }
             const el = els[idx];

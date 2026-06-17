@@ -45,4 +45,5 @@ coverage.out
 /docs/draft/
 f.bat
 a.bat
+win_reset_factory.bat
 *.pem

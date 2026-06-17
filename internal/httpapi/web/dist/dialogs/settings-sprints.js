@@ -7,7 +7,7 @@ import { setBoard } from '../state/mutations.js';
 import { normalizeSprints } from '../sprints.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
-import { formatDate, t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, formatDate, t } from '../i18n/index.js';
 let editingSprintId = null;
 const SPRINT_DATE_OPTS = {
     month: 'short',
@@ -273,7 +273,7 @@ export function bindSprintsTabInteractions(options) {
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || t('settings.sprints.toast.createFailed'));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.createFailed' }));
             }
         }, { signal });
     }
@@ -303,7 +303,7 @@ export function bindSprintsTabInteractions(options) {
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || t('settings.sprints.toast.activateFailed'));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.activateFailed' }));
             }
         }, { signal });
     });
@@ -322,7 +322,7 @@ export function bindSprintsTabInteractions(options) {
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || t('settings.sprints.toast.closeFailed'));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.closeFailed' }));
             }
         }, { signal });
     });
@@ -384,7 +384,7 @@ export function bindSprintsTabInteractions(options) {
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || t('settings.sprints.toast.updateFailed'));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.updateFailed' }));
             }
         }, { signal });
     });
@@ -426,7 +426,7 @@ export function bindSprintsTabInteractions(options) {
                 await rerender();
             }
             catch (err) {
-                showToast(err.message || t('settings.sprints.toast.deleteFailed'));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.deleteFailed' }));
             }
         }, { signal });
     });

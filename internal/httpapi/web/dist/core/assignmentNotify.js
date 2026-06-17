@@ -1,4 +1,5 @@
 /** Mute assignment toast+sound via localStorage key `scrumboy_assignment_notify_muted` = `'1'`. */
+import { t } from '../i18n/index.js';
 const MUTE_KEY = "scrumboy_assignment_notify_muted";
 let audio = null;
 function getNotifyAudio() {
@@ -40,7 +41,7 @@ export function showAssignmentDesktopNotification(title) {
         return;
     }
     try {
-        new Notification("New assignment", { body: title || "Todo" });
+        new Notification(t("notifications.desktop.title"), { body: title || t("realtime.todoFallback") });
     }
     catch {
         // ignore
@@ -73,12 +74,12 @@ export function getDesktopNotificationStatusKind() {
 export function getDesktopNotificationStatusDescription() {
     switch (getDesktopNotificationStatusKind()) {
         case "unsupported":
-            return "Not supported in this browser.";
+            return t("settings.customization.notifications.status.unsupported");
         case "granted":
-            return "Enabled - you will receive OS notifications for new assignments.";
+            return t("settings.customization.notifications.status.granted");
         case "denied":
-            return "Blocked — allow notifications for this site in your browser settings.";
+            return t("settings.customization.notifications.status.denied");
         default:
-            return "Not enabled yet — click the button below (your browser will ask for permission).";
+            return t("settings.customization.notifications.status.default");
     }
 }

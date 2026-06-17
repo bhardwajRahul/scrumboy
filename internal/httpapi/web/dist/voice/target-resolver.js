@@ -1,5 +1,5 @@
 import { normalizeTitleReference } from './normalize.js';
-import { commandFailure, isCommandFailure } from './schema.js';
+import { localizedCommandFailure, isCommandFailure } from './schema.js';
 const MIN_CANDIDATE_SCORE = 70;
 const SINGLE_CANDIDATE_AUTO_SCORE = 75;
 const CLEAR_WIN_SCORE_GAP = 12;
@@ -18,7 +18,7 @@ async function resolveTodoByLocalId(localId, context) {
     if (fromBoard)
         return { ok: true, value: fromBoard };
     if (!context.callTool) {
-        return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
+        return localizedCommandFailure("unknown_story", "voice.errors.todoNotFound", "Todo #{localId} was not found in this project.", { localId });
     }
     try {
         const data = await context.callTool("todos.get", {
@@ -28,10 +28,10 @@ async function resolveTodoByLocalId(localId, context) {
         if (data?.todo?.localId === localId) {
             return { ok: true, value: data.todo };
         }
-        return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
+        return localizedCommandFailure("unknown_story", "voice.errors.todoNotFound", "Todo #{localId} was not found in this project.", { localId });
     }
     catch {
-        return commandFailure("unknown_story", `Todo #${localId} was not found in this project.`);
+        return localizedCommandFailure("unknown_story", "voice.errors.todoNotFound", "Todo #{localId} was not found in this project.", { localId });
     }
 }
 function mergeCandidates(existing, candidates) {
@@ -125,7 +125,7 @@ async function resolveTodoByTitle(target, context) {
     mergeCandidates(candidates, await remoteTitleCandidates(target.phrase, context));
     const ranked = rankTitleCandidates(target.phrase, Array.from(candidates.values()));
     if (ranked.length === 0) {
-        return commandFailure("unknown_story", "No strong todo title match was found in this project.");
+        return localizedCommandFailure("unknown_story", "voice.errors.noStrongTitleMatch", "No strong todo title match was found in this project.");
     }
     const exactMatches = ranked.filter((candidate) => candidate.score === 100);
     if (exactMatches.length === 1) {
@@ -135,7 +135,7 @@ async function resolveTodoByTitle(target, context) {
         return { ok: true, value: { todo: resolved.value } };
     }
     if (exactMatches.length > 1) {
-        return commandFailure("ambiguous_story", "More than one todo matched. Choose one.", {
+        return localizedCommandFailure("ambiguous_story", "voice.errors.todoAmbiguous", "More than one todo matched. Choose one.", {}, {
             candidates: exactMatches.slice(0, 3).map(({ localId, title }) => ({ localId, title })),
         });
     }
@@ -148,14 +148,14 @@ async function resolveTodoByTitle(target, context) {
             return resolved;
         return { ok: true, value: { todo: resolved.value } };
     }
-    return commandFailure("ambiguous_story", "More than one todo matched. Choose one.", {
+    return localizedCommandFailure("ambiguous_story", "voice.errors.todoAmbiguous", "More than one todo matched. Choose one.", {}, {
         candidates: ranked.slice(0, 3).map(({ localId, title }) => ({ localId, title })),
     });
 }
 export async function resolveTodoTarget(target, context, selectedLocalId, allowedLocalIds) {
     if (selectedLocalId != null) {
         if (!allowedLocalIds || !allowedLocalIds.includes(selectedLocalId)) {
-            return commandFailure("invalid_schema", "Selected todo was not one of the offered choices.");
+            return localizedCommandFailure("invalid_schema", "voice.errors.selectedTodoNotOffered", "Selected todo was not one of the offered choices.");
         }
         const resolved = await resolveTodoByLocalId(selectedLocalId, context);
         if (isCommandFailure(resolved))

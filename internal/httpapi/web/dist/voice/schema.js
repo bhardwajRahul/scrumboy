@@ -1,5 +1,20 @@
-function fail(code, message, extra = {}) {
-    return { ok: false, code, message, ...extra };
+import { renderVoiceMessage } from './i18n.js';
+const COMMAND_FAILURE_MESSAGE = Symbol("voiceCommandFailureMessage");
+function attachFailureMessage(failure, descriptor) {
+    Object.defineProperty(failure, COMMAND_FAILURE_MESSAGE, {
+        configurable: true,
+        enumerable: false,
+        value: descriptor,
+    });
+    return failure;
+}
+function fail(code, message, extra = {}, descriptor) {
+    const failure = { ok: false, code, message, ...extra };
+    return descriptor ? attachFailureMessage(failure, descriptor) : failure;
+}
+function localizedFail(code, key, fallback, values = {}, extra = {}) {
+    const descriptor = { key, fallback, values };
+    return fail(code, renderVoiceMessage(descriptor), extra, descriptor);
 }
 function objectKeys(value) {
     if (value === null || typeof value !== "object" || Array.isArray(value))
@@ -28,69 +43,85 @@ function laneKeys(board) {
 }
 export function validateCommandIR(value, context) {
     if (!hasExactKeys(value, ["intent", "projectId", "projectSlug", "entities"])) {
-        return fail("invalid_schema", "Command shape is invalid.");
+        return localizedFail("invalid_schema", "voice.errors.schema.shapeInvalid", "Command shape is invalid.");
     }
     const ir = value;
     if (ir.projectId !== context.projectId || ir.projectSlug !== context.projectSlug) {
-        return fail("stale_context", "The board changed before the command could run.");
+        return localizedFail("stale_context", "voice.errors.staleContext", "The board changed before the command could run.");
     }
     const activeLaneKeys = laneKeys(context.board);
     switch (ir.intent) {
         case "todos.create": {
             if (!hasExactKeys(ir.entities, ["title"])) {
-                return fail("invalid_schema", "Create command fields are invalid.");
+                return localizedFail("invalid_schema", "voice.errors.schema.createFieldsInvalid", "Create command fields are invalid.");
             }
             const title = ir.entities.title;
             if (typeof title !== "string" || title.trim().length === 0 || title.trim().length > 200) {
-                return fail("invalid_title", "Todo title must be between 1 and 200 characters.");
+                return localizedFail("invalid_title", "voice.errors.schema.titleLength", "Todo title must be between 1 and 200 characters.");
             }
             return { ok: true, value: { ...ir, entities: { title: title.trim() } } };
         }
         case "todos.move": {
             if (!hasExactKeys(ir.entities, ["localId", "toColumnKey"])) {
-                return fail("invalid_schema", "Move command fields are invalid.");
+                return localizedFail("invalid_schema", "voice.errors.schema.moveFieldsInvalid", "Move command fields are invalid.");
             }
             if (!isPositiveInteger(ir.entities.localId)) {
-                return fail("invalid_schema", "Todo ID must be a positive integer.");
+                return localizedFail("invalid_schema", "voice.errors.schema.todoIdPositive", "Todo ID must be a positive integer.");
             }
             if (typeof ir.entities.toColumnKey !== "string" || !activeLaneKeys.has(ir.entities.toColumnKey)) {
-                return fail("unknown_status", "Status was not found on this board.");
+                return localizedFail("unknown_status", "voice.errors.statusNotFound", "Status was not found on this board.");
             }
             return { ok: true, value: ir };
         }
         case "todos.delete": {
             if (!hasExactKeys(ir.entities, ["localId"])) {
-                return fail("invalid_schema", "Delete command fields are invalid.");
+                return localizedFail("invalid_schema", "voice.errors.schema.deleteFieldsInvalid", "Delete command fields are invalid.");
             }
             if (!isPositiveInteger(ir.entities.localId)) {
-                return fail("invalid_schema", "Todo ID must be a positive integer.");
+                return localizedFail("invalid_schema", "voice.errors.schema.todoIdPositive", "Todo ID must be a positive integer.");
             }
             return { ok: true, value: ir };
         }
         case "todos.assign": {
             if (!hasExactKeys(ir.entities, ["localId", "assigneeUserId"])) {
-                return fail("invalid_schema", "Assign command fields are invalid.");
+                return localizedFail("invalid_schema", "voice.errors.schema.assignFieldsInvalid", "Assign command fields are invalid.");
             }
             if (!isPositiveInteger(ir.entities.localId) || !isPositiveInteger(ir.entities.assigneeUserId)) {
-                return fail("invalid_schema", "Assignment command IDs must be positive integers.");
+                return localizedFail("invalid_schema", "voice.errors.schema.assignmentIdsPositive", "Assignment command IDs must be positive integers.");
             }
             return { ok: true, value: ir };
         }
         case "open_todo": {
             if (!hasExactKeys(ir.entities, ["localId"])) {
-                return fail("invalid_schema", "Open command fields are invalid.");
+                return localizedFail("invalid_schema", "voice.errors.schema.openFieldsInvalid", "Open command fields are invalid.");
             }
             if (!isPositiveInteger(ir.entities.localId)) {
-                return fail("invalid_schema", "Todo ID must be a positive integer.");
+                return localizedFail("invalid_schema", "voice.errors.schema.todoIdPositive", "Todo ID must be a positive integer.");
             }
             return { ok: true, value: ir };
         }
         default:
-            return fail("invalid_schema", "Command intent is unsupported.");
+            return localizedFail("invalid_schema", "voice.errors.schema.intentUnsupported", "Command intent is unsupported.");
     }
 }
 export function commandFailure(code, message, extra = {}) {
     return fail(code, message, extra);
+}
+export function localizedCommandFailure(code, key, fallback, values = {}, extra = {}) {
+    return localizedFail(code, key, fallback, values, extra);
+}
+export function localizeCommandFailure(failure) {
+    const descriptor = failure[COMMAND_FAILURE_MESSAGE];
+    return descriptor ? renderVoiceMessage(descriptor) : failure.message;
+}
+export function cloneCommandFailure(failure, extra = {}) {
+    const descriptor = failure[COMMAND_FAILURE_MESSAGE];
+    const cloned = {
+        ...failure,
+        ...extra,
+        message: descriptor ? renderVoiceMessage(descriptor) : failure.message,
+    };
+    return descriptor ? attachFailureMessage(cloned, descriptor) : cloned;
 }
 export function isCommandFailure(result) {
     return result.ok === false;

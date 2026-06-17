@@ -1,10 +1,10 @@
-import { commandFailure, isCommandFailure } from './schema.js';
+import { localizedCommandFailure, isCommandFailure } from './schema.js';
 import { containsProjectScopeOverride, normalizePhrase, normalizeTitleReference, parseSpokenNumber, stripWrappingQuotes, } from './normalize.js';
 import { ENTITY_ALIAS_PATTERN, isBuiltinStatusPhrase } from './vocabulary.js';
 function parseId(raw) {
     const parsed = parseSpokenNumber(raw);
     if (!parsed) {
-        return commandFailure("invalid_id", "Todo ID was not recognized.");
+        return localizedCommandFailure("invalid_id", "voice.errors.invalidId", "Todo ID was not recognized.");
     }
     return { ok: true, value: { localId: parsed.value, ambiguousId: parsed.ambiguous } };
 }
@@ -14,13 +14,13 @@ function targetDisplay(target) {
 function parseTarget(raw) {
     const normalized = normalizeTitleReference(raw);
     if (!normalized) {
-        return commandFailure("unknown_story", "Todo reference is required.");
+        return localizedCommandFailure("unknown_story", "voice.errors.todoReferenceRequired", "Todo reference is required.");
     }
     if (["it", "that", "that one", "this", "this one"].includes(normalized)) {
-        return commandFailure("unsupported", "Unsupported command.");
+        return localizedCommandFailure("unsupported", "voice.errors.unsupportedCommand", "Unsupported command.");
     }
     if (["#", "id", "number"].includes(normalized)) {
-        return commandFailure("invalid_id", "Todo ID was not recognized.");
+        return localizedCommandFailure("invalid_id", "voice.errors.invalidId", "Todo ID was not recognized.");
     }
     const id = parseId(raw);
     if (!isCommandFailure(id)) {
@@ -85,7 +85,7 @@ function parseCreate(input) {
         return null;
     const title = stripWrappingQuotes(match[1]);
     if (!title) {
-        return commandFailure("invalid_title", "Todo title is required.");
+        return localizedCommandFailure("invalid_title", "voice.errors.todoTitleRequired", "Todo title is required.");
     }
     return { ok: true, value: { intent: "todos.create", title, display: `create todo ${title}` } };
 }
@@ -101,7 +101,7 @@ function parseMove(input) {
         return target;
     const rawStatus = normalizePhrase(parts.value);
     if (!rawStatus) {
-        return commandFailure("unknown_status", "Status is required.");
+        return localizedCommandFailure("unknown_status", "voice.errors.statusRequired", "Status is required.");
     }
     return {
         ok: true,
@@ -125,7 +125,7 @@ function parseTodoIs(input) {
         return target;
     const rawStatus = normalizePhrase(parts.value);
     if (!rawStatus) {
-        return commandFailure("unknown_status", "Status is required.");
+        return localizedCommandFailure("unknown_status", "voice.errors.statusRequired", "Status is required.");
     }
     return {
         ok: true,
@@ -184,7 +184,7 @@ function parseAssign(input) {
         return target;
     const rawUser = normalizePhrase(parts.value);
     if (!rawUser) {
-        return commandFailure("unknown_user", "Assignee is required.");
+        return localizedCommandFailure("unknown_user", "voice.errors.assigneeRequired", "Assignee is required.");
     }
     return {
         ok: true,
@@ -199,10 +199,10 @@ function parseAssign(input) {
 export function parseCommand(input) {
     const trimmed = String(input ?? "").trim();
     if (!trimmed) {
-        return commandFailure("unsupported", "Command is required.");
+        return localizedCommandFailure("unsupported", "voice.errors.commandRequired", "Command is required.");
     }
     if (containsProjectScopeOverride(trimmed)) {
-        return commandFailure("project_scope", "Project scope is fixed by the current board.");
+        return localizedCommandFailure("project_scope", "voice.errors.projectScope", "Project scope is fixed by the current board.");
     }
     const parsers = [parseCreate, parseMove, parseDelete, parseOpen, parseAssign, parseTodoIs];
     for (const parser of parsers) {
@@ -210,5 +210,5 @@ export function parseCommand(input) {
         if (parsed)
             return parsed;
     }
-    return commandFailure("unsupported", "Unsupported command.");
+    return localizedCommandFailure("unsupported", "voice.errors.unsupportedCommand", "Unsupported command.");
 }

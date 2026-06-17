@@ -1,4 +1,5 @@
 import { buildMermaidSemanticLabelColors, loadMermaidSemanticEdgeConfig, paintMermaidSemanticLabelBackgrounds, } from "./mermaid-semantic-edges.js";
+import { hasI18nKey, t } from "./i18n/index.js";
 import { escapeHTML } from "./utils.js";
 const SAFE_TAGS = [
     "a",
@@ -29,6 +30,9 @@ const MERMAID_MAX_BLOCKS_PER_PREVIEW = 4;
 const MERMAID_MAX_CHARS_PER_BLOCK = 4000;
 const MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW = 8000;
 const MERMAID_DIRECTIVE_BLOCK_RE = /%%\{[\s\S]*?\}%%/g;
+function previewText(key, fallback, values = {}) {
+    return hasI18nKey(key) ? t(key, values) : fallback;
+}
 let markdownRenderer = null;
 let mermaidConfiguredThemeKey = null;
 let mermaidLoadPromise = null;
@@ -100,16 +104,16 @@ function stripUnsupportedMermaidDirectives(source) {
 }
 function getMermaidWarningMessage(blockIndex, displaySource, renderSource, totalCharsBeforeBlock) {
     if (renderSource.trim() === "") {
-        return "This Mermaid block contains only ignored Mermaid directives. Showing source instead.";
+        return previewText("todo.markdownPreview.directivesOnly", "This Mermaid block contains only ignored Mermaid directives. Showing source instead.");
     }
     if (blockIndex >= MERMAID_MAX_BLOCKS_PER_PREVIEW) {
-        return `Only the first ${MERMAID_MAX_BLOCKS_PER_PREVIEW} Mermaid diagrams are rendered in note preview. Showing source instead.`;
+        return previewText("todo.markdownPreview.tooManyDiagrams", `Only the first ${MERMAID_MAX_BLOCKS_PER_PREVIEW} Mermaid diagrams are rendered in note preview. Showing source instead.`, { count: MERMAID_MAX_BLOCKS_PER_PREVIEW });
     }
     if (displaySource.length > MERMAID_MAX_CHARS_PER_BLOCK) {
-        return `This Mermaid diagram exceeds the ${MERMAID_MAX_CHARS_PER_BLOCK}-character preview limit. Showing source instead.`;
+        return previewText("todo.markdownPreview.diagramTooLarge", `This Mermaid diagram exceeds the ${MERMAID_MAX_CHARS_PER_BLOCK}-character preview limit. Showing source instead.`, { count: MERMAID_MAX_CHARS_PER_BLOCK });
     }
     if (totalCharsBeforeBlock + displaySource.length > MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW) {
-        return `This note exceeds the ${MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW}-character Mermaid preview budget. Showing source instead.`;
+        return previewText("todo.markdownPreview.budgetExceeded", `This note exceeds the ${MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW}-character Mermaid preview budget. Showing source instead.`, { count: MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW });
     }
     return undefined;
 }
@@ -231,7 +235,7 @@ function replaceMermaidPlaceholders(container, mermaidBlocks) {
         host.className = "todo-mermaid-host todo-mermaid-host--loading";
         const status = document.createElement("div");
         status.className = "todo-mermaid-status";
-        status.textContent = "Rendering diagram...";
+        status.textContent = previewText("todo.markdownPreview.rendering", "Rendering diagram...");
         const canvas = document.createElement("div");
         canvas.className = "mermaid todo-mermaid-canvas";
         canvas.textContent = block.displaySource;
@@ -253,7 +257,7 @@ function setMermaidFallbackState(host, displaySource, statusText, statusTone) {
     host.replaceChildren(status, pre);
 }
 function setMermaidErrorState(host, displaySource) {
-    setMermaidFallbackState(host, displaySource, "Could not render Mermaid diagram. Showing source instead.", "error");
+    setMermaidFallbackState(host, displaySource, previewText("todo.markdownPreview.renderFailed", "Could not render Mermaid diagram. Showing source instead."), "error");
 }
 function setMermaidSuccessState(host) {
     host.classList.remove("todo-mermaid-host--loading", "todo-mermaid-host--fallback");

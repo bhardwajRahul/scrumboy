@@ -17,7 +17,8 @@ import { getVoiceFlowEnabledPreference, setVoiceFlowEnabledPreference } from '..
 import { bindWorkflowTabInteractions, clearWorkflowDraftState, invalidateWorkflowLaneCountsCache, isWorkflowDraftDirty, loadWorkflowTabContent, resetWorkflowDraftToBaseline, } from './settings-workflow.js';
 import { bindTagTabInteractions, invalidateTagsCache as invalidateTagSettingsCache, loadTagSettingsContent, } from './settings-tags.js';
 import { bindSprintsTabInteractions, refreshSprintDateLabels, renderSprintsTabContent } from './settings-sprints.js';
-import { getLocale, hydrateI18n, I18N_LOCALE_CHANGED, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, getLocale, hydrateI18n, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
+import { bindPublicLocaleSelect, renderPublicLocaleSelectHTML, syncPublicLocaleSelect } from '../i18n/locale-select.js';
 export { invalidateTagsCache } from './settings-tags.js';
 /** Active keybinding capture listener (settings customization); removed when starting a new capture or on abort. */
 let keybindingCaptureKeydown = null;
@@ -134,10 +135,6 @@ function invalidateSprintsForChartsCache() {
 function getTagColor(tagName) {
     return getTagColors()[tagName] || null;
 }
-function getSelectedSettingsLocale() {
-    const currentLocale = getLocale();
-    return isPublicLocale(currentLocale) ? currentLocale : "en";
-}
 function getWallpaperSummaryMessageKey(mode) {
     switch (mode) {
         case "off":
@@ -185,23 +182,6 @@ function syncSettingsDialogVersionText() {
         return;
     const versionText = getAppVersion();
     versionEl.textContent = versionText ? ` v${versionText}` : "";
-}
-function syncSettingsLocaleSelectOptions() {
-    const select = document.getElementById("settingsLocaleSelect");
-    if (!select)
-        return;
-    const options = publicLocaleOptions();
-    const needsRebuild = select.options.length !== options.length ||
-        options.some((option, index) => {
-            const existing = select.options[index];
-            return !existing || existing.value !== option.id || existing.textContent !== option.label;
-        });
-    if (needsRebuild) {
-        select.innerHTML = options
-            .map((option) => `<option value="${escapeHTML(option.id)}">${escapeHTML(option.label)}</option>`)
-            .join("");
-    }
-    select.value = getSelectedSettingsLocale();
 }
 function syncWallpaperLocaleState() {
     const wallpaperState = getStoredWallpaperState();
@@ -313,7 +293,7 @@ function applySettingsLocaleToOpenDialog() {
         const customizationEl = document.getElementById("settingsCustomizationContent");
         if (!customizationEl)
             return;
-        syncSettingsLocaleSelectOptions();
+        syncPublicLocaleSelect(document.getElementById("settingsLocaleSelect"));
         syncWallpaperLocaleState();
         syncDesktopNotificationLocaleState();
         hydrateI18n(customizationEl);
@@ -395,22 +375,27 @@ function ensureSettingsLocaleListener() {
  * Make a Settings-owned dynamic dialog locale-safe: localizes its static
  * `data-i18n-*` chrome now and re-applies it on every locale change while the
  * dialog is open, without rebuilding the dialog or resetting typed fields.
- * Returns a cleanup that the dialog's close handler must call so the listener
- * is removed exactly once (no duplication, no leaks).
+ * Returns an idempotent cleanup that manual close handlers can call; native
+ * dialog `cancel` and `close` also release the listener automatically.
  */
 function bindDialogLocale(dialog, sync) {
     let removed = false;
-    const remove = () => {
+    const handleNativeCleanup = () => {
+        release();
+    };
+    const release = () => {
         if (removed)
             return;
         removed = true;
         document.removeEventListener(I18N_LOCALE_CHANGED, listener);
+        dialog.removeEventListener("cancel", handleNativeCleanup);
+        dialog.removeEventListener("close", handleNativeCleanup);
     };
     const listener = () => {
         // Self-clean if the dialog was detached without calling the cleanup
         // (defensive: avoids leaked listeners hydrating stale nodes).
         if (!dialog.isConnected) {
-            remove();
+            release();
             return;
         }
         hydrateI18n(dialog);
@@ -420,7 +405,9 @@ function bindDialogLocale(dialog, sync) {
     hydrateI18n(dialog);
     sync?.();
     document.addEventListener(I18N_LOCALE_CHANGED, listener);
-    return remove;
+    dialog.addEventListener("cancel", handleNativeCleanup);
+    dialog.addEventListener("close", handleNativeCleanup);
+    return release;
 }
 /**
  * Re-localize the Web Push hint without probing push capability or changing the
@@ -599,7 +586,7 @@ async function handleBackupExport() {
         });
         if (!response.ok) {
             const err = await response.json();
-            showToast(err.error?.message || t("settings.backup.toast.exportFailed"));
+            showToast(apiErrorMessageOrRaw({ data: err }, { fallbackKey: "settings.backup.toast.exportFailed" }));
             return;
         }
         const blob = await response.blob();
@@ -621,7 +608,7 @@ async function handleBackupExport() {
         showToast(t("settings.backup.toast.exported"));
     }
     catch (err) {
-        showToast(err.message || t("settings.backup.toast.exportFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.toast.exportFailed" }));
     }
 }
 async function handleBackupFileSelect(e) {
@@ -656,7 +643,7 @@ async function handleBackupFileSelect(e) {
         updateBackupUI();
     }
     catch (err) {
-        showToast(err.message || t("settings.backup.toast.readFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.toast.readFailed" }));
         setBackupData(null);
         setBackupPreview(null);
         renderBackupPreview(null);
@@ -800,7 +787,7 @@ async function handleBackupImport() {
             data: err.data,
             stack: err.stack
         });
-        const errorMsg = err.message || err.data?.error?.message || t("settings.backup.toast.importFailed");
+        const errorMsg = apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.toast.importFailed" });
         console.error("handleBackupImport: Showing toast with message:", errorMsg);
         showToast(errorMsg);
         // Re-enable button on error - use stored reference if available
@@ -963,7 +950,7 @@ export async function handleTrelloPreview() {
         updateTrelloImportUI();
     }
     catch (err) {
-        showToast(err.message || t("settings.backup.trello.toast.previewFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.trello.toast.previewFailed" }));
         setTrelloImportPreview(null);
         renderTrelloPreview(null);
         renderTrelloWarnings(null);
@@ -1007,7 +994,7 @@ export async function handleTrelloImport() {
         showToast(t("settings.backup.trello.toast.imported", { name: result.project.name }));
     }
     catch (err) {
-        showToast(err.message || t("settings.backup.trello.toast.importFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.backup.trello.toast.importFailed" }));
     }
     finally {
         if (importBtn) {
@@ -1397,16 +1384,11 @@ export async function renderSettingsModal(options) {
             ? "Web Push needs VAPID keys on the server (SCRUMBOY_VAPID_PUBLIC_KEY and SCRUMBOY_VAPID_PRIVATE_KEY; see docs)."
             : "Web Push is not available in anonymous mode."
         : "";
-    const selectedPublicLocale = getSelectedSettingsLocale();
     const languageSectionHTML = `
       <div class="settings-section">
         <label class="settings-section__title" for="settingsLocaleSelect" data-i18n-text="settings.language.title">Language</label>
         <div class="settings-section__description muted" data-i18n-text="settings.language.description">Choose the language used for Scrumboy on this browser.</div>
-        <select class="select" id="settingsLocaleSelect" aria-label="Language" data-i18n-aria-label="settings.language.selectLabel" style="margin-top: 10px; min-width: 180px;">
-          ${publicLocaleOptions().map((option) => `
-            <option value="${escapeHTML(option.id)}" ${option.id === selectedPublicLocale ? "selected" : ""}>${escapeHTML(option.label)}</option>
-          `).join("")}
-        </select>
+        ${renderPublicLocaleSelectHTML({ id: "settingsLocaleSelect", style: "margin-top: 10px; min-width: 180px;" })}
       </div>
     `;
     const customizationHTML = activeSettingsTab === "customization" ? `
@@ -1497,7 +1479,7 @@ export async function renderSettingsModal(options) {
     `
         : `
       <div class="settings-section">
-        <div class="muted">No projects available. Create a project to view charts.</div>
+        <div class="muted" data-i18n-text="settings.charts.noProjects">No projects available. Create a project to view charts.</div>
       </div>
     `;
     // Render users tab content if needed
@@ -1657,7 +1639,7 @@ export async function renderSettingsModal(options) {
                     showToast(t("settings.profile.toast.avatarUpdated"));
                 }
                 catch (err) {
-                    const msg = err?.message ?? String(err) ?? t("settings.profile.toast.uploadFailed");
+                    const msg = apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.toast.uploadFailed" });
                     showToast(msg);
                     if (profileAvatarError) {
                         profileAvatarError.textContent = msg;
@@ -1685,7 +1667,7 @@ export async function renderSettingsModal(options) {
                 showToast(t("settings.profile.toast.avatarRemoved"));
             }
             catch (err) {
-                showToast(err.message);
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.toast.uploadFailed" }));
             }
         }, { signal });
     }
@@ -1726,7 +1708,7 @@ export async function renderSettingsModal(options) {
                     await renderSettingsModal();
                 }
                 catch (err) {
-                    showToast(err.message || t("settings.users.toast.promoteFailed"));
+                    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.toast.promoteFailed" }));
                 }
             }, { signal });
         });
@@ -1749,7 +1731,7 @@ export async function renderSettingsModal(options) {
                     await renderSettingsModal();
                 }
                 catch (err) {
-                    showToast(err.message || t("settings.users.toast.demoteFailed"));
+                    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.toast.demoteFailed" }));
                 }
             }, { signal });
         });
@@ -1770,7 +1752,7 @@ export async function renderSettingsModal(options) {
                     await renderSettingsModal();
                 }
                 catch (err) {
-                    showToast(err.message || t("settings.users.toast.deleteFailed"));
+                    showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.toast.deleteFailed" }));
                 }
             }, { signal });
         });
@@ -1826,7 +1808,7 @@ export async function renderSettingsModal(options) {
                 showToast(t("settings.customization.wallpaper.toast.updated"));
             }
             catch (err) {
-                showToast(err?.message ?? String(err) ?? t("settings.customization.wallpaper.toast.uploadFailed"));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.customization.wallpaper.toast.uploadFailed" }));
             }
             await renderSettingsModal();
         };
@@ -1886,14 +1868,7 @@ export async function renderSettingsModal(options) {
     }
     if (getSettingsActiveTab() === "customization") {
         const localeSelect = document.getElementById("settingsLocaleSelect");
-        if (localeSelect) {
-            localeSelect.addEventListener("change", async () => {
-                const nextLocale = localeSelect.value;
-                if (!isPublicLocale(nextLocale))
-                    return;
-                await setLocale(nextLocale);
-            }, { signal });
-        }
+        bindPublicLocaleSelect(localeSelect, { signal });
         const voiceFlowEnabledToggle = document.getElementById("voiceFlowEnabledToggle");
         if (voiceFlowEnabledToggle) {
             voiceFlowEnabledToggle.addEventListener("change", () => {
@@ -2153,7 +2128,7 @@ function showPasswordResetDialog(userId) {
                 }
             }
             catch (err) {
-                showToast(err.message || t("settings.users.passwordReset.generateFailed"));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.passwordReset.generateFailed" }));
             }
         });
     }
@@ -2337,7 +2312,7 @@ function showCreateUserDialog() {
                 }
             }
             catch (err) {
-                showToast(err.message || t("settings.users.createUser.failed"));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.users.createUser.failed" }));
             }
         });
     }
@@ -2425,14 +2400,14 @@ async function showEnable2FADialog() {
                     await renderSettingsModal();
                 }
                 catch (err) {
-                    const msg = err?.message || t("settings.profile.enable2fa.enableFailed");
+                    const msg = apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.enable2fa.enableFailed" });
                     showError(msg);
                 }
             });
         }
     }
     catch (err) {
-        showToast(err.message || t("settings.profile.enable2fa.setupFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.enable2fa.setupFailed" }));
     }
 }
 function showRecoveryCodesDialog(codes) {
@@ -2520,7 +2495,7 @@ function showDisable2FADialog() {
                 await renderSettingsModal();
             }
             catch (err) {
-                showToast(err.message || t("settings.profile.disable2fa.failed"));
+                showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.disable2fa.failed" }));
             }
         });
     }
@@ -2537,6 +2512,6 @@ async function showRegenerateRecoveryCodesDialog() {
         }
     }
     catch (err) {
-        showToast(err.message || t("settings.profile.recovery.regenerateFailed"));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: "settings.profile.recovery.regenerateFailed" }));
     }
 }
