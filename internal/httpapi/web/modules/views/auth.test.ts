@@ -290,6 +290,50 @@ const ruCatalog = {
   "settings.language.selectLabel": "Язык",
 } as const;
 
+const jaCatalog = {
+  "auth.2fa.accountFallback": "あなたのアカウント",
+  "auth.2fa.failed": "認証に失敗しました。",
+  "auth.2fa.helper": "認証アプリの6桁コード、またはリカバリーコードを入力してください。",
+  "auth.2fa.placeholder": "{account} のコード",
+  "auth.2fa.submit": "確認",
+  "auth.2fa.title": "二要素認証",
+  "auth.actions.bootstrap": "初期設定",
+  "auth.actions.login": "ログイン",
+  "auth.actions.resetPassword": "パスワードをリセット",
+  "auth.bootstrap.failed": "セットアップに失敗しました。",
+  "auth.bootstrap.title": "初回セットアップ",
+  "auth.fields.confirmPassword.label": "パスワードの確認",
+  "auth.fields.confirmPassword.placeholder": "新しいパスワードを再入力",
+  "auth.fields.email.placeholder": "メールアドレス",
+  "auth.fields.name.placeholder": "名前",
+  "auth.fields.newPassword.label": "新しいパスワード",
+  "auth.fields.newPassword.placeholder": "8文字以上",
+  "auth.fields.password.placeholder": "パスワード",
+  "auth.login.failed": "ログインに失敗しました。",
+  "auth.oidc.button": "SSO で続行",
+  "auth.oidc.error.email": "確認済みのメールアドレスが必要です。",
+  "auth.oidc.error.generic": "認証に失敗しました。",
+  "auth.oidc.error.provider": "ID プロバイダーがエラーを返しました。",
+  "auth.oidc.error.state_invalid": "ログインセッションの有効期限が切れたか無効です。もう一度お試しください。",
+  "auth.oidc.error.token": "認証に失敗しました。もう一度お試しください。",
+  "auth.password.hide": "パスワードを非表示",
+  "auth.password.show": "パスワードを表示",
+  "auth.reset.helper": "新しいパスワードを入力してください。リンクは30分で失効します。",
+  "auth.reset.invalidLink": "リセットリンクが無効または見つかりません",
+  "auth.reset.invalidOrExpiredToken": "リセットトークンが無効または期限切れです",
+  "auth.reset.passwordsMismatch": "パスワードが一致しません",
+  "auth.reset.success": "パスワードをリセットしました。ログインしてください。",
+  "auth.reset.title": "パスワードをリセット",
+  "auth.shared.helper": "このインスタンスでは認証が有効です。匿名ボードは URL で共有可能です。永続的なプロジェクトにはサインインが必要です。",
+  "auth.shared.or": "または",
+  "auth.signIn.title": "サインイン",
+  "errors.RATE_LIMITED": "試行回数が多すぎます。しばらくしてから再度お試しください。",
+  "errors.UNAUTHORIZED": "認証が必要です",
+  "errors.generic": "問題が発生しました。",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "言語",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -334,7 +378,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -345,6 +389,7 @@ function loader() {
       pt: ptCatalog,
       ar: arCatalog,
       ru: ruCatalog,
+      ja: jaCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -392,9 +437,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/br.svg",
   "/assets/flags/sa.svg",
   "/assets/flags/ru.svg",
+  "/assets/flags/jp.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -464,6 +510,7 @@ describe("auth view i18n", () => {
       "Português (Brasil)",
       "العربية",
       "Русский",
+      "日本語",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
