@@ -422,6 +422,50 @@ const koCatalog = {
   "settings.language.selectLabel": "언어",
 } as const;
 
+const zhCatalog = {
+  "auth.2fa.accountFallback": "你的账户",
+  "auth.2fa.failed": "验证失败。",
+  "auth.2fa.helper": "输入认证器应用中的 6 位验证码，或输入恢复码。",
+  "auth.2fa.placeholder": "{account} 的验证码",
+  "auth.2fa.submit": "验证",
+  "auth.2fa.title": "双因素认证",
+  "auth.actions.bootstrap": "初始化",
+  "auth.actions.login": "登录",
+  "auth.actions.resetPassword": "重置密码",
+  "auth.bootstrap.failed": "设置失败。",
+  "auth.bootstrap.title": "首次设置",
+  "auth.fields.confirmPassword.label": "确认密码",
+  "auth.fields.confirmPassword.placeholder": "确认新密码",
+  "auth.fields.email.placeholder": "邮箱",
+  "auth.fields.name.placeholder": "姓名",
+  "auth.fields.newPassword.label": "新密码",
+  "auth.fields.newPassword.placeholder": "至少 8 个字符",
+  "auth.fields.password.placeholder": "密码",
+  "auth.login.failed": "登录失败。",
+  "auth.oidc.button": "使用 SSO 继续",
+  "auth.oidc.error.email": "需要已验证的邮箱地址。",
+  "auth.oidc.error.generic": "认证失败。",
+  "auth.oidc.error.provider": "身份提供商返回了错误。",
+  "auth.oidc.error.state_invalid": "登录会话已过期或无效。请重试。",
+  "auth.oidc.error.token": "认证失败。请重试。",
+  "auth.password.hide": "隐藏密码",
+  "auth.password.show": "显示密码",
+  "auth.reset.helper": "输入新密码。链接将在 30 分钟后过期。",
+  "auth.reset.invalidLink": "重置链接无效或缺失",
+  "auth.reset.invalidOrExpiredToken": "重置令牌无效或已过期",
+  "auth.reset.passwordsMismatch": "两次输入的密码不一致",
+  "auth.reset.success": "密码重置成功。请登录。",
+  "auth.reset.title": "重置密码",
+  "auth.shared.helper": "此实例已启用认证。匿名看板仍可通过 URL 分享；持久项目需要登录。",
+  "auth.shared.or": "或",
+  "auth.signIn.title": "登录",
+  "errors.RATE_LIMITED": "尝试次数过多。请稍后再试。",
+  "errors.UNAUTHORIZED": "未授权",
+  "errors.generic": "出了点问题。",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "语言",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -466,7 +510,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -480,6 +524,7 @@ function loader() {
       ja: jaCatalog,
       tr: trCatalog,
       ko: koCatalog,
+      zh: zhCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -530,9 +575,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/jp.svg",
   "/assets/flags/tr.svg",
   "/assets/flags/kr.svg",
+  "/assets/flags/cn.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -605,6 +651,7 @@ describe("auth view i18n", () => {
       "日本語",
       "Türkçe",
       "한국어",
+      "简体中文",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");

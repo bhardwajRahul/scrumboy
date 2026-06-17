@@ -1,5 +1,5 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko"];
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
@@ -12,6 +12,7 @@ export const LOCALE_LABELS = {
     ja: "日本語",
     tr: "Türkçe",
     ko: "한국어",
+    zh: "简体中文",
     pseudo: "Pseudo",
 };
 export const PUBLIC_LOCALE_FLAG_PATHS = {
@@ -24,6 +25,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS = {
     ja: "/assets/flags/jp.svg",
     tr: "/assets/flags/tr.svg",
     ko: "/assets/flags/kr.svg",
+    zh: "/assets/flags/cn.svg",
 };
 const BOOTSTRAP_EN_CATALOG = {
     "common.add": "Add",
@@ -483,6 +485,14 @@ export function normalizeLocale(value) {
         return "tr";
     if (normalized === "ko" || normalized.startsWith("ko-"))
         return "ko";
+    if (normalized === "zh"
+        || normalized === "zh-cn"
+        || normalized === "zh-hans"
+        || normalized === "zh-sg"
+        || normalized.startsWith("zh-cn-")
+        || normalized.startsWith("zh-hans-")) {
+        return "zh";
+    }
     if (normalized === "en" || normalized.startsWith("en-"))
         return "en";
     return null;
@@ -728,6 +738,8 @@ function intlLocale(locale = activeLocale) {
         return "en";
     if (locale === "pt")
         return "pt-BR";
+    if (locale === "zh")
+        return "zh-CN";
     return locale;
 }
 export function formatDate(value, options) {

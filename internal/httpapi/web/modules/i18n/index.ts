@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko"] as const;
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -18,6 +18,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   ja: "日本語",
   tr: "Türkçe",
   ko: "한국어",
+  zh: "简体中文",
   pseudo: "Pseudo",
 };
 
@@ -31,6 +32,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   ja: "/assets/flags/jp.svg",
   tr: "/assets/flags/tr.svg",
   ko: "/assets/flags/kr.svg",
+  zh: "/assets/flags/cn.svg",
 };
 
 const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
@@ -515,6 +517,16 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "ja" || normalized.startsWith("ja-")) return "ja";
   if (normalized === "tr" || normalized.startsWith("tr-")) return "tr";
   if (normalized === "ko" || normalized.startsWith("ko-")) return "ko";
+  if (
+    normalized === "zh"
+    || normalized === "zh-cn"
+    || normalized === "zh-hans"
+    || normalized === "zh-sg"
+    || normalized.startsWith("zh-cn-")
+    || normalized.startsWith("zh-hans-")
+  ) {
+    return "zh";
+  }
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
 }
@@ -775,6 +787,7 @@ export function hasI18nKey(key: string): boolean {
 function intlLocale(locale = activeLocale): string {
   if (locale === "pseudo") return "en";
   if (locale === "pt") return "pt-BR";
+  if (locale === "zh") return "zh-CN";
   return locale;
 }
 
