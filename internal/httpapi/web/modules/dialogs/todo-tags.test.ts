@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import deCatalog from '../i18n/locales/de.json';
 
 const selectorState: {
   autocompleteSuggestion: string | null;
@@ -195,6 +196,19 @@ describe('todo-tags', () => {
 
     mod.renderTagsChips(['Bug'], { canRemove: false });
     expect(document.querySelector('.tag-chip-remove')).toBeNull();
+  });
+
+  it('localizes remove tag aria labels', async () => {
+    const i18n = await import('../i18n/index.js');
+    await i18n.initI18n({
+      locale: 'de',
+      loadLocale: vi.fn(async () => deCatalog),
+    });
+    const mod = await loadTodoTagsModule();
+
+    mod.renderTagsChips(['Bug'], { canRemove: true });
+
+    expect(document.querySelector('.tag-chip-remove')?.getAttribute('aria-label')).toBe(deCatalog['todo.tags.remove']);
   });
 
   it('normalizes tags from the available-tags map and then falls back to existing chip casing', async () => {

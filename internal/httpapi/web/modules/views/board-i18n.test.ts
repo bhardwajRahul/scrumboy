@@ -1,15 +1,21 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Board } from "../types.js";
+import realDeCatalog from "../i18n/locales/de.json";
+import realEnCatalog from "../i18n/locales/en.json";
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const initDnDMock = vi.hoisted(() => vi.fn());
 const setDnDColumnsMock = vi.hoisted(() => vi.fn());
 const customBootstrapBackLabel = vi.hoisted(() => ({ value: null as string | null }));
+const domElements = vi.hoisted(() => ({
+  app: document.createElement("div"),
+  settingsDialog: document.createElement("dialog"),
+}));
 
 vi.mock("../dom/elements.js", () => ({
-  app: document.body,
-  settingsDialog: document.createElement("dialog"),
+  app: domElements.app,
+  settingsDialog: domElements.settingsDialog,
 }));
 
 vi.mock("../api.js", () => ({
@@ -221,6 +227,9 @@ async function renderPrefetchedBoard(
 describe("board i18n locale switching", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
+    domElements.app.id = "app";
+    domElements.app.innerHTML = "";
+    document.body.appendChild(domElements.app);
     localStorage.clear();
     customBootstrapBackLabel.value = null;
     window.history.replaceState({}, "", "/alpha?search=needle");
@@ -356,5 +365,81 @@ describe("board i18n locale switching", () => {
     expect(document.querySelector(".filters__label")?.textContent).toBe("[!! Tags: !!]");
     expect(document.querySelector(".no-results")?.textContent).toBe('[!! No todos found matching "needle" !!]');
     expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("relocalizes an open Manage Members dialog without refetching or losing add-member selections", async () => {
+    const i18n = await import("../i18n/index.js");
+    await i18n.initI18n({
+      locale: "en",
+      loadLocale: vi.fn(async (locale: "en" | "de") => (locale === "de" ? realDeCatalog : realEnCatalog)),
+    });
+    const membersCache = await import("../members-cache.js");
+    const mutations = await import("../state/mutations.js");
+    mutations.setAuthStatusAvailable(true);
+    mutations.setUser({ id: 1, name: "Alex", email: "alex@example.com" } as any);
+    vi.mocked(membersCache.fetchProjectMembers).mockResolvedValue([
+      { userId: 1, name: "Alex", email: "alex@example.com", role: "maintainer" },
+      { userId: 2, name: "Sam", email: "sam@example.com", role: "viewer" },
+    ] as any);
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === "/api/projects/1/members") {
+        return [
+          { userId: 1, name: "Alex", email: "alex@example.com", role: "maintainer" },
+          { userId: 2, name: "Sam", email: "sam@example.com", role: "viewer" },
+        ];
+      }
+      if (url === "/api/projects/1/available-users") {
+        return [{ id: 3, name: "Taylor", email: "taylor@example.com" }];
+      }
+      if (url === "/api/board/alpha/sprints") return null;
+      return null;
+    });
+    const addSpy = vi.spyOn(document, "addEventListener");
+    const removeSpy = vi.spyOn(document, "removeEventListener");
+    const mod = await import("./board.js");
+
+    await renderPrefetchedBoard(mod, { search: "" });
+    await flushPromises();
+
+    const manageMembersBtn = document.getElementById("manageMembersBtn") as HTMLButtonElement | null;
+    expect(manageMembersBtn).toBeTruthy();
+    const localeAddsBeforeOpen = addSpy.mock.calls.filter(([type]) => type === i18n.I18N_LOCALE_CHANGED).length;
+
+    manageMembersBtn!.click();
+    await flushPromises();
+
+    const dialog = document.getElementById("membersDialog") as HTMLDialogElement | null;
+    expect(dialog).toBeTruthy();
+    expect(document.getElementById("membersDialogTitle")?.textContent).toBe(realEnCatalog["board.members.dialogTitle"]);
+    expect(document.getElementById("membersCurrentMembersLabel")?.textContent).toBe(realEnCatalog["board.members.currentMembers"]);
+    expect(addSpy.mock.calls.filter(([type]) => type === i18n.I18N_LOCALE_CHANGED)).toHaveLength(localeAddsBeforeOpen + 1);
+
+    const userSelect = document.getElementById("addMemberUser") as HTMLSelectElement;
+    const roleSelect = document.getElementById("addMemberRole") as HTMLSelectElement;
+    userSelect.value = "3";
+    roleSelect.value = "viewer";
+    expect(roleSelect.value).toBe("viewer");
+    apiFetchMock.mockClear();
+    vi.mocked(membersCache.fetchProjectMembers).mockClear();
+
+    await i18n.setLocale("de");
+    await flushPromises();
+
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(membersCache.fetchProjectMembers).not.toHaveBeenCalled();
+    expect(document.getElementById("membersDialogTitle")?.textContent).toBe(realDeCatalog["board.members.dialogTitle"]);
+    expect(document.getElementById("membersCurrentMembersLabel")?.textContent).toBe(realDeCatalog["board.members.currentMembers"]);
+    expect(document.getElementById("membersUserFieldLabel")?.textContent).toBe(realDeCatalog["board.members.user"]);
+    expect(document.querySelector('#addMemberRole option[value="maintainer"]')?.textContent).toBe(
+      realDeCatalog["board.members.role.maintainer"],
+    );
+    expect((document.getElementById("addMemberUser") as HTMLSelectElement).value).toBe("3");
+    expect((document.getElementById("addMemberRole") as HTMLSelectElement).value).toBe("viewer");
+
+    (document.getElementById("addMemberCancel") as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(document.getElementById("membersDialog")).toBeNull();
+    expect(removeSpy.mock.calls.filter(([type]) => type === i18n.I18N_LOCALE_CHANGED)).toHaveLength(1);
   });
 });

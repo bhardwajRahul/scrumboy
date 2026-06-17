@@ -3,6 +3,7 @@ import {
   loadMermaidSemanticEdgeConfig,
   paintMermaidSemanticLabelBackgrounds,
 } from "./mermaid-semantic-edges.js";
+import { hasI18nKey, t } from "./i18n/index.js";
 import { escapeHTML } from "./utils.js";
 
 const SAFE_TAGS = [
@@ -35,6 +36,10 @@ const MERMAID_MAX_BLOCKS_PER_PREVIEW = 4;
 const MERMAID_MAX_CHARS_PER_BLOCK = 4_000;
 const MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW = 8_000;
 const MERMAID_DIRECTIVE_BLOCK_RE = /%%\{[\s\S]*?\}%%/g;
+
+function previewText(key: string, fallback: string, values: Record<string, string | number> = {}): string {
+  return hasI18nKey(key) ? t(key, values) : fallback;
+}
 
 type MarkdownPreviewOptions = {
   mermaidEnabled?: boolean;
@@ -144,16 +149,31 @@ function getMermaidWarningMessage(
   totalCharsBeforeBlock: number,
 ): string | undefined {
   if (renderSource.trim() === "") {
-    return "This Mermaid block contains only ignored Mermaid directives. Showing source instead.";
+    return previewText(
+      "todo.markdownPreview.directivesOnly",
+      "This Mermaid block contains only ignored Mermaid directives. Showing source instead.",
+    );
   }
   if (blockIndex >= MERMAID_MAX_BLOCKS_PER_PREVIEW) {
-    return `Only the first ${MERMAID_MAX_BLOCKS_PER_PREVIEW} Mermaid diagrams are rendered in note preview. Showing source instead.`;
+    return previewText(
+      "todo.markdownPreview.tooManyDiagrams",
+      `Only the first ${MERMAID_MAX_BLOCKS_PER_PREVIEW} Mermaid diagrams are rendered in note preview. Showing source instead.`,
+      { count: MERMAID_MAX_BLOCKS_PER_PREVIEW },
+    );
   }
   if (displaySource.length > MERMAID_MAX_CHARS_PER_BLOCK) {
-    return `This Mermaid diagram exceeds the ${MERMAID_MAX_CHARS_PER_BLOCK}-character preview limit. Showing source instead.`;
+    return previewText(
+      "todo.markdownPreview.diagramTooLarge",
+      `This Mermaid diagram exceeds the ${MERMAID_MAX_CHARS_PER_BLOCK}-character preview limit. Showing source instead.`,
+      { count: MERMAID_MAX_CHARS_PER_BLOCK },
+    );
   }
   if (totalCharsBeforeBlock + displaySource.length > MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW) {
-    return `This note exceeds the ${MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW}-character Mermaid preview budget. Showing source instead.`;
+    return previewText(
+      "todo.markdownPreview.budgetExceeded",
+      `This note exceeds the ${MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW}-character Mermaid preview budget. Showing source instead.`,
+      { count: MERMAID_MAX_TOTAL_CHARS_PER_PREVIEW },
+    );
   }
   return undefined;
 }
@@ -302,7 +322,7 @@ function replaceMermaidPlaceholders(container: HTMLElement, mermaidBlocks: Merma
 
     const status = document.createElement("div");
     status.className = "todo-mermaid-status";
-    status.textContent = "Rendering diagram...";
+    status.textContent = previewText("todo.markdownPreview.rendering", "Rendering diagram...");
 
     const canvas = document.createElement("div");
     canvas.className = "mermaid todo-mermaid-canvas";
@@ -340,7 +360,10 @@ function setMermaidErrorState(host: HTMLElement, displaySource: string): void {
   setMermaidFallbackState(
     host,
     displaySource,
-    "Could not render Mermaid diagram. Showing source instead.",
+    previewText(
+      "todo.markdownPreview.renderFailed",
+      "Could not render Mermaid diagram. Showing source instead.",
+    ),
     "error",
   );
 }

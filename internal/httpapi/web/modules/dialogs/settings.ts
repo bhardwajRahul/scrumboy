@@ -1663,7 +1663,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
     `
     : `
       <div class="settings-section">
-        <div class="muted">No projects available. Create a project to view charts.</div>
+        <div class="muted" data-i18n-text="settings.charts.noProjects">No projects available. Create a project to view charts.</div>
       </div>
     `;
 
