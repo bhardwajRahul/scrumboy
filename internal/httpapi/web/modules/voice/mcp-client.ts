@@ -1,3 +1,5 @@
+import { voiceText } from './i18n.js';
+
 export type McpToolName =
   | "todos.create"
   | "todos.get"
@@ -39,14 +41,22 @@ export async function callMcpTool<T = unknown>(tool: McpToolName, input: Record<
   });
   const data = await res.json().catch(() => null) as McpEnvelope<T> | null;
   if (!isObject(data)) {
-    throw mcpError(res.ok ? "Invalid MCP response" : `HTTP ${res.status}`, res.status, data);
+    throw mcpError(
+      res.ok
+        ? voiceText("voice.errors.mcpInvalidResponse", "Invalid MCP response")
+        : voiceText("voice.errors.mcpHttpFailure", "HTTP {status}", { status: res.status }),
+      res.status,
+      data,
+    );
   }
   if (typeof data.ok !== "boolean" || (data.ok === true && !("data" in data))) {
-    throw mcpError("Invalid MCP response", res.status, data);
+    throw mcpError(voiceText("voice.errors.mcpInvalidResponse", "Invalid MCP response"), res.status, data);
   }
   if (!res.ok || !data || data.ok !== true) {
     const errorValue = "error" in data && isObject(data.error) ? data.error : null;
-    const message = typeof errorValue?.message === "string" && errorValue.message ? errorValue.message : `HTTP ${res.status}`;
+    const message = typeof errorValue?.message === "string" && errorValue.message
+      ? errorValue.message
+      : voiceText("voice.errors.mcpHttpFailure", "HTTP {status}", { status: res.status });
     throw mcpError(message, res.status, data);
   }
   return data.data;
