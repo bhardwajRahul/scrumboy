@@ -209,7 +209,7 @@ func (s *Server) uploadUserWallpaperImage(w http.ResponseWriter, r *http.Request
 	}
 	img, err := decodeWallpaperUpload(data, ct)
 	if err != nil {
-		writeValidationError(w, err.Error(), "invalid_image", map[string]any{"field": "file"})
+		writeValidationError(w, err.Error(), "", map[string]any{"field": "file"})
 		return
 	}
 
