@@ -334,6 +334,50 @@ const jaCatalog = {
   "settings.language.selectLabel": "言語",
 } as const;
 
+const trCatalog = {
+  "auth.2fa.accountFallback": "hesabınız",
+  "auth.2fa.failed": "Doğrulama başarısız.",
+  "auth.2fa.helper": "Kimlik doğrulama uygulamanızdaki 6 haneli kodu veya bir kurtarma kodunu girin.",
+  "auth.2fa.placeholder": "{account} için kod",
+  "auth.2fa.submit": "Doğrula",
+  "auth.2fa.title": "İki faktörlü kimlik doğrulama",
+  "auth.actions.bootstrap": "Kurulum",
+  "auth.actions.login": "Giriş yap",
+  "auth.actions.resetPassword": "Parolayı sıfırla",
+  "auth.bootstrap.failed": "Kurulum başarısız.",
+  "auth.bootstrap.title": "İlk kurulum",
+  "auth.fields.confirmPassword.label": "Parolayı onayla",
+  "auth.fields.confirmPassword.placeholder": "Yeni parolayı onayla",
+  "auth.fields.email.placeholder": "E-posta",
+  "auth.fields.name.placeholder": "Ad",
+  "auth.fields.newPassword.label": "Yeni parola",
+  "auth.fields.newPassword.placeholder": "En az 8 karakter",
+  "auth.fields.password.placeholder": "Parola",
+  "auth.login.failed": "Giriş başarısız.",
+  "auth.oidc.button": "SSO ile devam et",
+  "auth.oidc.error.email": "Doğrulanmış bir e-posta adresi gerekli.",
+  "auth.oidc.error.generic": "Kimlik doğrulama başarısız.",
+  "auth.oidc.error.provider": "Kimlik sağlayıcı bir hata döndürdü.",
+  "auth.oidc.error.state_invalid": "Oturum açma oturumu süresi doldu veya geçersiz. Lütfen tekrar deneyin.",
+  "auth.oidc.error.token": "Kimlik doğrulama başarısız. Lütfen tekrar deneyin.",
+  "auth.password.hide": "Parolayı gizle",
+  "auth.password.show": "Parolayı göster",
+  "auth.reset.helper": "Yeni parolanızı girin. Bağlantının süresi 30 dakika içinde dolacak.",
+  "auth.reset.invalidLink": "Geçersiz veya eksik sıfırlama bağlantısı",
+  "auth.reset.invalidOrExpiredToken": "Geçersiz veya süresi dolmuş sıfırlama jetonu",
+  "auth.reset.passwordsMismatch": "Parolalar eşleşmiyor",
+  "auth.reset.success": "Parola başarıyla sıfırlandı. Lütfen giriş yapın.",
+  "auth.reset.title": "Parolayı sıfırla",
+  "auth.shared.helper": "Bu örnek için kimlik doğrulama etkin. Anonim panolar URL ile paylaşılabilir; kalıcı projeler için oturum açmanız gerekir.",
+  "auth.shared.or": "veya",
+  "auth.signIn.title": "Oturum aç",
+  "errors.RATE_LIMITED": "Çok fazla deneme. Daha sonra tekrar deneyin.",
+  "errors.UNAUTHORIZED": "Yetkisiz",
+  "errors.generic": "Bir şeyler ters gitti.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Dil",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -378,7 +422,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -390,6 +434,7 @@ function loader() {
       ar: arCatalog,
       ru: ruCatalog,
       ja: jaCatalog,
+      tr: trCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -438,9 +483,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/sa.svg",
   "/assets/flags/ru.svg",
   "/assets/flags/jp.svg",
+  "/assets/flags/tr.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -511,6 +557,7 @@ describe("auth view i18n", () => {
       "العربية",
       "Русский",
       "日本語",
+      "Türkçe",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");

@@ -6,6 +6,7 @@
 
 ### Added
 
+- **Turkish UI** - Full frontend catalog (`tr`) with Turkey flag in the public locale picker.
 - **Japanese UI** - Full frontend catalog (`ja`) with Japan flag in the public locale picker.
 - **Russian UI** - Full frontend catalog (`ru`) with Russia flag in the public locale picker.
 - **Arabic UI (Modern Standard Arabic)** - Full frontend catalog (`ar`) with RTL document direction and minimal shell layout fixes for locale picker, auth, and dialogs.
