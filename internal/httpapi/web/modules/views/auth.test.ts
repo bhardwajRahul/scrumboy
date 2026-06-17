@@ -67,6 +67,7 @@ const enCatalog = {
   "errors.UNAUTHORIZED": "Unauthorized",
   "errors.generic": "Something went wrong.",
   "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Language",
 } as const;
 
 const deCatalog = {
@@ -110,6 +111,7 @@ const deCatalog = {
   "errors.UNAUTHORIZED": "Nicht angemeldet",
   "errors.generic": "Etwas ist schiefgelaufen.",
   "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Sprache",
 } as const;
 
 const frCatalog = {
@@ -153,6 +155,7 @@ const frCatalog = {
   "errors.UNAUTHORIZED": "Connexion requise",
   "errors.generic": "Une erreur s’est produite.",
   "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Langue",
 } as const;
 
 const ptCatalog = {
@@ -196,6 +199,7 @@ const ptCatalog = {
   "errors.UNAUTHORIZED": "Login necessário",
   "errors.generic": "Algo deu errado.",
   "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Idioma",
 } as const;
 
 const pseudoCatalog = {
@@ -239,6 +243,7 @@ const pseudoCatalog = {
   "errors.UNAUTHORIZED": "[!! Unauthorized !!]",
   "errors.generic": "[!! Something went wrong. !!]",
   "errors.httpStatus": "[!! HTTP {status} !!]",
+  "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
 type TestLocale = "en" | "de" | "fr" | "pt" | "pseudo";
@@ -269,6 +274,16 @@ async function flushPromises(count = 8): Promise<void> {
   for (let i = 0; i < count; i += 1) {
     await Promise.resolve();
   }
+}
+
+function getAuthLocaleSelect(): HTMLSelectElement {
+  const select = document.getElementById("authLocaleSelect") as HTMLSelectElement | null;
+  if (!select) throw new Error("missing auth locale selector");
+  return select;
+}
+
+function authLocaleOptionValues(): string[] {
+  return Array.from(getAuthLocaleSelect().options).map((option) => option.value);
 }
 
 describe("auth view i18n", () => {
@@ -307,6 +322,106 @@ describe("auth view i18n", () => {
     expect((document.getElementById("authPassword") as HTMLInputElement | null)?.placeholder).toBe("Password");
     expect(document.getElementById("loginBtn")?.textContent).toBe("Login");
     expect(document.getElementById("authPasswordToggle")?.getAttribute("aria-label")).toBe("Show password");
+  });
+
+  it("renders a public language selector in every auth shell", async () => {
+    await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
+    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionValues()).not.toContain("pseudo");
+    expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
+
+    auth.renderAuth({ next: "/projects", bootstrap: true, oidcEnabled: false, localAuthEnabled: true });
+    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+
+    auth.renderResetPassword("reset-token");
+    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+
+    apiFetchMock.mockResolvedValueOnce({
+      requires2fa: true,
+      tempToken: "temp-token",
+      user: { id: 7, email: "user@example.com" },
+    });
+    auth.renderAuth({ next: "/dashboard", localAuthEnabled: true });
+    (document.getElementById("authEmail") as HTMLInputElement).value = "user@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "password";
+    document.getElementById("authForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+
+    expect(document.querySelector(".panel__title")?.textContent).toBe("Two-factor authentication");
+    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionValues()).not.toContain("pseudo");
+  });
+
+  it("selecting German in the auth selector persists locale and updates chrome without clearing sign-in fields", async () => {
+    const i18n = await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard?tab=mine", oidcEnabled: true, localAuthEnabled: true });
+    const emailEl = document.getElementById("authEmail") as HTMLInputElement;
+    const pwEl = document.getElementById("authPassword") as HTMLInputElement;
+    emailEl.value = "user@example.com";
+    pwEl.value = "secret";
+    emailEl.dispatchEvent(new Event("input", { bubbles: true }));
+    pwEl.dispatchEvent(new Event("input", { bubbles: true }));
+
+    const select = getAuthLocaleSelect();
+    select.value = "de";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushPromises();
+
+    expect(i18n.getLocale()).toBe("de");
+    expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+    expect(select.value).toBe("de");
+    expect(select.getAttribute("aria-label")).toBe("Sprache");
+    expect(document.querySelector(".panel__title")?.textContent).toBe("Anmelden");
+    expect(document.getElementById("authSsoBtn")?.textContent).toBe("Mit SSO fortfahren");
+    expect((document.getElementById("authEmail") as HTMLInputElement).value).toBe("user@example.com");
+    expect((document.getElementById("authPassword") as HTMLInputElement).value).toBe("secret");
+  });
+
+  it("selecting a locale in bootstrap preserves typed admin fields", async () => {
+    const i18n = await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/projects", bootstrap: true, localAuthEnabled: true });
+    const nameEl = document.getElementById("authName") as HTMLInputElement;
+    const emailEl = document.getElementById("authEmail") as HTMLInputElement;
+    const pwEl = document.getElementById("authPassword") as HTMLInputElement;
+    nameEl.value = "Admin";
+    emailEl.value = "admin@example.com";
+    pwEl.value = "bootstrap-secret";
+    nameEl.dispatchEvent(new Event("input", { bubbles: true }));
+    emailEl.dispatchEvent(new Event("input", { bubbles: true }));
+    pwEl.dispatchEvent(new Event("input", { bubbles: true }));
+
+    const select = getAuthLocaleSelect();
+    select.value = "fr";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushPromises();
+
+    expect(i18n.getLocale()).toBe("fr");
+    expect(document.querySelector(".panel__title")?.textContent).toBe("Configuration initiale");
+    expect(getAuthLocaleSelect().value).toBe("fr");
+    expect((document.getElementById("authName") as HTMLInputElement).value).toBe("Admin");
+    expect((document.getElementById("authEmail") as HTMLInputElement).value).toBe("admin@example.com");
+    expect((document.getElementById("authPassword") as HTMLInputElement).value).toBe("bootstrap-secret");
+  });
+
+  it("keeps pseudo hidden from the auth selector while displaying a public fallback", async () => {
+    const i18n = await setupI18n("pseudo");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
+
+    expect(i18n.getLocale()).toBe("pseudo");
+    expect(document.querySelector(".panel__title")?.textContent).toBe("[!! Sign in !!]");
+    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionValues()).not.toContain("pseudo");
+    expect(getAuthLocaleSelect().value).toBe("en");
+    expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("[!! Language !!]");
   });
 
   it("renders English bootstrap and reset-password copy", async () => {

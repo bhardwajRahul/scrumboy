@@ -1,6 +1,7 @@
 import { app } from '../dom/elements.js';
 import { apiFetch } from '../api.js';
 import { I18N_LOCALE_CHANGED, apiErrorMessage, t } from '../i18n/index.js';
+import { bindPublicLocaleSelect, renderPublicLocaleSelectHTML, syncPublicLocaleSelect } from '../i18n/locale-select.js';
 import { showToast, getAppVersion, escapeHTML, redirectAfterAuth } from '../utils.js';
 
 const PATH_SHOW = "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z";
@@ -55,6 +56,14 @@ type AuthGlobal = typeof globalThis & {
 
 let authViewState: AuthViewState | null = null;
 let authLocaleListenerBound = false;
+
+function getAuthLocaleSelect(): HTMLSelectElement | null {
+  return document.getElementById("authLocaleSelect") as HTMLSelectElement | null;
+}
+
+function bindAuthLocaleSelect(): void {
+  bindPublicLocaleSelect(getAuthLocaleSelect());
+}
 
 function nonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
@@ -117,6 +126,8 @@ function twoFactorDisplayName(user: AuthUser): string {
 
 function applyAuthViewTranslations(): void {
   if (!authViewState || !isAuthViewVisible()) return;
+
+  syncPublicLocaleSelect(getAuthLocaleSelect());
 
   if (authViewState.mode === "auth") {
     const { bootstrap } = authViewState.options;
@@ -213,6 +224,7 @@ function authShellHTML(content: string, version: string): string {
           <img src="/scrumboytext.png" alt="Scrumboy" class="brand-text" />
         </div>
         <div class="spacer"></div>
+        ${renderPublicLocaleSelectHTML({ id: "authLocaleSelect", className: "auth-locale-select" })}
       </div>
       <div class="container">
         <div class="panel">
@@ -289,6 +301,7 @@ function renderAuthView(state: AuthBaseState, options: { handleOidcError: boolea
       </form>
     ` : ""}
   `, version);
+  bindAuthLocaleSelect();
 
   const nameEl = document.getElementById("authName") as HTMLInputElement | null;
   const emailEl = document.getElementById("authEmail") as HTMLInputElement | null;
@@ -430,6 +443,7 @@ function render2FAView(state: TwoFactorState): void {
       </div>
     </form>
   `, version);
+  bindAuthLocaleSelect();
 
   const form = document.getElementById("auth2FAForm");
   const codeEl = document.getElementById("auth2FACode") as HTMLInputElement | null;
@@ -500,6 +514,7 @@ function renderResetPasswordView(state: ResetPasswordState): void {
       </div>
     </form>
   `, version);
+  bindAuthLocaleSelect();
 
   const form = document.getElementById("resetPasswordForm");
   const newPwEl = document.getElementById("resetNewPassword") as HTMLInputElement | null;

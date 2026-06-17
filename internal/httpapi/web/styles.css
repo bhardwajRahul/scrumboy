@@ -1185,6 +1185,13 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 }
 
 /* Auth page: password row and toggle use same dark background as email field (all viewports). */
+.page--auth .topbar .auth-locale-select {
+  width: auto;
+  min-width: 150px;
+  max-width: min(42vw, 220px);
+  flex: 0 0 auto;
+}
+
 .page--auth .password-row {
   background: var(--bg);
 }
@@ -4840,6 +4847,15 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
 @media (max-width: 768px) {
   .settings-workflow-footer {
     justify-content: center;
+  }
+}
+
+@media (max-width: 767px) {
+  .page--auth .topbar .auth-locale-select {
+    order: 1;
+    margin-left: auto;
+    min-width: min(148px, 45vw);
+    max-width: 48vw;
   }
 }
 

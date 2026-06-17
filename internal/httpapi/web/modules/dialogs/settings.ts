@@ -81,7 +81,8 @@ import {
   loadTagSettingsContent,
 } from './settings-tags.js';
 import { bindSprintsTabInteractions, refreshSprintDateLabels, renderSprintsTabContent } from './settings-sprints.js';
-import { apiErrorMessageOrRaw, getLocale, hydrateI18n, I18N_LOCALE_CHANGED, isPublicLocale, publicLocaleOptions, setLocale, t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, getLocale, hydrateI18n, I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
+import { bindPublicLocaleSelect, renderPublicLocaleSelectHTML, syncPublicLocaleSelect } from '../i18n/locale-select.js';
 
 export { invalidateTagsCache } from './settings-tags.js';
 
@@ -222,11 +223,6 @@ function getTagColor(tagName: string): string | null {
   return getTagColors()[tagName] || null;
 }
 
-function getSelectedSettingsLocale(): string {
-  const currentLocale = getLocale();
-  return isPublicLocale(currentLocale) ? currentLocale : "en";
-}
-
 function getWallpaperSummaryMessageKey(mode: "off" | "color" | "image" | "builtin"): string {
   switch (mode) {
     case "off":
@@ -279,25 +275,6 @@ function syncSettingsDialogVersionText(): void {
   if (!versionEl) return;
   const versionText = getAppVersion();
   versionEl.textContent = versionText ? ` v${versionText}` : "";
-}
-
-function syncSettingsLocaleSelectOptions(): void {
-  const select = document.getElementById("settingsLocaleSelect") as HTMLSelectElement | null;
-  if (!select) return;
-  const options = publicLocaleOptions();
-  const needsRebuild =
-    select.options.length !== options.length ||
-    options.some((option, index) => {
-      const existing = select.options[index];
-      return !existing || existing.value !== option.id || existing.textContent !== option.label;
-    });
-
-  if (needsRebuild) {
-    select.innerHTML = options
-      .map((option) => `<option value="${escapeHTML(option.id)}">${escapeHTML(option.label)}</option>`)
-      .join("");
-  }
-  select.value = getSelectedSettingsLocale();
 }
 
 function syncWallpaperLocaleState(): void {
@@ -417,7 +394,7 @@ function applySettingsLocaleToOpenDialog(): void {
   if (activeTab === "customization") {
     const customizationEl = document.getElementById("settingsCustomizationContent");
     if (!customizationEl) return;
-    syncSettingsLocaleSelectOptions();
+    syncPublicLocaleSelect(document.getElementById("settingsLocaleSelect") as HTMLSelectElement | null);
     syncWallpaperLocaleState();
     syncDesktopNotificationLocaleState();
     hydrateI18n(customizationEl);
@@ -1560,16 +1537,11 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       : "Web Push is not available in anonymous mode."
     : "";
 
-  const selectedPublicLocale = getSelectedSettingsLocale();
   const languageSectionHTML = `
       <div class="settings-section">
         <label class="settings-section__title" for="settingsLocaleSelect" data-i18n-text="settings.language.title">Language</label>
         <div class="settings-section__description muted" data-i18n-text="settings.language.description">Choose the language used for Scrumboy on this browser.</div>
-        <select class="select" id="settingsLocaleSelect" aria-label="Language" data-i18n-aria-label="settings.language.selectLabel" style="margin-top: 10px; min-width: 180px;">
-          ${publicLocaleOptions().map((option) => `
-            <option value="${escapeHTML(option.id)}" ${option.id === selectedPublicLocale ? "selected" : ""}>${escapeHTML(option.label)}</option>
-          `).join("")}
-        </select>
+        ${renderPublicLocaleSelectHTML({ id: "settingsLocaleSelect", style: "margin-top: 10px; min-width: 180px;" })}
       </div>
     `;
 
@@ -2084,17 +2056,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
 
   if (getSettingsActiveTab() === "customization") {
     const localeSelect = document.getElementById("settingsLocaleSelect") as HTMLSelectElement | null;
-    if (localeSelect) {
-      localeSelect.addEventListener(
-        "change",
-        async () => {
-          const nextLocale = localeSelect.value;
-          if (!isPublicLocale(nextLocale)) return;
-          await setLocale(nextLocale);
-        },
-        { signal }
-      );
-    }
+    bindPublicLocaleSelect(localeSelect, { signal });
 
     const voiceFlowEnabledToggle = document.getElementById("voiceFlowEnabledToggle") as HTMLInputElement | null;
     if (voiceFlowEnabledToggle) {

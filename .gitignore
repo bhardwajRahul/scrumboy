@@ -26,7 +26,8 @@ key.pem
 # Dependencies (npm install / go mod download on clone)
 node_modules/
 
-# IDE and OS junk (optional but keeps diffs clean)
+# IDE and OS junk 
+AGENTS.md
 .cursor/
 .idea/
 .vscode/
