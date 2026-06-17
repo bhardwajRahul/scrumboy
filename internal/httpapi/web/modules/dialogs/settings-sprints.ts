@@ -7,7 +7,7 @@ import { setBoard } from '../state/mutations.js';
 import { normalizeSprints } from '../sprints.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
-import { formatDate, t } from '../i18n/index.js';
+import { apiErrorMessage, formatDate, hasI18nKey, t } from '../i18n/index.js';
 
 type BindSprintsTabInteractionsOptions = {
   signal: AbortSignal;
@@ -24,6 +24,21 @@ const SPRINT_DATE_OPTS: Intl.DateTimeFormatOptions = {
   hour: 'numeric',
   minute: '2-digit',
 };
+
+function apiReasonOrRawMessage(err: unknown, fallbackKey: string): string {
+  const apiError = (err as { data?: { error?: { code?: unknown; details?: { reason?: unknown }; message?: unknown } } })?.data?.error;
+  const code = typeof apiError?.code === 'string' ? apiError.code : '';
+  const reason = typeof apiError?.details?.reason === 'string' ? apiError.details.reason : '';
+  if (code && reason && hasI18nKey(`errors.${code}.${reason}`)) {
+    return apiErrorMessage(err, { fallbackKey });
+  }
+  const rawApiMessage = typeof apiError?.message === 'string' && apiError.message.trim() ? apiError.message : '';
+  if (rawApiMessage) return rawApiMessage;
+  const rawMessage = typeof (err as { message?: unknown })?.message === 'string' && String((err as { message?: unknown }).message).trim()
+    ? String((err as { message?: unknown }).message)
+    : '';
+  return rawMessage || t(fallbackKey);
+}
 
 function formatSprintDate(ms: number): string {
   return formatDate(ms, SPRINT_DATE_OPTS);
@@ -309,7 +324,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           refreshSprintsAndChips(getSlug() ?? '').catch(() => {});
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.createFailed'));
+          showToast(apiReasonOrRawMessage(err, 'settings.sprints.toast.createFailed'));
         }
       },
       { signal }
@@ -345,7 +360,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           emit('sprint-updated', { sprintId: parseInt(sprintId, 10), state: 'ACTIVE' });
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.activateFailed'));
+          showToast(apiReasonOrRawMessage(err, 'settings.sprints.toast.activateFailed'));
         }
       },
       { signal }
@@ -367,7 +382,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           emit('sprint-updated', { sprintId: parseInt(sprintId, 10), state: 'CLOSED' });
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.closeFailed'));
+          showToast(apiReasonOrRawMessage(err, 'settings.sprints.toast.closeFailed'));
         }
       },
       { signal }
@@ -439,7 +454,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           refreshSprintsAndChips(getSlug() ?? '').catch(() => {});
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.updateFailed'));
+          showToast(apiReasonOrRawMessage(err, 'settings.sprints.toast.updateFailed'));
         }
       },
       { signal }
@@ -481,7 +496,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           refreshSprintsAndChips(getSlug() ?? '').catch(() => {});
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.deleteFailed'));
+          showToast(apiReasonOrRawMessage(err, 'settings.sprints.toast.deleteFailed'));
         }
       },
       { signal }

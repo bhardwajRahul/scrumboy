@@ -76,21 +76,29 @@ type apiErrorEnvelope struct {
 	} `json:"error"`
 }
 
-func assertAPIError(t *testing.T, got apiErrorEnvelope, wantCode, wantField string) {
+func assertAPIError(t *testing.T, got apiErrorEnvelope, wantCode, wantField string, wantReason ...string) {
 	t.Helper()
 
 	if got.Error.Code != wantCode {
 		t.Fatalf("expected error code %q, got %+v", wantCode, got)
 	}
-	if wantField == "" {
-		return
+	if wantField != "" {
+		if got.Error.Details == nil {
+			t.Fatalf("expected error.details.field=%q, got nil details", wantField)
+		}
+		gotField, _ := got.Error.Details["field"].(string)
+		if gotField != wantField {
+			t.Fatalf("expected error.details.field=%q, got %+v", wantField, got.Error.Details)
+		}
 	}
-	if got.Error.Details == nil {
-		t.Fatalf("expected error.details.field=%q, got nil details", wantField)
-	}
-	gotField, _ := got.Error.Details["field"].(string)
-	if gotField != wantField {
-		t.Fatalf("expected error.details.field=%q, got %+v", wantField, got.Error.Details)
+	if len(wantReason) > 0 && wantReason[0] != "" {
+		if got.Error.Details == nil {
+			t.Fatalf("expected error.details.reason=%q, got nil details", wantReason[0])
+		}
+		gotReason, _ := got.Error.Details["reason"].(string)
+		if gotReason != wantReason[0] {
+			t.Fatalf("expected error.details.reason=%q, got %+v", wantReason[0], got.Error.Details)
+		}
 	}
 }
 
@@ -2041,6 +2049,7 @@ func TestBoardTodoLinks_ValidationAndStatusCodes(t *testing.T) {
 		wantStatus int
 		wantCode   string
 		wantField  string
+		wantReason string
 	}{
 		{
 			name:       "get invalid source localId",
@@ -2049,6 +2058,7 @@ func TestBoardTodoLinks_ValidationAndStatusCodes(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantCode:   "VALIDATION_ERROR",
 			wantField:  "localId",
+			wantReason: "invalid_todo_local_id",
 		},
 		{
 			name:       "get missing source todo",
@@ -2065,6 +2075,7 @@ func TestBoardTodoLinks_ValidationAndStatusCodes(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantCode:   "VALIDATION_ERROR",
 			wantField:  "targetLocalId",
+			wantReason: "target_local_id_required",
 		},
 		{
 			name:       "post self link rejected",
@@ -2074,6 +2085,7 @@ func TestBoardTodoLinks_ValidationAndStatusCodes(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantCode:   "VALIDATION_ERROR",
 			wantField:  "targetLocalId",
+			wantReason: "cannot_link_todo_to_itself",
 		},
 		{
 			name:       "post invalid linkType",
@@ -2082,6 +2094,7 @@ func TestBoardTodoLinks_ValidationAndStatusCodes(t *testing.T) {
 			body:       map[string]any{"targetLocalId": t2.LocalID, "linkType": "invalid_type"},
 			wantStatus: http.StatusBadRequest,
 			wantCode:   "VALIDATION_ERROR",
+			wantReason: "invalid_link",
 		},
 		{
 			name:       "post target uses localId not global id",
@@ -2098,6 +2111,7 @@ func TestBoardTodoLinks_ValidationAndStatusCodes(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 			wantCode:   "VALIDATION_ERROR",
 			wantField:  "targetLocalId",
+			wantReason: "invalid_target_local_id",
 		},
 		{
 			name:       "delete missing existing link",
@@ -2115,8 +2129,20 @@ func TestBoardTodoLinks_ValidationAndStatusCodes(t *testing.T) {
 			if resp.StatusCode != tc.wantStatus {
 				t.Fatalf("status=%d want=%d body=%s", resp.StatusCode, tc.wantStatus, string(body))
 			}
-			assertAPIError(t, errResp, tc.wantCode, tc.wantField)
+			assertAPIError(t, errResp, tc.wantCode, tc.wantField, tc.wantReason)
 		})
+	}
+
+	var storeErrResp apiErrorEnvelope
+	resp, body := doJSON(t, client, http.MethodPost, ts.URL+"/api/board/"+project.Slug+"/todos", map[string]any{
+		"title": "",
+	}, &storeErrResp)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("create todo with invalid title status=%d body=%s", resp.StatusCode, string(body))
+	}
+	assertAPIError(t, storeErrResp, "VALIDATION_ERROR", "", "invalid_title")
+	if storeErrResp.Error.Message != "validation: invalid title" {
+		t.Fatalf("message=%q", storeErrResp.Error.Message)
 	}
 }
 

@@ -253,6 +253,39 @@ describe('settings-tags', () => {
     expect(rerender).not.toHaveBeenCalled();
   });
 
+  it('shows a localized backend validation reason when a tag color update fails', async () => {
+    selectorState.projectId = 7;
+    const rerender = vi.fn().mockResolvedValue(undefined);
+    const mod = await loadTagsModule('de');
+
+    render(`<input type="color" class="settings-color-picker" data-tag="bug" data-tag-id="5" value="#ff0000" />`);
+    mod.bindTagTabInteractions({
+      signal: new AbortController().signal,
+      hasProjectAccess: true,
+      rerender,
+    });
+
+    const err = new Error('validation: invalid tag color "nope"') as Error & { data?: unknown };
+    err.data = {
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'validation: invalid tag color "nope"',
+        details: { reason: 'invalid_tag_color' },
+      },
+    };
+    apiFetchMock.mockRejectedValueOnce(err);
+
+    const picker = document.querySelector('.settings-color-picker[data-tag="bug"]');
+    if (!(picker instanceof HTMLInputElement)) throw new Error('missing durable tag color picker');
+    picker.value = '#abcdef';
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    await flushPromises();
+
+    expect(showToastMock).toHaveBeenCalledWith(deCatalog['errors.VALIDATION_ERROR.invalid_tag_color']);
+    expect(invalidateBoardMock).not.toHaveBeenCalled();
+    expect(rerender).not.toHaveBeenCalled();
+  });
+
   it('deletes durable project tags through rerender-first flow and only invalidates the board when a slug exists', async () => {
     selectorState.projectId = 7;
     selectorState.tagColors = { bug: '#ff0000', keep: '#00ff00' };

@@ -12,7 +12,7 @@ import {
 } from '../state/selectors.js';
 import { setTagColors } from '../state/mutations.js';
 import { escapeHTML, sanitizeHexColor, showConfirmDialog, showToast } from '../utils.js';
-import { t } from '../i18n/index.js';
+import { apiErrorMessage, hasI18nKey, t } from '../i18n/index.js';
 
 type BindTagTabInteractionsOptions = {
   signal: AbortSignal;
@@ -23,6 +23,21 @@ type BindTagTabInteractionsOptions = {
 let cachedTags: any[] | null = null;
 let cachedTagsHTML: string | null = null;
 let cachedTagsURL: string | null = null;
+
+function apiReasonOrRawMessage(err: unknown, fallbackKey = 'errors.generic'): string {
+  const apiError = (err as { data?: { error?: { code?: unknown; details?: { reason?: unknown }; message?: unknown } } })?.data?.error;
+  const code = typeof apiError?.code === 'string' ? apiError.code : '';
+  const reason = typeof apiError?.details?.reason === 'string' ? apiError.details.reason : '';
+  if (code && reason && hasI18nKey(`errors.${code}.${reason}`)) {
+    return apiErrorMessage(err, { fallbackKey });
+  }
+  const rawApiMessage = typeof apiError?.message === 'string' && apiError.message.trim() ? apiError.message : '';
+  if (rawApiMessage) return rawApiMessage;
+  const rawMessage = typeof (err as { message?: unknown })?.message === 'string' && String((err as { message?: unknown }).message).trim()
+    ? String((err as { message?: unknown }).message)
+    : '';
+  return rawMessage || t(fallbackKey);
+}
 
 export function invalidateTagsCache(): void {
   cachedTags = null;
@@ -66,7 +81,7 @@ async function applyTagColorSuccess(tagName: string, color: string | null): Prom
 
     showToast(t('settings.tagColors.toast.colorUpdated'));
   } catch (err: any) {
-    showToast(err.message);
+    showToast(apiReasonOrRawMessage(err));
   }
 }
 
@@ -93,7 +108,7 @@ async function updateTagColor(
       });
       await applyTagColorSuccess(tagName, color);
     } catch (err: any) {
-      showToast(err.message);
+      showToast(apiReasonOrRawMessage(err));
     }
     return;
   }
@@ -113,7 +128,7 @@ async function updateTagColor(
       });
       await applyTagColorSuccess(tagName, color);
     } catch (err: any) {
-      showToast(err.message);
+      showToast(apiReasonOrRawMessage(err));
     }
     return;
   }
@@ -173,7 +188,7 @@ async function deleteTag(
 
     showToast(t('settings.tagColors.toast.deleted', { name: tagName }));
   } catch (err: any) {
-    showToast(err.message);
+    showToast(apiReasonOrRawMessage(err));
   }
 }
 

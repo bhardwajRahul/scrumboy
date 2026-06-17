@@ -295,6 +295,52 @@ describe('settings-sprints', () => {
     expect(emitMock).not.toHaveBeenCalled();
   });
 
+  it('shows a localized backend validation reason when sprint creation fails', async () => {
+    apiFetchMock.mockResolvedValue({ sprints: [] });
+    const mod = await loadSprintsModule('de');
+    const rerender = vi.fn().mockResolvedValue(undefined);
+    const invalidateSprintChartsCache = vi.fn();
+
+    render(await mod.renderSprintsTabContent());
+    mod.bindSprintsTabInteractions({
+      signal: new AbortController().signal,
+      rerender,
+      invalidateSprintChartsCache,
+    });
+
+    apiFetchMock.mockClear();
+    recordLocalMutationMock.mockClear();
+
+    const err = new Error('validation: a sprint with this name already exists in the project') as Error & { data?: unknown };
+    err.data = {
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'validation: a sprint with this name already exists in the project',
+        details: { reason: 'sprint_name_exists' },
+      },
+    };
+    apiFetchMock.mockRejectedValueOnce(err);
+
+    const nameInput = document.getElementById('sprintNameInput') as HTMLInputElement | null;
+    const startInput = document.getElementById('sprintStartInput') as HTMLInputElement | null;
+    const endInput = document.getElementById('sprintEndInput') as HTMLInputElement | null;
+    const createBtn = document.getElementById('createSprintBtn');
+    if (!nameInput || !startInput || !endInput || !(createBtn instanceof HTMLElement)) {
+      throw new Error('missing sprint create controls');
+    }
+
+    nameInput.value = 'Release Sprint';
+    startInput.value = '2026-04-13T09:00';
+    endInput.value = '2026-04-19T23:59';
+    createBtn.click();
+    await flushPromises();
+
+    expect(showToastMock).toHaveBeenCalledWith(deCatalog['errors.VALIDATION_ERROR.sprint_name_exists']);
+    expect(invalidateSprintChartsCache).not.toHaveBeenCalled();
+    expect(refreshSprintsAndChipsMock).not.toHaveBeenCalled();
+    expect(rerender).not.toHaveBeenCalled();
+  });
+
   it('shows localized activation confirm with raw sprint name and locale-formatted planned date', async () => {
     const plannedStartAt = new Date('2026-06-01T09:00:00').getTime();
     apiFetchMock.mockResolvedValue({

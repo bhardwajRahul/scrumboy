@@ -15,7 +15,7 @@ func (s *Server) handleTodos(w http.ResponseWriter, r *http.Request, rest []stri
 
 	todoID, ok := parseInt64(rest[0])
 	if !ok {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid todo id", map[string]any{"field": "todoId"})
+		writeValidationError(w, "invalid todo id", "invalid_todo_id", map[string]any{"field": "todoId"})
 		return
 	}
 
@@ -42,7 +42,7 @@ func (s *Server) handleTodosPatchOrDelete(w http.ResponseWriter, r *http.Request
 			return true
 		}
 		if _, ok := raw["assigneeUserId"]; !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "missing assigneeUserId", map[string]any{"field": "assigneeUserId"})
+			writeValidationError(w, "missing assigneeUserId", "missing_assignee_user_id", map[string]any{"field": "assigneeUserId"})
 			return true
 		}
 
@@ -55,11 +55,11 @@ func (s *Server) handleTodosPatchOrDelete(w http.ResponseWriter, r *http.Request
 		}
 		payload, err := json.Marshal(raw)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid json payload", nil)
+			writeValidationError(w, "invalid json payload", "invalid_json", nil)
 			return true
 		}
 		if err := json.Unmarshal(payload, &in); err != nil {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid json payload", nil)
+			writeValidationError(w, "invalid json payload", "invalid_json", nil)
 			return true
 		}
 		todo, err := s.store.UpdateTodo(s.requestContext(r), todoID, store.UpdateTodoInput{
@@ -119,7 +119,7 @@ func (s *Server) handleTodosMove(w http.ResponseWriter, r *http.Request, rest []
 		toColumnKey = normalizeLaneKey(in.ToStatus)
 	}
 	if toColumnKey == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "missing toColumnKey", map[string]any{"field": "toColumnKey"})
+		writeValidationError(w, "missing toColumnKey", "missing_to_column_key", map[string]any{"field": "toColumnKey"})
 		return true
 	}
 	todo, err := s.store.MoveTodo(s.requestContext(r), todoID, toColumnKey, in.AfterID, in.BeforeID, s.storeMode())

@@ -11,7 +11,7 @@ import {
 } from '../state/selectors.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
-import { t } from '../i18n/index.js';
+import { apiErrorMessage, hasI18nKey, t } from '../i18n/index.js';
 
 type WorkflowLaneCountsState =
   | { status: 'loading' }
@@ -30,6 +30,21 @@ type BindWorkflowTabInteractionsOptions = {
 };
 
 const DEFAULT_WORKFLOW_LANE_COLOR = '#64748b';
+
+function apiReasonOrRawMessage(err: unknown, fallbackKey: string): string {
+  const apiError = (err as { data?: { error?: { code?: unknown; details?: { reason?: unknown }; message?: unknown } } })?.data?.error;
+  const code = typeof apiError?.code === 'string' ? apiError.code : '';
+  const reason = typeof apiError?.details?.reason === 'string' ? apiError.details.reason : '';
+  if (code && reason && hasI18nKey(`errors.${code}.${reason}`)) {
+    return apiErrorMessage(err, { fallbackKey });
+  }
+  const rawApiMessage = typeof apiError?.message === 'string' && apiError.message.trim() ? apiError.message : '';
+  if (rawApiMessage) return rawApiMessage;
+  const rawMessage = typeof (err as { message?: unknown })?.message === 'string' && String((err as { message?: unknown }).message).trim()
+    ? String((err as { message?: unknown }).message)
+    : '';
+  return rawMessage || t(fallbackKey);
+}
 
 let workflowLaneCountsCache: {
   slug: string;
@@ -262,7 +277,7 @@ async function addWorkflowLane(name: string, rerender: RerenderFn): Promise<void
     await rerender();
     showToast(t('settings.workflow.toast.laneAdded'));
   } catch (err: any) {
-    showToast(err.message || t('settings.workflow.toast.addFailed'));
+    showToast(apiReasonOrRawMessage(err, 'settings.workflow.toast.addFailed'));
   }
 }
 
@@ -299,7 +314,7 @@ async function saveWorkflowDraftChanges(rerender: RerenderFn): Promise<void> {
     await rerender();
     showToast(t('settings.workflow.toast.updated'));
   } catch (err: any) {
-    showToast(err.message || t('settings.workflow.toast.updateFailed'));
+    showToast(apiReasonOrRawMessage(err, 'settings.workflow.toast.updateFailed'));
   }
 }
 
@@ -335,7 +350,7 @@ async function deleteWorkflowLane(key: string, rerender: RerenderFn): Promise<vo
     await rerender();
     showToast(t('settings.workflow.toast.laneDeleted'));
   } catch (err: any) {
-    showToast(err.message || t('settings.workflow.toast.deleteFailed'));
+    showToast(apiReasonOrRawMessage(err, 'settings.workflow.toast.deleteFailed'));
   }
 }
 

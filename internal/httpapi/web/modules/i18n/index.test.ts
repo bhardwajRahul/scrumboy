@@ -18,6 +18,7 @@ const enCatalog = {
   "errors.CONFLICT": "Conflict",
   "errors.NOT_FOUND": "Not found",
   "errors.VALIDATION_ERROR": "Please check the request and try again.",
+  "errors.VALIDATION_ERROR.invalid_workflow_column_color": "Enter a valid workflow column color.",
   "errors.VALIDATION_ERROR.name_required": "Please enter a name.",
   "errors.generic": "Something went wrong.",
   "errors.httpStatus": "HTTP {status}",
@@ -53,6 +54,7 @@ const pseudoCatalog = {
   "errors.CONFLICT": "[!! Conflict !!]",
   "errors.NOT_FOUND": "[!! Not found !!]",
   "errors.VALIDATION_ERROR": "[!! Please check the request and try again. !!]",
+  "errors.VALIDATION_ERROR.invalid_workflow_column_color": "[!! Enter a valid workflow column color. !!]",
   "errors.VALIDATION_ERROR.name_required": "[!! Please enter a name. !!]",
   "errors.generic": "[!! Something went wrong. !!]",
   "errors.httpStatus": "[!! HTTP {status} !!]",
@@ -88,6 +90,7 @@ const deCatalog = {
   "errors.CONFLICT": "Konflikt",
   "errors.NOT_FOUND": "Nicht gefunden",
   "errors.VALIDATION_ERROR": "Bitte prüfe die Eingabe und versuche es erneut.",
+  "errors.VALIDATION_ERROR.invalid_workflow_column_color": "Bitte gib eine gültige Workflow-Spaltenfarbe ein.",
   "errors.VALIDATION_ERROR.name_required": "Bitte gib einen Namen ein.",
   "errors.generic": "Etwas ist schiefgelaufen.",
   "errors.httpStatus": "HTTP {status}",
@@ -340,11 +343,40 @@ describe("i18n catalog loading", () => {
     expect(i18n.apiErrorMessage({
       data: {
         error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+          details: { reason: "invalid_workflow_column_color", field: "color" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Bitte gib eine gültige Workflow-Spaltenfarbe ein.");
+
+    expect(i18n.apiErrorMessage({
+      data: {
+        error: {
           code: "CONFLICT",
           message: "raw english",
         },
       },
     }, { fallbackKey: "todo.saveFailed" })).toBe("Konflikt");
+
+    expect(i18n.apiErrorMessage({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+          details: { reason: "unknown_reason" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Bitte prüfe die Eingabe und versuche es erneut.");
+
+    expect(i18n.apiErrorMessage({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Bitte prüfe die Eingabe und versuche es erneut.");
   });
 
   it("uses the provided localized fallback key before raw API messages", async () => {
