@@ -1185,6 +1185,11 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 }
 
 /* Auth page: password row and toggle use same dark background as email field (all viewports). */
+.page--auth .topbar {
+  overflow: visible;
+  z-index: 20;
+}
+
 .page--auth .topbar .auth-locale-select {
   width: auto;
   min-width: 150px;
