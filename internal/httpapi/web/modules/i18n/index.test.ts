@@ -153,6 +153,8 @@ describe("i18n locale detection", () => {
     expect(i18n.normalizeLocale("ja-JP")).toBe("ja");
     expect(i18n.normalizeLocale("tr")).toBe("tr");
     expect(i18n.normalizeLocale("tr-TR")).toBe("tr");
+    expect(i18n.normalizeLocale("ko")).toBe("ko");
+    expect(i18n.normalizeLocale("ko-KR")).toBe("ko");
     expect(i18n.isRtlLocale("ar")).toBe(true);
     expect(i18n.documentDirection("ar")).toBe("rtl");
     expect(i18n.documentDirection("en")).toBe("ltr");

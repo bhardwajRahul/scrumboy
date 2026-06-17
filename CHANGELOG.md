@@ -6,6 +6,7 @@
 
 ### Added
 
+- **Korean UI** - Full frontend catalog (`ko`) with South Korea flag in the public locale picker.
 - **Turkish UI** - Full frontend catalog (`tr`) with Turkey flag in the public locale picker.
 - **Japanese UI** - Full frontend catalog (`ja`) with Japan flag in the public locale picker.
 - **Russian UI** - Full frontend catalog (`ru`) with Russia flag in the public locale picker.

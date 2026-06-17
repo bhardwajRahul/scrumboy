@@ -1,5 +1,5 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr"];
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
@@ -11,6 +11,7 @@ export const LOCALE_LABELS = {
     ru: "Русский",
     ja: "日本語",
     tr: "Türkçe",
+    ko: "한국어",
     pseudo: "Pseudo",
 };
 export const PUBLIC_LOCALE_FLAG_PATHS = {
@@ -22,6 +23,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS = {
     ru: "/assets/flags/ru.svg",
     ja: "/assets/flags/jp.svg",
     tr: "/assets/flags/tr.svg",
+    ko: "/assets/flags/kr.svg",
 };
 const BOOTSTRAP_EN_CATALOG = {
     "common.add": "Add",
@@ -479,6 +481,8 @@ export function normalizeLocale(value) {
         return "ja";
     if (normalized === "tr" || normalized.startsWith("tr-"))
         return "tr";
+    if (normalized === "ko" || normalized.startsWith("ko-"))
+        return "ko";
     if (normalized === "en" || normalized.startsWith("en-"))
         return "en";
     return null;

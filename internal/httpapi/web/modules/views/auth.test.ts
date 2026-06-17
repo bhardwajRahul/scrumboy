@@ -378,6 +378,50 @@ const trCatalog = {
   "settings.language.selectLabel": "Dil",
 } as const;
 
+const koCatalog = {
+  "auth.2fa.accountFallback": "내 계정",
+  "auth.2fa.failed": "인증에 실패했습니다.",
+  "auth.2fa.helper": "인증 앱의 6자리 코드 또는 복구 코드를 입력하세요.",
+  "auth.2fa.placeholder": "{account}용 코드",
+  "auth.2fa.submit": "인증",
+  "auth.2fa.title": "2단계 인증",
+  "auth.actions.bootstrap": "초기 설정",
+  "auth.actions.login": "로그인",
+  "auth.actions.resetPassword": "비밀번호 재설정",
+  "auth.bootstrap.failed": "설정에 실패했습니다.",
+  "auth.bootstrap.title": "최초 설정",
+  "auth.fields.confirmPassword.label": "비밀번호 확인",
+  "auth.fields.confirmPassword.placeholder": "새 비밀번호 확인",
+  "auth.fields.email.placeholder": "이메일",
+  "auth.fields.name.placeholder": "이름",
+  "auth.fields.newPassword.label": "새 비밀번호",
+  "auth.fields.newPassword.placeholder": "최소 8자",
+  "auth.fields.password.placeholder": "비밀번호",
+  "auth.login.failed": "로그인에 실패했습니다.",
+  "auth.oidc.button": "SSO로 계속",
+  "auth.oidc.error.email": "인증된 이메일 주소가 필요합니다.",
+  "auth.oidc.error.generic": "인증에 실패했습니다.",
+  "auth.oidc.error.provider": "ID 공급자가 오류를 반환했습니다.",
+  "auth.oidc.error.state_invalid": "로그인 세션이 만료되었거나 유효하지 않습니다. 다시 시도하세요.",
+  "auth.oidc.error.token": "인증에 실패했습니다. 다시 시도하세요.",
+  "auth.password.hide": "비밀번호 숨기기",
+  "auth.password.show": "비밀번호 표시",
+  "auth.reset.helper": "새 비밀번호를 입력하세요. 링크는 30분 후 만료됩니다.",
+  "auth.reset.invalidLink": "재설정 링크가 없거나 유효하지 않습니다",
+  "auth.reset.invalidOrExpiredToken": "재설정 토큰이 유효하지 않거나 만료되었습니다",
+  "auth.reset.passwordsMismatch": "비밀번호가 일치하지 않습니다",
+  "auth.reset.success": "비밀번호가 재설정되었습니다. 로그인하세요.",
+  "auth.reset.title": "비밀번호 재설정",
+  "auth.shared.helper": "이 인스턴스에서는 인증이 활성화되어 있습니다. 익명 보드는 URL로 공유할 수 있으며, 영구 프로젝트에는 로그인이 필요합니다.",
+  "auth.shared.or": "또는",
+  "auth.signIn.title": "로그인",
+  "errors.RATE_LIMITED": "시도 횟수가 너무 많습니다. 나중에 다시 시도하세요.",
+  "errors.UNAUTHORIZED": "인증되지 않음",
+  "errors.generic": "문제가 발생했습니다.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "언어",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -422,7 +466,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -435,6 +479,7 @@ function loader() {
       ru: ruCatalog,
       ja: jaCatalog,
       tr: trCatalog,
+      ko: koCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -484,9 +529,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/ru.svg",
   "/assets/flags/jp.svg",
   "/assets/flags/tr.svg",
+  "/assets/flags/kr.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -558,6 +604,7 @@ describe("auth view i18n", () => {
       "Русский",
       "日本語",
       "Türkçe",
+      "한국어",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
