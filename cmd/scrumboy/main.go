@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -14,7 +15,6 @@ import (
 
 	"scrumboy/internal/agora"
 	"scrumboy/internal/config"
-	"scrumboy/internal/crypto"
 	"scrumboy/internal/db"
 	"scrumboy/internal/httpapi"
 	"scrumboy/internal/mcp"
@@ -46,24 +46,21 @@ func main() {
 		logger.Fatalf("migrate: %v", err)
 	}
 
-	// Fail fast if 2FA is in use but encryption key is missing. Do not silently run.
-	if cfg.TwoFactorEncryptionKey == "" {
-		var n int
-		if err := sqlDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE two_factor_enabled = 1`).Scan(&n); err != nil {
-			logger.Printf("warning: could not check 2FA users: %v", err)
-		} else if n > 0 {
-			logger.Fatalf("2FA is enabled for %d user(s) but SCRUMBOY_ENCRYPTION_KEY is not set. Set the key (e.g. openssl rand -base64 32) or disable 2FA for affected users via recovery code + DB.", n)
+	keyResolution, err := store.ResolveStartupEncryptionKey(ctx, sqlDB, cfg.TwoFactorEncryptionKey)
+	if err != nil {
+		switch {
+		case errors.Is(err, store.ErrStartupEncryptionKeyRequired):
+			logger.Fatalf("SCRUMBOY_ENCRYPTION_KEY is required because existing encrypted auth/security data is present. Restore the correct original SCRUMBOY_ENCRYPTION_KEY from backup or follow documented recovery guidance before changing DB state.")
+		case errors.Is(err, store.ErrStartupEncryptionKeyInvalid):
+			logger.Fatalf("invalid SCRUMBOY_ENCRYPTION_KEY for existing encrypted auth/security data. Restore the correct original SCRUMBOY_ENCRYPTION_KEY from backup or follow documented recovery guidance before changing DB state. Details: %v", err)
+		default:
+			logger.Fatalf("resolve SCRUMBOY_ENCRYPTION_KEY: %v", err)
 		}
 	}
-
-	var encKey []byte
-	if cfg.TwoFactorEncryptionKey != "" {
-		var err error
-		encKey, err = crypto.DecodeKey(cfg.TwoFactorEncryptionKey)
-		if err != nil {
-			logger.Fatalf("invalid SCRUMBOY_ENCRYPTION_KEY: %v", err)
-		}
+	if keyResolution.InvalidIgnored {
+		logger.Printf("warning: invalid SCRUMBOY_ENCRYPTION_KEY ignored because no encrypted auth/security data exists; continuing with 2FA setup and password reset disabled until a valid key is configured")
 	}
+	encKey := keyResolution.Key
 	var storeOpts *store.StoreOptions
 	if len(encKey) > 0 {
 		storeOpts = &store.StoreOptions{EncryptionKey: encKey}

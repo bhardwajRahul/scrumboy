@@ -309,6 +309,37 @@ func loginUserClient(t *testing.T, client *http.Client, baseURL, email, password
 	}
 }
 
+func TestAuth2FASetupWithoutEncryptionKeyReturns503(t *testing.T) {
+	ts, _, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+	client := newCookieClient(t)
+	bootstrapUserClient(t, client, ts.URL, "Alice", "alice-2fa-503@example.com", "password123")
+
+	resp, body := doJSON(t, client, http.MethodPost, ts.URL+"/api/auth/2fa/setup", nil, nil)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d body=%s", resp.StatusCode, string(body))
+	}
+	if !strings.Contains(string(body), "Two-factor authentication is not configured") {
+		t.Fatalf("expected existing 2FA configuration message, body=%s", string(body))
+	}
+}
+
+func TestAuthResetPasswordWithoutEncryptionKeyReturns503(t *testing.T) {
+	ts, _, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+
+	resp, body := doJSON(t, ts.Client(), http.MethodPost, ts.URL+"/api/auth/reset-password", map[string]any{
+		"token":        "not-a-token",
+		"new_password": "password123",
+	}, nil)
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d body=%s", resp.StatusCode, string(body))
+	}
+	if !strings.Contains(string(body), "Password reset is not configured") {
+		t.Fatalf("expected existing password reset configuration message, body=%s", string(body))
+	}
+}
+
 func TestAPI_CreateMoveAndFetchBoard(t *testing.T) {
 	ts, sqlDB, cleanup := newTestHTTPServer(t, "full")
 	defer cleanup()
