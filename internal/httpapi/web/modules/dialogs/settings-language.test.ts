@@ -296,10 +296,10 @@ describe('settings language selector', () => {
       const select = document.getElementById('settingsLocaleSelect') as HTMLSelectElement | null;
       expect(select).toBeTruthy();
       expect(Array.from(select?.options ?? []).map((option) => [option.value, option.textContent])).toEqual([
-        ['en', 'English'],
-        ['de', 'Deutsch'],
-        ['fr', 'Français'],
-        ['pt', 'Português (Brasil)'],
+        ['en', '🌐 English'],
+        ['de', '🇩🇪 Deutsch'],
+        ['fr', '🇫🇷 Français'],
+        ['pt', '🇧🇷 Português (Brasil)'],
       ]);
       expect(Array.from(select?.options ?? []).some((option) => option.value === 'pseudo')).toBe(false);
       expect(document.querySelector('label[for="settingsLocaleSelect"]')?.textContent).toBe('Language');

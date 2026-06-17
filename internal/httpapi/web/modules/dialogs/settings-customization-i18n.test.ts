@@ -461,10 +461,10 @@ describe('settings customization i18n', () => {
     expect(themeLight.checked).toBe(true);
     expect(languageSelect.value).toBe('de');
     expect(Array.from(languageSelect.options).map((option) => [option.value, option.textContent])).toEqual([
-      ['en', 'English'],
-      ['de', 'Deutsch'],
-      ['fr', 'Français'],
-      ['pt', 'Português (Brasil)'],
+      ['en', '🌐 English'],
+      ['de', '🇩🇪 Deutsch'],
+      ['fr', '🇫🇷 Français'],
+      ['pt', '🇧🇷 Português (Brasil)'],
     ]);
     expect(wallpaperRemoveBtn.textContent).toBe('DE Remove wallpaper');
   });

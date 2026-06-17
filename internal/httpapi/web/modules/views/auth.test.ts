@@ -286,6 +286,10 @@ function authLocaleOptionValues(): string[] {
   return Array.from(getAuthLocaleSelect().options).map((option) => option.value);
 }
 
+function authLocaleOptionText(): string[] {
+  return Array.from(getAuthLocaleSelect().options).map((option) => option.textContent || "");
+}
+
 describe("auth view i18n", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -330,6 +334,7 @@ describe("auth view i18n", () => {
 
     auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
     expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionText()).toEqual(["🌐 English", "🇩🇪 Deutsch", "🇫🇷 Français", "🇧🇷 Português (Brasil)"]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
 
@@ -419,6 +424,7 @@ describe("auth view i18n", () => {
     expect(i18n.getLocale()).toBe("pseudo");
     expect(document.querySelector(".panel__title")?.textContent).toBe("[!! Sign in !!]");
     expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionText()).toEqual(["🌐 English", "🇩🇪 Deutsch", "🇫🇷 Français", "🇧🇷 Português (Brasil)"]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().value).toBe("en");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("[!! Language !!]");

@@ -1,6 +1,7 @@
 import {
   getLocale,
   isPublicLocale,
+  publicLocaleOptionText,
   publicLocaleOptions,
   setLocale,
   t,
@@ -36,7 +37,7 @@ export function renderPublicLocaleSelectHTML(options: {
   const optionHTML = publicLocaleOptions()
     .map((option) => {
       const selectedAttr = option.id === selectedLocale ? " selected" : "";
-      return `<option value="${escapeHTML(option.id)}"${selectedAttr}>${escapeHTML(option.label)}</option>`;
+      return `<option value="${escapeHTML(option.id)}"${selectedAttr}>${escapeHTML(publicLocaleOptionText(option))}</option>`;
     })
     .join("");
 
@@ -51,12 +52,12 @@ export function syncPublicLocaleSelect(select: HTMLSelectElement | null): void {
     select.options.length !== options.length ||
     options.some((option, index) => {
       const existing = select.options[index];
-      return !existing || existing.value !== option.id || existing.textContent !== option.label;
+      return !existing || existing.value !== option.id || existing.textContent !== publicLocaleOptionText(option);
     });
 
   if (needsRebuild) {
     select.innerHTML = options
-      .map((option) => `<option value="${escapeHTML(option.id)}">${escapeHTML(option.label)}</option>`)
+      .map((option) => `<option value="${escapeHTML(option.id)}">${escapeHTML(publicLocaleOptionText(option))}</option>`)
       .join("");
   }
 
