@@ -246,6 +246,50 @@ const arCatalog = {
   "settings.language.selectLabel": "اللغة",
 } as const;
 
+const ruCatalog = {
+  "auth.2fa.accountFallback": "ваш аккаунт",
+  "auth.2fa.failed": "Проверка не удалась.",
+  "auth.2fa.helper": "Введите 6-значный код из приложения-аутентификатора или код восстановления.",
+  "auth.2fa.placeholder": "Код для {account}",
+  "auth.2fa.submit": "Проверить",
+  "auth.2fa.title": "Двухфакторная аутентификация",
+  "auth.actions.bootstrap": "Настройка",
+  "auth.actions.login": "Войти",
+  "auth.actions.resetPassword": "Сбросить пароль",
+  "auth.bootstrap.failed": "Настройка не удалась.",
+  "auth.bootstrap.title": "Первоначальная настройка",
+  "auth.fields.confirmPassword.label": "Подтвердите пароль",
+  "auth.fields.confirmPassword.placeholder": "Подтвердите новый пароль",
+  "auth.fields.email.placeholder": "Email",
+  "auth.fields.name.placeholder": "Имя",
+  "auth.fields.newPassword.label": "Новый пароль",
+  "auth.fields.newPassword.placeholder": "Минимум 8 символов",
+  "auth.fields.password.placeholder": "Пароль",
+  "auth.login.failed": "Вход не удался.",
+  "auth.oidc.button": "Продолжить через SSO",
+  "auth.oidc.error.email": "Требуется подтверждённый адрес email.",
+  "auth.oidc.error.generic": "Аутентификация не удалась.",
+  "auth.oidc.error.provider": "Провайдер идентификации вернул ошибку.",
+  "auth.oidc.error.state_invalid": "Сессия входа истекла или недействительна. Попробуйте снова.",
+  "auth.oidc.error.token": "Аутентификация не удалась. Попробуйте снова.",
+  "auth.password.hide": "Скрыть пароль",
+  "auth.password.show": "Показать пароль",
+  "auth.reset.helper": "Введите новый пароль. Ссылка действует 30 минут.",
+  "auth.reset.invalidLink": "Недействительная или отсутствующая ссылка сброса",
+  "auth.reset.invalidOrExpiredToken": "Недействительный или просроченный токен сброса",
+  "auth.reset.passwordsMismatch": "Пароли не совпадают",
+  "auth.reset.success": "Пароль успешно сброшен. Войдите в систему.",
+  "auth.reset.title": "Сброс пароля",
+  "auth.shared.helper": "Для этого экземпляра включена аутентификация. Анонимные доски остаются доступными по URL; постоянные проекты требуют входа.",
+  "auth.shared.or": "или",
+  "auth.signIn.title": "Вход",
+  "errors.RATE_LIMITED": "Слишком много попыток. Попробуйте позже.",
+  "errors.UNAUTHORIZED": "Не авторизован",
+  "errors.generic": "Что-то пошло не так.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Язык",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -290,7 +334,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -300,6 +344,7 @@ function loader() {
       fr: frCatalog,
       pt: ptCatalog,
       ar: arCatalog,
+      ru: ruCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -346,9 +391,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/fr.svg",
   "/assets/flags/br.svg",
   "/assets/flags/sa.svg",
+  "/assets/flags/ru.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -417,6 +463,7 @@ describe("auth view i18n", () => {
       "Français",
       "Português (Brasil)",
       "العربية",
+      "Русский",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");

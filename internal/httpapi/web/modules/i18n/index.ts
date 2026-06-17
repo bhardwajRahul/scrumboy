@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar"] as const;
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -14,6 +14,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   fr: "Français",
   pt: "Português (Brasil)",
   ar: "العربية",
+  ru: "Русский",
   pseudo: "Pseudo",
 };
 
@@ -23,6 +24,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   fr: "/assets/flags/fr.svg",
   pt: "/assets/flags/br.svg",
   ar: "/assets/flags/sa.svg",
+  ru: "/assets/flags/ru.svg",
 };
 
 const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
@@ -503,6 +505,7 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
   if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
   if (normalized === "ar" || normalized.startsWith("ar-")) return "ar";
+  if (normalized === "ru" || normalized.startsWith("ru-")) return "ru";
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
 }
