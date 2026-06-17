@@ -1,5 +1,5 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt"];
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
@@ -7,6 +7,7 @@ export const LOCALE_LABELS = {
     de: "Deutsch",
     fr: "Français",
     pt: "Português (Brasil)",
+    ar: "العربية",
     pseudo: "Pseudo",
 };
 export const PUBLIC_LOCALE_FLAG_PATHS = {
@@ -14,6 +15,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS = {
     de: "/assets/flags/de.svg",
     fr: "/assets/flags/fr.svg",
     pt: "/assets/flags/br.svg",
+    ar: "/assets/flags/sa.svg",
 };
 const BOOTSTRAP_EN_CATALOG = {
     "common.add": "Add",
@@ -463,9 +465,17 @@ export function normalizeLocale(value) {
         return "fr";
     if (normalized === "pt" || normalized.startsWith("pt-"))
         return "pt";
+    if (normalized === "ar" || normalized.startsWith("ar-"))
+        return "ar";
     if (normalized === "en" || normalized.startsWith("en-"))
         return "en";
     return null;
+}
+export function isRtlLocale(locale) {
+    return locale === "ar";
+}
+export function documentDirection(locale) {
+    return isRtlLocale(locale) ? "rtl" : "ltr";
 }
 export function isPublicLocale(locale) {
     return PUBLIC_LOCALES.includes(locale);
@@ -541,6 +551,13 @@ function updateDocumentLang(locale, element = getDefaultDocumentElement()) {
         return;
     element.lang = locale === "pseudo" ? "en" : intlLocale(locale);
     element.setAttribute("data-locale", locale);
+    const dir = documentDirection(locale);
+    if (dir === "rtl") {
+        element.setAttribute("dir", "rtl");
+    }
+    else {
+        element.removeAttribute("dir");
+    }
 }
 function persistLocale(locale, storage = getDefaultStorage()) {
     try {

@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt"] as const;
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -13,6 +13,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   de: "Deutsch",
   fr: "Français",
   pt: "Português (Brasil)",
+  ar: "العربية",
   pseudo: "Pseudo",
 };
 
@@ -21,6 +22,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   de: "/assets/flags/de.svg",
   fr: "/assets/flags/fr.svg",
   pt: "/assets/flags/br.svg",
+  ar: "/assets/flags/sa.svg",
 };
 
 const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
@@ -500,8 +502,17 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "de" || normalized.startsWith("de-")) return "de";
   if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
   if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
+  if (normalized === "ar" || normalized.startsWith("ar-")) return "ar";
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
+}
+
+export function isRtlLocale(locale: LocaleId): boolean {
+  return locale === "ar";
+}
+
+export function documentDirection(locale: LocaleId): "ltr" | "rtl" {
+  return isRtlLocale(locale) ? "rtl" : "ltr";
 }
 
 export function isPublicLocale(locale: string): locale is PublicLocaleId {
@@ -580,6 +591,12 @@ function updateDocumentLang(locale: LocaleId, element = getDefaultDocumentElemen
   if (!element) return;
   element.lang = locale === "pseudo" ? "en" : intlLocale(locale);
   element.setAttribute("data-locale", locale);
+  const dir = documentDirection(locale);
+  if (dir === "rtl") {
+    element.setAttribute("dir", "rtl");
+  } else {
+    element.removeAttribute("dir");
+  }
 }
 
 function persistLocale(locale: LocaleId, storage = getDefaultStorage()): void {

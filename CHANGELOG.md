@@ -6,6 +6,7 @@
 
 ### Added
 
+- **Arabic UI (Modern Standard Arabic)** - Full frontend catalog (`ar`) with RTL document direction and minimal shell layout fixes for locale picker, auth, and dialogs.
 - **Pre-auth language selector** - Public locale picker on the auth shell (sign-in, bootstrap, 2FA, password reset) using the same shared helper as Settings.
 - **SVG flag icons for language selectors** - Auth and Settings language pickers now show vendored 3x2 SVG flags (from `country-flag-icons`, MIT) instead of emoji that degrade to regional letter codes on Windows/Chromium.
 

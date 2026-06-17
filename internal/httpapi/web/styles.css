@@ -343,7 +343,7 @@ html {
 body {
   margin: 0;
   min-height: 100%;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Tahoma, Roboto, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -5287,3 +5287,47 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   pointer-events: none;
 }
 .wall-empty .muted { color: var(--wall-fg-muted); opacity: 0.75; }
+
+/* ============================================
+   RTL LAYOUT (Arabic)
+   ============================================ */
+
+[dir="rtl"] .locale-picker__button {
+  text-align: right;
+}
+
+[dir="rtl"] .locale-picker__list {
+  left: auto;
+  right: 0;
+}
+
+[dir="rtl"] .todo-notes-tabs {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[dir="rtl"] .password-toggle {
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+
+[dir="rtl"] .dialog__footer .spacer {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+@media (max-width: 767px) {
+  [dir="rtl"] .dialog__footer .btn--danger {
+    margin-left: 0;
+    margin-right: auto;
+  }
+}
+
+[dir="rtl"] .voice-command__tab {
+  border-right: 0;
+  border-left: 1px solid var(--border);
+}
+
+[dir="rtl"] .voice-command__tab:last-child {
+  border-left: 0;
+}

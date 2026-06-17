@@ -115,7 +115,7 @@ async function loadModule() {
 }
 
 function loader(catalogs: Record<string, Record<string, string>>) {
-  return vi.fn(async (locale: "en" | "de" | "pseudo") => catalogs[locale]);
+  return vi.fn(async (locale: string) => catalogs[locale]);
 }
 
 describe("i18n locale detection", () => {
@@ -145,6 +145,11 @@ describe("i18n locale detection", () => {
     expect(i18n.normalizeLocale("fr-FR")).toBe("fr");
     expect(i18n.normalizeLocale("pt")).toBe("pt");
     expect(i18n.normalizeLocale("pt-BR")).toBe("pt");
+    expect(i18n.normalizeLocale("ar")).toBe("ar");
+    expect(i18n.normalizeLocale("ar-SA")).toBe("ar");
+    expect(i18n.isRtlLocale("ar")).toBe(true);
+    expect(i18n.documentDirection("ar")).toBe("rtl");
+    expect(i18n.documentDirection("en")).toBe("ltr");
   });
 });
 
@@ -153,6 +158,7 @@ describe("i18n catalog loading", () => {
     localStorage.clear();
     document.documentElement.lang = "en";
     document.documentElement.removeAttribute("data-locale");
+    document.documentElement.removeAttribute("dir");
   });
 
   afterEach(async () => {
@@ -185,7 +191,26 @@ describe("i18n catalog loading", () => {
     expect(i18n.getLocale()).toBe("de");
     expect(document.documentElement.lang).toBe("de");
     expect(document.documentElement.getAttribute("data-locale")).toBe("de");
+    expect(document.documentElement.hasAttribute("dir")).toBe(false);
     expect(i18n.t("common.cancel")).toBe("Abbrechen");
+  });
+
+  it("sets dir=rtl for Arabic and clears it when switching back to English", async () => {
+    const i18n = await loadModule();
+    const arCatalog = { "common.cancel": "إلغاء" };
+    const loadLocale = loader({ en: enCatalog, ar: arCatalog });
+
+    await i18n.initI18n({ locale: "en", loadLocale });
+    expect(document.documentElement.hasAttribute("dir")).toBe(false);
+
+    await i18n.setLocale("ar");
+    expect(document.documentElement.getAttribute("dir")).toBe("rtl");
+    expect(document.documentElement.lang).toBe("ar");
+    expect(document.documentElement.getAttribute("data-locale")).toBe("ar");
+
+    await i18n.setLocale("en");
+    expect(document.documentElement.hasAttribute("dir")).toBe(false);
+    expect(document.documentElement.lang).toBe("en");
   });
 
   it("keeps the bootstrap English fallback when a custom loader fails loading English", async () => {

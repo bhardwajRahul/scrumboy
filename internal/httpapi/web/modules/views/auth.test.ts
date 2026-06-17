@@ -202,6 +202,50 @@ const ptCatalog = {
   "settings.language.selectLabel": "Idioma",
 } as const;
 
+const arCatalog = {
+  "auth.2fa.accountFallback": "حسابك",
+  "auth.2fa.failed": "فشل التحقق.",
+  "auth.2fa.helper": "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة، أو رمز استرداد.",
+  "auth.2fa.placeholder": "رمز {account}",
+  "auth.2fa.submit": "تحقق",
+  "auth.2fa.title": "المصادقة الثنائية",
+  "auth.actions.bootstrap": "إعداد أولي",
+  "auth.actions.login": "تسجيل الدخول",
+  "auth.actions.resetPassword": "إعادة تعيين كلمة المرور",
+  "auth.bootstrap.failed": "فشل الإعداد.",
+  "auth.bootstrap.title": "الإعداد لأول مرة",
+  "auth.fields.confirmPassword.label": "تأكيد كلمة المرور",
+  "auth.fields.confirmPassword.placeholder": "تأكيد كلمة المرور الجديدة",
+  "auth.fields.email.placeholder": "البريد الإلكتروني",
+  "auth.fields.name.placeholder": "الاسم",
+  "auth.fields.newPassword.label": "كلمة مرور جديدة",
+  "auth.fields.newPassword.placeholder": "8 أحرف على الأقل",
+  "auth.fields.password.placeholder": "كلمة المرور",
+  "auth.login.failed": "فشل تسجيل الدخول.",
+  "auth.oidc.button": "المتابعة عبر SSO",
+  "auth.oidc.error.email": "يلزم عنوان بريد إلكتروني موثّق.",
+  "auth.oidc.error.generic": "فشلت المصادقة.",
+  "auth.oidc.error.provider": "أعاد مزوّد الهوية خطأ.",
+  "auth.oidc.error.state_invalid": "انتهت صلاحية جلسة تسجيل الدخول أو أنها غير صالحة. يرجى المحاولة مرة أخرى.",
+  "auth.oidc.error.token": "فشلت المصادقة. يرجى المحاولة مرة أخرى.",
+  "auth.password.hide": "إخفاء كلمة المرور",
+  "auth.password.show": "إظهار كلمة المرور",
+  "auth.reset.helper": "أدخل كلمة المرور الجديدة. ينتهي الرابط خلال 30 دقيقة.",
+  "auth.reset.invalidLink": "رابط إعادة التعيين غير صالح أو مفقود",
+  "auth.reset.invalidOrExpiredToken": "رمز إعادة التعيين غير صالح أو منتهٍ",
+  "auth.reset.passwordsMismatch": "كلمتا المرور غير متطابقتين",
+  "auth.reset.success": "تمت إعادة تعيين كلمة المرور بنجاح. يرجى تسجيل الدخول.",
+  "auth.reset.title": "إعادة تعيين كلمة المرور",
+  "auth.shared.helper": "المصادقة مفعّلة لهذه النسخة. تبقى اللوحات المجهولة قابلة للمشاركة عبر الرابط؛ المشاريع الدائمة تتطلب تسجيل الدخول.",
+  "auth.shared.or": "أو",
+  "auth.signIn.title": "تسجيل الدخول",
+  "errors.RATE_LIMITED": "محاولات كثيرة جداً. حاول مرة أخرى لاحقاً.",
+  "errors.UNAUTHORIZED": "غير مصرّح",
+  "errors.generic": "حدث خطأ ما.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "اللغة",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -246,7 +290,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -255,6 +299,7 @@ function loader() {
       de: deCatalog,
       fr: frCatalog,
       pt: ptCatalog,
+      ar: arCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -300,7 +345,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/de.svg",
   "/assets/flags/fr.svg",
   "/assets/flags/br.svg",
+  "/assets/flags/sa.svg",
 ];
+
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -361,22 +409,23 @@ describe("auth view i18n", () => {
     const auth = await import("./auth.js");
 
     auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
-    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
     expect(authLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
     expect(authLocaleOptionDetails().map((option) => option.label)).toEqual([
       "English",
       "Deutsch",
       "Français",
       "Português (Brasil)",
+      "العربية",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
 
     auth.renderAuth({ next: "/projects", bootstrap: true, oidcEnabled: false, localAuthEnabled: true });
-    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
 
     auth.renderResetPassword("reset-token");
-    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
 
     apiFetchMock.mockResolvedValueOnce({
       requires2fa: true,
@@ -390,8 +439,21 @@ describe("auth view i18n", () => {
     await flushPromises();
 
     expect(document.querySelector(".panel__title")?.textContent).toBe("Two-factor authentication");
-    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
+  });
+
+  it("selecting Arabic in the auth selector sets RTL document direction", async () => {
+    const i18n = await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
+    await selectAuthLocale("ar");
+
+    expect(i18n.getLocale()).toBe("ar");
+    expect(document.documentElement.getAttribute("dir")).toBe("rtl");
+    expect(document.documentElement.lang).toBe("ar");
+    expect(document.querySelector(".panel__title")?.textContent).toBe("تسجيل الدخول");
   });
 
   it("selecting German in the auth selector persists locale and updates chrome without clearing sign-in fields", async () => {
@@ -452,7 +514,7 @@ describe("auth view i18n", () => {
 
     expect(i18n.getLocale()).toBe("pseudo");
     expect(document.querySelector(".panel__title")?.textContent).toBe("[!! Sign in !!]");
-    expect(authLocaleOptionValues()).toEqual(["en", "de", "fr", "pt"]);
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
     expect(authLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocalePickerSelectedLocale()).toBe("en");
