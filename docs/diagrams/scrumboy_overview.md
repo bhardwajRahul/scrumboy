@@ -43,7 +43,7 @@ Core path: browser to HTTP to store to SQLite, with SSE for live board updates. 
 | `cmd/scrumboy` | Process entry, TLS, hourly maintenance |
 | `internal/httpapi` | HTTP routing, SSE hub, SPA embed, webhooks, push |
 | `internal/store` | Domain logic and authorization |
-| `internal/httpapi/web` | TypeScript SPA compiled to `dist/` |
+| `internal/httpapi/web` | TypeScript SPA compiled to `dist/`; i18n catalogs, locale runtime, vendored flag assets |
 | `internal/migrate` | Versioned SQL migrations |
 | `internal/mcp` | Optional MCP HTTP and JSON-RPC tools |
 | `internal/agora` | Optional Agoragentic adapter over MCP |

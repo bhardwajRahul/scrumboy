@@ -33,3 +33,7 @@ flowchart TD
 - `/anon` anonymous temporary board creation (anonymous mode)
 
 API lives under `/api/*` only; everything else falls through to embedded `web/dist` assets or slug canonicalization.
+
+## Localized validation errors (SPA)
+
+Handlers use `writeValidationError(w, message, reason, details)` with stable snake_case `details.reason` when the failure class is known. The SPA maps recognized reasons through `apiErrorMessage()` / catalog keys; unknown or dynamic store messages keep the English `error.message` (or raw text via `apiErrorMessageOrRaw()` on import/backup paths). HTTP status codes and payload shape are unchanged.

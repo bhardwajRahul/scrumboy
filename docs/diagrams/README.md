@@ -47,4 +47,4 @@ The viewer ports Scrumboy's semantic edge coloring (`mermaid-semantic-edges.js` 
 | [scrumboy_voiceflow.md](scrumboy_voiceflow.md) | Speech commands; UI localized, grammar English-centric |
 | [scrumboy_wall_canvas.md](scrumboy_wall_canvas.md) | Scrumbaby wall canvas |
 | [scrumboy_backup_import.md](scrumboy_backup_import.md) | Backup JSON and Trello import |
-| [scrumboy_frontend_spa.md](scrumboy_frontend_spa.md) | SPA router, state, locale runtime |
+| [scrumboy_frontend_spa.md](scrumboy_frontend_spa.md) | SPA router, state, i18n catalogs, locale picker, API error localization |

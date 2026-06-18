@@ -22,7 +22,7 @@ flowchart LR
 
 ## Locale boundary
 
-- Board chrome and `Settings -> Customization -> VoiceFlow` copy follow the app locale.
+- Board chrome, `Settings -> Customization -> VoiceFlow` copy, and runtime status/error toasts follow the app locale.
 - Parser vocabulary, built-in status aliases, spoken `yes` / `no` confirmations, and spoken disambiguation words currently stay English-centric.
 - `Safe-Mode` is the safer choice in a non-English UI because the command grammar does not switch with the app locale yet.
 

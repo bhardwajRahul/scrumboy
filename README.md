@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.18.10-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.18.12-blue" alt="version" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   </a>
@@ -188,7 +188,7 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 
 - PWA: Excellent UX for mobile users.
 
-- Multi-language UI: English, Deutsch, Français, Português (Brasil), Español (Latinoamérica), العربية, Русский, 日本語, Türkçe, 한국어, 简体中文, Bahasa Indonesia, Tiếng Việt, ไทย, اردو, and हिन्दी. The app can infer language from the browser or you can switch it in `Settings -> Language`. The pseudo-locale is reserved for localhost/dev QA.
+- Multi-language UI: English, 简体中文, हिन्दी, Español (Latinoamérica), العربية, Français, Português (Brasil), Bahasa Indonesia, اردو, Русский, Deutsch, 日本語, Tiếng Việt, Türkçe, 한국어, Italiano, and ไทย. The app can infer language from the browser or you can switch it in `Settings -> Language`.
 
 - Anonymous shareable boards can be created in both Full & Anonymous deployments.
 

@@ -7,6 +7,7 @@ flowchart LR
   Env[config.FromEnv]
   DB[db.Open SQLite]
   Mig[migrate.Apply]
+  Key[ResolveStartupEncryptionKey]
   Store[store.New]
   Color[BackfillDominantColors]
   OIDC[oidc.New optional]
@@ -15,10 +16,12 @@ flowchart LR
   Srv[httpapi.NewServer]
   Listen[http.Server Listen TLS optional]
 
-  Env --> DB --> Mig --> Store --> Color
+  Env --> DB --> Mig --> Key --> Store --> Color
   Color --> OIDC
   OIDC --> MCP --> Agora --> Srv --> Listen
 ```
+
+`ResolveStartupEncryptionKey` runs after migrations and before `store.New`. If encrypted auth/security data already exists, an invalid or missing `SCRUMBOY_ENCRYPTION_KEY` fails startup. On a fresh database with no encrypted data, an invalid key is logged and ignored (2FA setup and password-reset encryption stay disabled until a valid key is configured).
 
 ## Background work
 
