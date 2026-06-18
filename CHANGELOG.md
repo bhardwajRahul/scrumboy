@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.4] - 2026-06-17
+
+### Fixed
+
+- **Arabic Settings modal on mobile** - Settings dialog shell is explicitly viewport-centered on narrow RTL viewports so it stays fully visible; modal content remains RTL.
+
 ## [3.18.3] - 2026-06-17
 
 ### Fixed
