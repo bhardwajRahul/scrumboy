@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.12] - 2026-06-18
+
+### Documentation
+
+- **Architecture diagrams** - Brought `docs/diagrams/` up to date through 3.18.x (i18n catalogs, locale picker, API error localization, encryption-key startup, field tooltips, pre-auth locale picker); viewer header date set to June 18th 2026.
+
 ## [3.18.11] - 2026-06-18
 
 ### Added
@@ -19,7 +25,7 @@
 ### Added
 
 - **Hindi UI** - Full frontend catalog (`hi`) with India flag in the public locale picker.
-
+    
 ### Changed
 
 - **Locale flag SVGs** - Optimized all vendored flags under `internal/httpapi/web/assets/flags/` with SVGO (`--multipass --final-newline`); normalized UTF-16/BOM encodings on `cn.svg`, `kr.svg`, `tr.svg`, `pk.svg`, and `th.svg` so the assets parse cleanly. Total flag payload ~12% smaller with unchanged visuals.
