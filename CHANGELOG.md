@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.8] - 2026-06-17
+
+### Added
+
+- **Urdu UI** - Full frontend catalog (`ur`) with RTL document direction and Pakistan flag in the public locale picker.
+
 ## [3.18.7] - 2026-06-17
 
 ### Added

@@ -484,6 +484,7 @@ describe('settings customization i18n', () => {
       ['id', 'Bahasa Indonesia', '/assets/flags/id.svg'],
       ['vi', 'Tiếng Việt', '/assets/flags/vn.svg'],
       ['th', 'ไทย', '/assets/flags/th.svg'],
+      ['ur', 'اردو', '/assets/flags/pk.svg'],
     ]);
     expect(wallpaperRemoveBtn.textContent).toBe('DE Remove wallpaper');
   });

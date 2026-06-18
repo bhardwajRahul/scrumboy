@@ -165,8 +165,12 @@ describe("i18n locale detection", () => {
     expect(i18n.normalizeLocale("vi-VN")).toBe("vi");
     expect(i18n.normalizeLocale("th")).toBe("th");
     expect(i18n.normalizeLocale("th-TH")).toBe("th");
+    expect(i18n.normalizeLocale("ur")).toBe("ur");
+    expect(i18n.normalizeLocale("ur-PK")).toBe("ur");
     expect(i18n.isRtlLocale("ar")).toBe(true);
+    expect(i18n.isRtlLocale("ur")).toBe(true);
     expect(i18n.documentDirection("ar")).toBe("rtl");
+    expect(i18n.documentDirection("ur")).toBe("rtl");
     expect(i18n.documentDirection("en")).toBe("ltr");
   });
 });

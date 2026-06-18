@@ -598,6 +598,50 @@ const thCatalog = {
   "settings.language.selectLabel": "ภาษา",
 } as const;
 
+const urCatalog = {
+  "auth.2fa.accountFallback": "آپ کا اکاؤنٹ",
+  "auth.2fa.failed": "تصدیق ناکام رہی۔",
+  "auth.2fa.helper": "تصدیقی ایپ سے 6 ہندسوں کا کوڈ یا بحالی کوڈ درج کریں۔",
+  "auth.2fa.placeholder": "{account} کے لیے کوڈ",
+  "auth.2fa.submit": "تصدیق کریں",
+  "auth.2fa.title": "دو عنصر کی تصدیق",
+  "auth.actions.bootstrap": "ابتدائی سیٹ اپ",
+  "auth.actions.login": "لاگ ان",
+  "auth.actions.resetPassword": "پاس ورڈ ری سیٹ",
+  "auth.bootstrap.failed": "سیٹ اپ ناکام رہا۔",
+  "auth.bootstrap.title": "پہلی بار سیٹ اپ",
+  "auth.fields.confirmPassword.label": "پاس ورڈ کی تصدیق",
+  "auth.fields.confirmPassword.placeholder": "نیا پاس ورڈ دوبارہ درج کریں",
+  "auth.fields.email.placeholder": "ای میل",
+  "auth.fields.name.placeholder": "نام",
+  "auth.fields.newPassword.label": "نیا پاس ورڈ",
+  "auth.fields.newPassword.placeholder": "کم از کم 8 حروف",
+  "auth.fields.password.placeholder": "پاس ورڈ",
+  "auth.login.failed": "لاگ ان ناکام رہا۔",
+  "auth.oidc.button": "SSO کے ساتھ جاری رکھیں",
+  "auth.oidc.error.email": "تصدیق شدہ ای میل پتہ ضروری ہے۔",
+  "auth.oidc.error.generic": "تصدیق ناکام رہی۔",
+  "auth.oidc.error.provider": "شناختی فراہم کنندہ نے خرابی واپس کی۔",
+  "auth.oidc.error.state_invalid": "لاگ ان سیشن ختم یا غلط ہے۔ براہ کرم دوبارہ کوشش کریں۔",
+  "auth.oidc.error.token": "تصدیق ناکام رہی۔ براہ کرم دوبارہ کوشش کریں۔",
+  "auth.password.hide": "پاس ورڈ چھپائیں",
+  "auth.password.show": "پاس ورڈ دکھائیں",
+  "auth.reset.helper": "اپنا نیا پاس ورڈ درج کریں۔ لنک 30 منٹ میں ختم ہو جائے گا۔",
+  "auth.reset.invalidLink": "ری سیٹ لنک غلط یا موجود نہیں",
+  "auth.reset.invalidOrExpiredToken": "ری سیٹ ٹوکن غلط یا ختم ہو چکا",
+  "auth.reset.passwordsMismatch": "پاس ورڈ مماثل نہیں",
+  "auth.reset.success": "پاس ورڈ کامیابی سے ری سیٹ ہو گیا۔ براہ کرم لاگ ان کریں۔",
+  "auth.reset.title": "پاس ورڈ ری سیٹ",
+  "auth.shared.helper": "اس انسٹالیشن پر تصدیق فعال ہے۔ گمنام بورڈز URL سے شیئر ہو سکتے ہیں؛ مستقل پروجیکٹس کے لیے سائن ان ضروری ہے۔",
+  "auth.shared.or": "یا",
+  "auth.signIn.title": "سائن ان",
+  "errors.RATE_LIMITED": "بہت زیادہ کوششیں۔ بعد میں کوشش کریں۔",
+  "errors.UNAUTHORIZED": "غیر مجاز",
+  "errors.generic": "کچھ غلط ہو گیا۔",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "زبان",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -642,7 +686,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "th" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "th" | "ur" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -660,6 +704,7 @@ function loader() {
       id: idCatalog,
       vi: viCatalog,
       th: thCatalog,
+      ur: urCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -714,9 +759,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/id.svg",
   "/assets/flags/vn.svg",
   "/assets/flags/th.svg",
+  "/assets/flags/pk.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -793,6 +839,7 @@ describe("auth view i18n", () => {
       "Bahasa Indonesia",
       "Tiếng Việt",
       "ไทย",
+      "اردو",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
