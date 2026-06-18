@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "es", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur", "hi", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "es", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur", "hi"] as const;
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -11,6 +11,7 @@ export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS: Record<LocaleId, string> = {
   en: "English",
   de: "Deutsch",
+  it: "Italiano",
   fr: "Français",
   pt: "Português (Brasil)",
   es: "Español (Latinoamérica)",
@@ -31,6 +32,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
 export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   en: "/assets/flags/us.svg",
   de: "/assets/flags/de.svg",
+  it: "/assets/flags/it.svg",
   fr: "/assets/flags/fr.svg",
   pt: "/assets/flags/br.svg",
   es: "/assets/flags/mx.svg",
@@ -522,6 +524,7 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   const normalized = value.trim().toLowerCase().replace("_", "-");
   if (normalized === "pseudo") return "pseudo";
   if (normalized === "de" || normalized.startsWith("de-")) return "de";
+  if (normalized === "it" || normalized.startsWith("it-")) return "it";
   if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
   if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
   if (normalized === "es" || normalized.startsWith("es-")) return "es";
@@ -806,6 +809,7 @@ function intlLocale(locale = activeLocale): string {
   if (locale === "pseudo") return "en";
   if (locale === "pt") return "pt-BR";
   if (locale === "es") return "es-MX";
+  if (locale === "it") return "it-IT";
   if (locale === "zh") return "zh-CN";
   if (locale === "id") return "id-ID";
   if (locale === "vi") return "vi-VN";

@@ -9,8 +9,12 @@ const deCatalog = {
   "settings.language.selectLabel": "Sprache",
 };
 
+const zhCatalog = {
+  "settings.language.selectLabel": "语言",
+};
+
 function loader(catalogs: Record<string, Record<string, string>>) {
-  return vi.fn(async (locale: "en" | "de") => catalogs[locale]);
+  return vi.fn(async (locale: "en" | "de" | "zh") => catalogs[locale]);
 }
 
 async function flushPromises(count = 8): Promise<void> {
@@ -81,7 +85,11 @@ describe("locale-select custom picker", () => {
   });
 
   it("supports keyboard navigation and Enter to select", async () => {
-    const i18n = await setupI18n("en");
+    const i18n = await import("./index.js");
+    await i18n.initI18n({
+      locale: "en",
+      loadLocale: loader({ en: enCatalog, de: deCatalog, zh: zhCatalog }),
+    });
     const localeSelect = await import("./locale-select.js");
     document.body.innerHTML = localeSelect.renderPublicLocaleSelectHTML({ id: "testLocaleSelect" });
     const button = document.getElementById("testLocaleSelect") as HTMLButtonElement;
@@ -94,12 +102,15 @@ describe("locale-select custom picker", () => {
 
     button.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     const highlighted = list.querySelector(".locale-picker__option--highlight");
-    expect(highlighted?.getAttribute("data-locale")).toBe("de");
+    expect(highlighted?.getAttribute("data-locale")).toBe("zh");
 
     button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await flushPromises();
 
-    expect(i18n.getLocale()).toBe("de");
+    expect(i18n.getLocale()).toBe("zh");
+    expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("zh");
+    expect(button.querySelector(".locale-picker__label")?.textContent).toBe("简体中文");
+    expect((button.querySelector(".locale-picker__flag") as HTMLImageElement).getAttribute("src")).toBe("/assets/flags/cn.svg");
     expect(list.hidden).toBe(true);
   });
 

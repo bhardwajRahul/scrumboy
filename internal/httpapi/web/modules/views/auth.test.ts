@@ -730,6 +730,50 @@ const esCatalog = {
   "settings.language.selectLabel": "Idioma",
 } as const;
 
+const itCatalog = {
+  "auth.2fa.accountFallback": "il tuo account",
+  "auth.2fa.failed": "Verifica non riuscita.",
+  "auth.2fa.helper": "Inserisci il codice a 6 cifre dalla tua app di autenticazione o un codice di recupero.",
+  "auth.2fa.placeholder": "Codice per {account}",
+  "auth.2fa.submit": "Verifica",
+  "auth.2fa.title": "Autenticazione a due fattori",
+  "auth.actions.bootstrap": "Configurazione iniziale",
+  "auth.actions.login": "Accedi",
+  "auth.actions.resetPassword": "Reimposta password",
+  "auth.bootstrap.failed": "Configurazione non riuscita.",
+  "auth.bootstrap.title": "Configurazione iniziale",
+  "auth.fields.confirmPassword.label": "Conferma password",
+  "auth.fields.confirmPassword.placeholder": "Conferma la nuova password",
+  "auth.fields.email.placeholder": "Email",
+  "auth.fields.name.placeholder": "Nome",
+  "auth.fields.newPassword.label": "Nuova password",
+  "auth.fields.newPassword.placeholder": "Min. 8 caratteri",
+  "auth.fields.password.placeholder": "Password",
+  "auth.login.failed": "Accesso non riuscito.",
+  "auth.oidc.button": "Continua con SSO",
+  "auth.oidc.error.email": "È richiesto un indirizzo email verificato.",
+  "auth.oidc.error.generic": "Autenticazione non riuscita.",
+  "auth.oidc.error.provider": "Il provider di identità ha restituito un errore.",
+  "auth.oidc.error.state_invalid": "Sessione di accesso scaduta o non valida. Riprova.",
+  "auth.oidc.error.token": "Autenticazione non riuscita. Riprova.",
+  "auth.password.hide": "Nascondi password",
+  "auth.password.show": "Mostra password",
+  "auth.reset.helper": "Inserisci la nuova password. Il link scade tra 30 minuti.",
+  "auth.reset.invalidLink": "Link di reimpostazione non valido o mancante",
+  "auth.reset.invalidOrExpiredToken": "Token di reimpostazione non valido o scaduto",
+  "auth.reset.passwordsMismatch": "Le password non corrispondono",
+  "auth.reset.success": "Password reimpostata. Accedi.",
+  "auth.reset.title": "Reimposta password",
+  "auth.shared.helper": "L'autenticazione è abilitata per questa installazione. Le board anonime restano condivisibili tramite URL; i progetti persistenti richiedono l'accesso.",
+  "auth.shared.or": "oppure",
+  "auth.signIn.title": "Accedi",
+  "errors.RATE_LIMITED": "Troppi tentativi. Riprova più tardi.",
+  "errors.UNAUTHORIZED": "Non autorizzato",
+  "errors.generic": "Qualcosa è andato storto.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Lingua",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -774,7 +818,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "es" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "th" | "ur" | "hi" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "es" | "it" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "th" | "ur" | "hi" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -784,6 +828,7 @@ function loader() {
       fr: frCatalog,
       pt: ptCatalog,
       es: esCatalog,
+      it: itCatalog,
       ar: arCatalog,
       ru: ruCatalog,
       ja: jaCatalog,
@@ -837,24 +882,25 @@ function authLocaleOptionValues(): string[] {
 
 const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/us.svg",
-  "/assets/flags/de.svg",
-  "/assets/flags/fr.svg",
-  "/assets/flags/br.svg",
+  "/assets/flags/cn.svg",
+  "/assets/flags/in.svg",
   "/assets/flags/mx.svg",
   "/assets/flags/sa.svg",
+  "/assets/flags/fr.svg",
+  "/assets/flags/br.svg",
+  "/assets/flags/id.svg",
+  "/assets/flags/pk.svg",
   "/assets/flags/ru.svg",
+  "/assets/flags/de.svg",
   "/assets/flags/jp.svg",
+  "/assets/flags/vn.svg",
   "/assets/flags/tr.svg",
   "/assets/flags/kr.svg",
-  "/assets/flags/cn.svg",
-  "/assets/flags/id.svg",
-  "/assets/flags/vn.svg",
+  "/assets/flags/it.svg",
   "/assets/flags/th.svg",
-  "/assets/flags/pk.svg",
-  "/assets/flags/in.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "es", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur", "hi"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -919,21 +965,22 @@ describe("auth view i18n", () => {
     expect(authLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
     expect(authLocaleOptionDetails().map((option) => option.label)).toEqual([
       "English",
-      "Deutsch",
-      "Français",
-      "Português (Brasil)",
+      "简体中文",
+      "हिन्दी",
       "Español (Latinoamérica)",
       "العربية",
+      "Français",
+      "Português (Brasil)",
+      "Bahasa Indonesia",
+      "اردو",
       "Русский",
+      "Deutsch",
       "日本語",
+      "Tiếng Việt",
       "Türkçe",
       "한국어",
-      "简体中文",
-      "Bahasa Indonesia",
-      "Tiếng Việt",
+      "Italiano",
       "ไทย",
-      "اردو",
-      "हिन्दी",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
