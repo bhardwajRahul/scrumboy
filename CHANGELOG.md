@@ -2,6 +2,28 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.7] - 2026-06-17
+
+### Added
+
+- **Thai UI** - Full frontend catalog (`th`) with Thailand flag in the public locale picker.
+
+### Fixed
+
+- **Auth topbar on mobile** - Pre-auth language selector stays on the right and the Scrumboy logo on the left on narrow viewports, including Arabic/RTL, instead of inheriting board topbar flex ordering.
+
+## [3.18.6] - 2026-06-17
+
+### Added
+
+- **Vietnamese UI** - Full frontend catalog (`vi`) with Vietnam flag in the public locale picker.
+
+## [3.18.5] - 2026-06-17
+
+### Added
+
+- **Indonesian UI** - Full frontend catalog (`id`) with Indonesia flag in the public locale picker.
+
 ## [3.18.4] - 2026-06-17
 
 ### Fixed
