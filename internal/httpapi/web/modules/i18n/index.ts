@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur", "hi", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur"] as const;
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur", "hi"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -23,6 +23,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   vi: "Tiếng Việt",
   th: "ไทย",
   ur: "اردو",
+  hi: "हिन्दी",
   pseudo: "Pseudo",
 };
 
@@ -41,6 +42,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   vi: "/assets/flags/vn.svg",
   th: "/assets/flags/th.svg",
   ur: "/assets/flags/pk.svg",
+  hi: "/assets/flags/in.svg",
 };
 
 const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
@@ -539,6 +541,7 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "vi" || normalized.startsWith("vi-")) return "vi";
   if (normalized === "th" || normalized.startsWith("th-")) return "th";
   if (normalized === "ur" || normalized.startsWith("ur-")) return "ur";
+  if (normalized === "hi" || normalized.startsWith("hi-")) return "hi";
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
 }
@@ -804,6 +807,7 @@ function intlLocale(locale = activeLocale): string {
   if (locale === "vi") return "vi-VN";
   if (locale === "th") return "th-TH";
   if (locale === "ur") return "ur-PK";
+  if (locale === "hi") return "hi-IN";
   return locale;
 }
 
