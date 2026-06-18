@@ -466,6 +466,50 @@ const zhCatalog = {
   "settings.language.selectLabel": "语言",
 } as const;
 
+const idCatalog = {
+  "auth.2fa.accountFallback": "akun Anda",
+  "auth.2fa.failed": "Verifikasi gagal.",
+  "auth.2fa.helper": "Masukkan kode 6 digit dari aplikasi autentikator, atau kode pemulihan.",
+  "auth.2fa.placeholder": "Kode untuk {account}",
+  "auth.2fa.submit": "Verifikasi",
+  "auth.2fa.title": "Autentikasi dua faktor",
+  "auth.actions.bootstrap": "Penyiapan",
+  "auth.actions.login": "Masuk",
+  "auth.actions.resetPassword": "Atur ulang kata sandi",
+  "auth.bootstrap.failed": "Penyiapan gagal.",
+  "auth.bootstrap.title": "Penyiapan pertama",
+  "auth.fields.confirmPassword.label": "Konfirmasi kata sandi",
+  "auth.fields.confirmPassword.placeholder": "Konfirmasi kata sandi baru",
+  "auth.fields.email.placeholder": "Email",
+  "auth.fields.name.placeholder": "Nama",
+  "auth.fields.newPassword.label": "Kata sandi baru",
+  "auth.fields.newPassword.placeholder": "Min. 8 karakter",
+  "auth.fields.password.placeholder": "Kata sandi",
+  "auth.login.failed": "Gagal masuk.",
+  "auth.oidc.button": "Lanjutkan dengan SSO",
+  "auth.oidc.error.email": "Alamat email terverifikasi diperlukan.",
+  "auth.oidc.error.generic": "Autentikasi gagal.",
+  "auth.oidc.error.provider": "Penyedia identitas mengembalikan error.",
+  "auth.oidc.error.state_invalid": "Sesi masuk kedaluwarsa atau tidak valid. Silakan coba lagi.",
+  "auth.oidc.error.token": "Autentikasi gagal. Silakan coba lagi.",
+  "auth.password.hide": "Sembunyikan kata sandi",
+  "auth.password.show": "Tampilkan kata sandi",
+  "auth.reset.helper": "Masukkan kata sandi baru. Tautan kedaluwarsa dalam 30 menit.",
+  "auth.reset.invalidLink": "Tautan atur ulang tidak valid atau hilang",
+  "auth.reset.invalidOrExpiredToken": "Token atur ulang tidak valid atau kedaluwarsa",
+  "auth.reset.passwordsMismatch": "Kata sandi tidak cocok",
+  "auth.reset.success": "Kata sandi berhasil diatur ulang. Silakan masuk.",
+  "auth.reset.title": "Atur ulang kata sandi",
+  "auth.shared.helper": "Autentikasi diaktifkan untuk instance ini. Papan anonim tetap dapat dibagikan lewat URL; proyek permanen memerlukan masuk.",
+  "auth.shared.or": "atau",
+  "auth.signIn.title": "Masuk",
+  "errors.RATE_LIMITED": "Terlalu banyak percobaan. Coba lagi nanti.",
+  "errors.UNAUTHORIZED": "Tidak diizinkan",
+  "errors.generic": "Terjadi kesalahan.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Bahasa",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -510,7 +554,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -525,6 +569,7 @@ function loader() {
       tr: trCatalog,
       ko: koCatalog,
       zh: zhCatalog,
+      id: idCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -576,9 +621,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/tr.svg",
   "/assets/flags/kr.svg",
   "/assets/flags/cn.svg",
+  "/assets/flags/id.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -652,6 +698,7 @@ describe("auth view i18n", () => {
       "Türkçe",
       "한국어",
       "简体中文",
+      "Bahasa Indonesia",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
