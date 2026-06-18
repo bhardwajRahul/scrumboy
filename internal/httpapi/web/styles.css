@@ -1586,6 +1586,27 @@ html[data-wallpaper-active] #settingsDialog.dialog {
   }
 }
 
+/* RTL mobile: explicitly viewport-center the Settings shell to avoid off-screen horizontal drift. */
+@media (max-width: 767px) {
+  [dir="rtl"] #settingsDialog.dialog {
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    transform: translateY(-50%);
+    width: min(720px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 620px) {
+  [dir="rtl"] #settingsDialog.dialog {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+  }
+}
+
 .dialog[open] {
   display: flex;
   flex-direction: column;
