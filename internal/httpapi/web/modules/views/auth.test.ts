@@ -554,6 +554,50 @@ const viCatalog = {
   "settings.language.selectLabel": "Ngôn ngữ",
 } as const;
 
+const thCatalog = {
+  "auth.2fa.accountFallback": "บัญชีของคุณ",
+  "auth.2fa.failed": "การยืนยันล้มเหลว",
+  "auth.2fa.helper": "ป้อนรหัส 6 หลักจากแอปยืนยันตัวตน หรือรหัสกู้คืน",
+  "auth.2fa.placeholder": "รหัสสำหรับ {account}",
+  "auth.2fa.submit": "ยืนยัน",
+  "auth.2fa.title": "การยืนยันตัวตนสองขั้นตอน",
+  "auth.actions.bootstrap": "เริ่มตั้งค่า",
+  "auth.actions.login": "เข้าสู่ระบบ",
+  "auth.actions.resetPassword": "รีเซ็ตรหัสผ่าน",
+  "auth.bootstrap.failed": "การตั้งค่าล้มเหลว",
+  "auth.bootstrap.title": "การตั้งค่าครั้งแรก",
+  "auth.fields.confirmPassword.label": "ยืนยันรหัสผ่าน",
+  "auth.fields.confirmPassword.placeholder": "ยืนยันรหัสผ่านใหม่",
+  "auth.fields.email.placeholder": "อีเมล",
+  "auth.fields.name.placeholder": "ชื่อ",
+  "auth.fields.newPassword.label": "รหัสผ่านใหม่",
+  "auth.fields.newPassword.placeholder": "อย่างน้อย 8 ตัวอักษร",
+  "auth.fields.password.placeholder": "รหัสผ่าน",
+  "auth.login.failed": "เข้าสู่ระบบล้มเหลว",
+  "auth.oidc.button": "ดำเนินการต่อด้วย SSO",
+  "auth.oidc.error.email": "ต้องมีที่อยู่อีเมลที่ยืนยันแล้ว",
+  "auth.oidc.error.generic": "การยืนยันตัวตนล้มเหลว",
+  "auth.oidc.error.provider": "ผู้ให้บริการตัวตนส่งคืนข้อผิดพลาด",
+  "auth.oidc.error.state_invalid": "เซสชันเข้าสู่ระบบหมดอายุหรือไม่ถูกต้อง โปรดลองอีกครั้ง",
+  "auth.oidc.error.token": "การยืนยันตัวตนล้มเหลว โปรดลองอีกครั้ง",
+  "auth.password.hide": "ซ่อนรหัสผ่าน",
+  "auth.password.show": "แสดงรหัสผ่าน",
+  "auth.reset.helper": "ป้อนรหัสผ่านใหม่ ลิงก์จะหมดอายุใน 30 นาที",
+  "auth.reset.invalidLink": "ลิงก์รีเซ็ตไม่ถูกต้องหรือไม่มี",
+  "auth.reset.invalidOrExpiredToken": "โทเค็นรีเซ็ตไม่ถูกต้องหรือหมดอายุ",
+  "auth.reset.passwordsMismatch": "รหัสผ่านไม่ตรงกัน",
+  "auth.reset.success": "รีเซ็ตรหัสผ่านสำเร็จ โปรดเข้าสู่ระบบ",
+  "auth.reset.title": "รีเซ็ตรหัสผ่าน",
+  "auth.shared.helper": "เปิดใช้การยืนยันตัวตนสำหรับการติดตั้งนี้ บอร์ดไม่ระบุตัวตนยังแชร์ผ่าน URL ได้ โปรเจกต์ถาวรต้องเข้าสู่ระบบ",
+  "auth.shared.or": "หรือ",
+  "auth.signIn.title": "เข้าสู่ระบบ",
+  "errors.RATE_LIMITED": "ลองมากเกินไป โปรดลองอีกครั้งภายหลัง",
+  "errors.UNAUTHORIZED": "ต้องเข้าสู่ระบบ",
+  "errors.generic": "เกิดข้อผิดพลาด",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "ภาษา",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -598,7 +642,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "th" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -615,6 +659,7 @@ function loader() {
       zh: zhCatalog,
       id: idCatalog,
       vi: viCatalog,
+      th: thCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -668,9 +713,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/cn.svg",
   "/assets/flags/id.svg",
   "/assets/flags/vn.svg",
+  "/assets/flags/th.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -746,6 +792,7 @@ describe("auth view i18n", () => {
       "简体中文",
       "Bahasa Indonesia",
       "Tiếng Việt",
+      "ไทย",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
