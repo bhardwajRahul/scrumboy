@@ -54,4 +54,4 @@ flowchart LR
 
 Projects may add lanes (up to store limit), rename labels, recolor columns, reorder them, and choose which lane counts as done. Todos reference lanes by `column_key`, not a fixed enum.
 
-Lane colors and sprint chips use `styles.css` CSS variables. Sprints filter board scope via `sprintId` query param; tags and search filters apply client-side in `board-filters.ts`.
+Lane colors and sprint chips use `styles.css` CSS variables. Sprints filter board scope via `sprintId` query param; tags and search filters apply client-side in `board-filters.ts`. Agile field labels and native `title` hover hints (`field-tooltips.ts`) localize with the active locale.
