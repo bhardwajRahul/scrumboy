@@ -260,15 +260,22 @@ async function setupCustomizationSettings() {
 
 const EXPECTED_LOCALE_FLAG_PATHS = [
   '/assets/flags/us.svg',
-  '/assets/flags/de.svg',
+  '/assets/flags/cn.svg',
+  '/assets/flags/in.svg',
+  '/assets/flags/mx.svg',
+  '/assets/flags/sa.svg',
   '/assets/flags/fr.svg',
   '/assets/flags/br.svg',
-  '/assets/flags/sa.svg',
+  '/assets/flags/id.svg',
+  '/assets/flags/pk.svg',
   '/assets/flags/ru.svg',
+  '/assets/flags/de.svg',
   '/assets/flags/jp.svg',
+  '/assets/flags/vn.svg',
   '/assets/flags/tr.svg',
   '/assets/flags/kr.svg',
-  '/assets/flags/cn.svg',
+  '/assets/flags/it.svg',
+  '/assets/flags/th.svg',
 ];
 
 function getSettingsLocalePicker(): HTMLButtonElement {
@@ -334,15 +341,22 @@ describe('settings language selector', () => {
       expect(button).toBeTruthy();
       expect(settingsLocaleOptionDetails().map((option) => [option.locale, option.label])).toEqual([
         ['en', 'English'],
-        ['de', 'Deutsch'],
+        ['zh', '简体中文'],
+        ['hi', 'हिन्दी'],
+        ['es', 'Español (Latinoamérica)'],
+        ['ar', 'العربية'],
         ['fr', 'Français'],
         ['pt', 'Português (Brasil)'],
-        ['ar', 'العربية'],
+        ['id', 'Bahasa Indonesia'],
+        ['ur', 'اردو'],
         ['ru', 'Русский'],
+        ['de', 'Deutsch'],
         ['ja', '日本語'],
+        ['vi', 'Tiếng Việt'],
         ['tr', 'Türkçe'],
         ['ko', '한국어'],
-        ['zh', '简体中文'],
+        ['it', 'Italiano'],
+        ['th', 'ไทย'],
       ]);
       expect(settingsLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
       expect(settingsLocaleOptionDetails().some((option) => option.locale === 'pseudo')).toBe(false);
@@ -386,7 +400,7 @@ describe('settings language selector', () => {
       await settings.renderSettingsModal();
 
       expect(i18n.getLocale()).toBe('pseudo');
-      expect(settingsLocaleOptionDetails().map((option) => option.locale)).toEqual(['en', 'de', 'fr', 'pt', 'ar', 'ru', 'ja', 'tr', 'ko', 'zh']);
+      expect(settingsLocaleOptionDetails().map((option) => option.locale)).toEqual(['en', 'zh', 'hi', 'es', 'ar', 'fr', 'pt', 'id', 'ur', 'ru', 'de', 'ja', 'vi', 'tr', 'ko', 'it', 'th']);
       expect(settingsLocaleOptionDetails().some((option) => option.locale === 'pseudo')).toBe(false);
     } finally {
       cleanup();

@@ -1,31 +1,45 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh"];
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
     en: "English",
     de: "Deutsch",
+    it: "Italiano",
     fr: "Français",
     pt: "Português (Brasil)",
+    es: "Español (Latinoamérica)",
     ar: "العربية",
     ru: "Русский",
     ja: "日本語",
     tr: "Türkçe",
     ko: "한국어",
     zh: "简体中文",
+    id: "Bahasa Indonesia",
+    vi: "Tiếng Việt",
+    th: "ไทย",
+    ur: "اردو",
+    hi: "हिन्दी",
     pseudo: "Pseudo",
 };
 export const PUBLIC_LOCALE_FLAG_PATHS = {
     en: "/assets/flags/us.svg",
     de: "/assets/flags/de.svg",
+    it: "/assets/flags/it.svg",
     fr: "/assets/flags/fr.svg",
     pt: "/assets/flags/br.svg",
+    es: "/assets/flags/mx.svg",
     ar: "/assets/flags/sa.svg",
     ru: "/assets/flags/ru.svg",
     ja: "/assets/flags/jp.svg",
     tr: "/assets/flags/tr.svg",
     ko: "/assets/flags/kr.svg",
     zh: "/assets/flags/cn.svg",
+    id: "/assets/flags/id.svg",
+    vi: "/assets/flags/vn.svg",
+    th: "/assets/flags/th.svg",
+    ur: "/assets/flags/pk.svg",
+    hi: "/assets/flags/in.svg",
 };
 const BOOTSTRAP_EN_CATALOG = {
     "common.add": "Add",
@@ -471,10 +485,14 @@ export function normalizeLocale(value) {
         return "pseudo";
     if (normalized === "de" || normalized.startsWith("de-"))
         return "de";
+    if (normalized === "it" || normalized.startsWith("it-"))
+        return "it";
     if (normalized === "fr" || normalized.startsWith("fr-"))
         return "fr";
     if (normalized === "pt" || normalized.startsWith("pt-"))
         return "pt";
+    if (normalized === "es" || normalized.startsWith("es-"))
+        return "es";
     if (normalized === "ar" || normalized.startsWith("ar-"))
         return "ar";
     if (normalized === "ru" || normalized.startsWith("ru-"))
@@ -493,12 +511,22 @@ export function normalizeLocale(value) {
         || normalized.startsWith("zh-hans-")) {
         return "zh";
     }
+    if (normalized === "id" || normalized.startsWith("id-"))
+        return "id";
+    if (normalized === "vi" || normalized.startsWith("vi-"))
+        return "vi";
+    if (normalized === "th" || normalized.startsWith("th-"))
+        return "th";
+    if (normalized === "ur" || normalized.startsWith("ur-"))
+        return "ur";
+    if (normalized === "hi" || normalized.startsWith("hi-"))
+        return "hi";
     if (normalized === "en" || normalized.startsWith("en-"))
         return "en";
     return null;
 }
 export function isRtlLocale(locale) {
-    return locale === "ar";
+    return locale === "ar" || locale === "ur";
 }
 export function documentDirection(locale) {
     return isRtlLocale(locale) ? "rtl" : "ltr";
@@ -738,8 +766,22 @@ function intlLocale(locale = activeLocale) {
         return "en";
     if (locale === "pt")
         return "pt-BR";
+    if (locale === "es")
+        return "es-MX";
+    if (locale === "it")
+        return "it-IT";
     if (locale === "zh")
         return "zh-CN";
+    if (locale === "id")
+        return "id-ID";
+    if (locale === "vi")
+        return "vi-VN";
+    if (locale === "th")
+        return "th-TH";
+    if (locale === "ur")
+        return "ur-PK";
+    if (locale === "hi")
+        return "hi-IN";
     return locale;
 }
 export function formatDate(value, options) {

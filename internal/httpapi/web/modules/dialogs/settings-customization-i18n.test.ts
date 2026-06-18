@@ -472,15 +472,22 @@ describe('settings customization i18n', () => {
       ]),
     ).toEqual([
       ['en', 'English', '/assets/flags/us.svg'],
-      ['de', 'Deutsch', '/assets/flags/de.svg'],
+      ['zh', '简体中文', '/assets/flags/cn.svg'],
+      ['hi', 'हिन्दी', '/assets/flags/in.svg'],
+      ['es', 'Español (Latinoamérica)', '/assets/flags/mx.svg'],
+      ['ar', 'العربية', '/assets/flags/sa.svg'],
       ['fr', 'Français', '/assets/flags/fr.svg'],
       ['pt', 'Português (Brasil)', '/assets/flags/br.svg'],
-      ['ar', 'العربية', '/assets/flags/sa.svg'],
+      ['id', 'Bahasa Indonesia', '/assets/flags/id.svg'],
+      ['ur', 'اردو', '/assets/flags/pk.svg'],
       ['ru', 'Русский', '/assets/flags/ru.svg'],
+      ['de', 'Deutsch', '/assets/flags/de.svg'],
       ['ja', '日本語', '/assets/flags/jp.svg'],
+      ['vi', 'Tiếng Việt', '/assets/flags/vn.svg'],
       ['tr', 'Türkçe', '/assets/flags/tr.svg'],
       ['ko', '한국어', '/assets/flags/kr.svg'],
-      ['zh', '简体中文', '/assets/flags/cn.svg'],
+      ['it', 'Italiano', '/assets/flags/it.svg'],
+      ['th', 'ไทย', '/assets/flags/th.svg'],
     ]);
     expect(wallpaperRemoveBtn.textContent).toBe('DE Remove wallpaper');
   });

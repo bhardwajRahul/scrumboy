@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh"] as const;
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -11,28 +11,42 @@ export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS: Record<LocaleId, string> = {
   en: "English",
   de: "Deutsch",
+  it: "Italiano",
   fr: "Français",
   pt: "Português (Brasil)",
+  es: "Español (Latinoamérica)",
   ar: "العربية",
   ru: "Русский",
   ja: "日本語",
   tr: "Türkçe",
   ko: "한국어",
   zh: "简体中文",
+  id: "Bahasa Indonesia",
+  vi: "Tiếng Việt",
+  th: "ไทย",
+  ur: "اردو",
+  hi: "हिन्दी",
   pseudo: "Pseudo",
 };
 
 export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   en: "/assets/flags/us.svg",
   de: "/assets/flags/de.svg",
+  it: "/assets/flags/it.svg",
   fr: "/assets/flags/fr.svg",
   pt: "/assets/flags/br.svg",
+  es: "/assets/flags/mx.svg",
   ar: "/assets/flags/sa.svg",
   ru: "/assets/flags/ru.svg",
   ja: "/assets/flags/jp.svg",
   tr: "/assets/flags/tr.svg",
   ko: "/assets/flags/kr.svg",
   zh: "/assets/flags/cn.svg",
+  id: "/assets/flags/id.svg",
+  vi: "/assets/flags/vn.svg",
+  th: "/assets/flags/th.svg",
+  ur: "/assets/flags/pk.svg",
+  hi: "/assets/flags/in.svg",
 };
 
 const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
@@ -510,8 +524,10 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   const normalized = value.trim().toLowerCase().replace("_", "-");
   if (normalized === "pseudo") return "pseudo";
   if (normalized === "de" || normalized.startsWith("de-")) return "de";
+  if (normalized === "it" || normalized.startsWith("it-")) return "it";
   if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
   if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
+  if (normalized === "es" || normalized.startsWith("es-")) return "es";
   if (normalized === "ar" || normalized.startsWith("ar-")) return "ar";
   if (normalized === "ru" || normalized.startsWith("ru-")) return "ru";
   if (normalized === "ja" || normalized.startsWith("ja-")) return "ja";
@@ -527,12 +543,17 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   ) {
     return "zh";
   }
+  if (normalized === "id" || normalized.startsWith("id-")) return "id";
+  if (normalized === "vi" || normalized.startsWith("vi-")) return "vi";
+  if (normalized === "th" || normalized.startsWith("th-")) return "th";
+  if (normalized === "ur" || normalized.startsWith("ur-")) return "ur";
+  if (normalized === "hi" || normalized.startsWith("hi-")) return "hi";
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
 }
 
 export function isRtlLocale(locale: LocaleId): boolean {
-  return locale === "ar";
+  return locale === "ar" || locale === "ur";
 }
 
 export function documentDirection(locale: LocaleId): "ltr" | "rtl" {
@@ -787,7 +808,14 @@ export function hasI18nKey(key: string): boolean {
 function intlLocale(locale = activeLocale): string {
   if (locale === "pseudo") return "en";
   if (locale === "pt") return "pt-BR";
+  if (locale === "es") return "es-MX";
+  if (locale === "it") return "it-IT";
   if (locale === "zh") return "zh-CN";
+  if (locale === "id") return "id-ID";
+  if (locale === "vi") return "vi-VN";
+  if (locale === "th") return "th-TH";
+  if (locale === "ur") return "ur-PK";
+  if (locale === "hi") return "hi-IN";
   return locale;
 }
 

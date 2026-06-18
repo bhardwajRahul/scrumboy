@@ -3561,6 +3561,18 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
     min-width: 0;
   }
 
+  /* Auth shell: keep logo left / locale picker right; ignore board topbar order shuffle. */
+  .page--auth .topbar::after {
+    content: none;
+    display: none;
+  }
+
+  .page--auth .topbar .brand,
+  .page--auth .topbar .spacer,
+  .page--auth .topbar .locale-picker {
+    order: 0;
+  }
+
   .topbar .search-input-wrapper {
     order: 4;
     flex: 1 1 0;
@@ -4939,9 +4951,17 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
 }
 
 @media (max-width: 767px) {
+  .page--auth .topbar {
+    direction: ltr;
+    flex-wrap: nowrap;
+  }
+
+  .page--auth .topbar .locale-picker {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+  }
+
   .page--auth .topbar .auth-locale-select {
-    order: 1;
-    margin-left: auto;
     min-width: min(148px, 45vw);
     max-width: 48vw;
   }
