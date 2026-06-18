@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.10] - 2026-06-17
+
+### Added
+
+- **Spanish (Latin America) UI** - Full frontend catalog (`es`) with Mexico flag in the public locale picker.
+
 ## [3.18.9] - 2026-06-17
 
 ### Added

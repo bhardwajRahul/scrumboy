@@ -686,6 +686,50 @@ const hiCatalog = {
   "settings.language.selectLabel": "भाषा",
 } as const;
 
+const esCatalog = {
+  "auth.2fa.accountFallback": "tu cuenta",
+  "auth.2fa.failed": "La verificación falló.",
+  "auth.2fa.helper": "Ingresa el código de 6 dígitos de tu app de autenticación o un código de recuperación.",
+  "auth.2fa.placeholder": "Código para {account}",
+  "auth.2fa.submit": "Verificar",
+  "auth.2fa.title": "Autenticación de dos factores",
+  "auth.actions.bootstrap": "Configuración inicial",
+  "auth.actions.login": "Iniciar sesión",
+  "auth.actions.resetPassword": "Restablecer contraseña",
+  "auth.bootstrap.failed": "La configuración falló.",
+  "auth.bootstrap.title": "Configuración inicial",
+  "auth.fields.confirmPassword.label": "Confirmar contraseña",
+  "auth.fields.confirmPassword.placeholder": "Confirmar nueva contraseña",
+  "auth.fields.email.placeholder": "Correo electrónico",
+  "auth.fields.name.placeholder": "Nombre",
+  "auth.fields.newPassword.label": "Nueva contraseña",
+  "auth.fields.newPassword.placeholder": "Mínimo 8 caracteres",
+  "auth.fields.password.placeholder": "Contraseña",
+  "auth.login.failed": "Error al iniciar sesión.",
+  "auth.oidc.button": "Continuar con SSO",
+  "auth.oidc.error.email": "Se requiere una dirección de correo verificada.",
+  "auth.oidc.error.generic": "La autenticación falló.",
+  "auth.oidc.error.provider": "El proveedor de identidad devolvió un error.",
+  "auth.oidc.error.state_invalid": "La sesión de inicio expiró o no es válida. Inténtalo de nuevo.",
+  "auth.oidc.error.token": "La autenticación falló. Inténtalo de nuevo.",
+  "auth.password.hide": "Ocultar contraseña",
+  "auth.password.show": "Mostrar contraseña",
+  "auth.reset.helper": "Ingresa tu nueva contraseña. El enlace expira en 30 minutos.",
+  "auth.reset.invalidLink": "Enlace de restablecimiento inválido o faltante",
+  "auth.reset.invalidOrExpiredToken": "Token de restablecimiento inválido o expirado",
+  "auth.reset.passwordsMismatch": "Las contraseñas no coinciden",
+  "auth.reset.success": "Contraseña restablecida correctamente. Inicia sesión.",
+  "auth.reset.title": "Restablecer contraseña",
+  "auth.shared.helper": "La autenticación está habilitada en esta instalación. Los tableros anónimos siguen compartiéndose por URL; los proyectos permanentes requieren iniciar sesión.",
+  "auth.shared.or": "o",
+  "auth.signIn.title": "Iniciar sesión",
+  "errors.RATE_LIMITED": "Demasiados intentos. Inténtalo más tarde.",
+  "errors.UNAUTHORIZED": "No autorizado",
+  "errors.generic": "Algo salió mal.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Idioma",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -730,7 +774,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "th" | "ur" | "hi" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "es" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "th" | "ur" | "hi" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -739,6 +783,7 @@ function loader() {
       de: deCatalog,
       fr: frCatalog,
       pt: ptCatalog,
+      es: esCatalog,
       ar: arCatalog,
       ru: ruCatalog,
       ja: jaCatalog,
@@ -795,6 +840,7 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/de.svg",
   "/assets/flags/fr.svg",
   "/assets/flags/br.svg",
+  "/assets/flags/mx.svg",
   "/assets/flags/sa.svg",
   "/assets/flags/ru.svg",
   "/assets/flags/jp.svg",
@@ -808,7 +854,7 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/in.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur", "hi"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "es", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi", "th", "ur", "hi"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -876,6 +922,7 @@ describe("auth view i18n", () => {
       "Deutsch",
       "Français",
       "Português (Brasil)",
+      "Español (Latinoamérica)",
       "العربية",
       "Русский",
       "日本語",

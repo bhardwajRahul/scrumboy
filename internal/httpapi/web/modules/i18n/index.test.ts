@@ -145,6 +145,8 @@ describe("i18n locale detection", () => {
     expect(i18n.normalizeLocale("fr-FR")).toBe("fr");
     expect(i18n.normalizeLocale("pt")).toBe("pt");
     expect(i18n.normalizeLocale("pt-BR")).toBe("pt");
+    expect(i18n.normalizeLocale("es")).toBe("es");
+    expect(i18n.normalizeLocale("es-MX")).toBe("es");
     expect(i18n.normalizeLocale("ar")).toBe("ar");
     expect(i18n.normalizeLocale("ar-SA")).toBe("ar");
     expect(i18n.normalizeLocale("ru")).toBe("ru");
