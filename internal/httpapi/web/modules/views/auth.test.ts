@@ -510,6 +510,50 @@ const idCatalog = {
   "settings.language.selectLabel": "Bahasa",
 } as const;
 
+const viCatalog = {
+  "auth.2fa.accountFallback": "tài khoản của bạn",
+  "auth.2fa.failed": "Xác minh thất bại.",
+  "auth.2fa.helper": "Nhập mã 6 chữ số từ ứng dụng xác thực hoặc mã khôi phục.",
+  "auth.2fa.placeholder": "Mã cho {account}",
+  "auth.2fa.submit": "Xác minh",
+  "auth.2fa.title": "Xác thực hai yếu tố",
+  "auth.actions.bootstrap": "Thiết lập",
+  "auth.actions.login": "Đăng nhập",
+  "auth.actions.resetPassword": "Đặt lại mật khẩu",
+  "auth.bootstrap.failed": "Thiết lập thất bại.",
+  "auth.bootstrap.title": "Thiết lập lần đầu",
+  "auth.fields.confirmPassword.label": "Xác nhận mật khẩu",
+  "auth.fields.confirmPassword.placeholder": "Xác nhận mật khẩu mới",
+  "auth.fields.email.placeholder": "Email",
+  "auth.fields.name.placeholder": "Tên",
+  "auth.fields.newPassword.label": "Mật khẩu mới",
+  "auth.fields.newPassword.placeholder": "Tối thiểu 8 ký tự",
+  "auth.fields.password.placeholder": "Mật khẩu",
+  "auth.login.failed": "Đăng nhập thất bại.",
+  "auth.oidc.button": "Tiếp tục với SSO",
+  "auth.oidc.error.email": "Cần địa chỉ email đã xác minh.",
+  "auth.oidc.error.generic": "Xác thực thất bại.",
+  "auth.oidc.error.provider": "Nhà cung cấp danh tính trả về lỗi.",
+  "auth.oidc.error.state_invalid": "Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng thử lại.",
+  "auth.oidc.error.token": "Xác thực thất bại. Vui lòng thử lại.",
+  "auth.password.hide": "Ẩn mật khẩu",
+  "auth.password.show": "Hiện mật khẩu",
+  "auth.reset.helper": "Nhập mật khẩu mới. Liên kết hết hạn sau 30 phút.",
+  "auth.reset.invalidLink": "Liên kết đặt lại không hợp lệ hoặc thiếu",
+  "auth.reset.invalidOrExpiredToken": "Mã đặt lại không hợp lệ hoặc đã hết hạn",
+  "auth.reset.passwordsMismatch": "Mật khẩu không khớp",
+  "auth.reset.success": "Đặt lại mật khẩu thành công. Vui lòng đăng nhập.",
+  "auth.reset.title": "Đặt lại mật khẩu",
+  "auth.shared.helper": "Xác thực được bật cho máy chủ này. Bảng ẩn danh vẫn có thể chia sẻ qua URL; dự án cần đăng nhập.",
+  "auth.shared.or": "hoặc",
+  "auth.signIn.title": "Đăng nhập",
+  "errors.RATE_LIMITED": "Quá nhiều lần thử. Hãy thử lại sau.",
+  "errors.UNAUTHORIZED": "Không được phép",
+  "errors.generic": "Đã xảy ra lỗi.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Ngôn ngữ",
+} as const;
+
 const pseudoCatalog = {
   "auth.2fa.accountFallback": "[!! your account !!]",
   "auth.2fa.failed": "[!! Verification failed. !!]",
@@ -554,7 +598,7 @@ const pseudoCatalog = {
   "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "id" | "vi" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -570,6 +614,7 @@ function loader() {
       ko: koCatalog,
       zh: zhCatalog,
       id: idCatalog,
+      vi: viCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -622,9 +667,10 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/kr.svg",
   "/assets/flags/cn.svg",
   "/assets/flags/id.svg",
+  "/assets/flags/vn.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "id", "vi"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -699,6 +745,7 @@ describe("auth view i18n", () => {
       "한국어",
       "简体中文",
       "Bahasa Indonesia",
+      "Tiếng Việt",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");

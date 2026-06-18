@@ -270,6 +270,7 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   '/assets/flags/kr.svg',
   '/assets/flags/cn.svg',
   '/assets/flags/id.svg',
+  '/assets/flags/vn.svg',
 ];
 
 function getSettingsLocalePicker(): HTMLButtonElement {
@@ -345,6 +346,7 @@ describe('settings language selector', () => {
         ['ko', '한국어'],
         ['zh', '简体中文'],
         ['id', 'Bahasa Indonesia'],
+        ['vi', 'Tiếng Việt'],
       ]);
       expect(settingsLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
       expect(settingsLocaleOptionDetails().some((option) => option.locale === 'pseudo')).toBe(false);
@@ -388,7 +390,7 @@ describe('settings language selector', () => {
       await settings.renderSettingsModal();
 
       expect(i18n.getLocale()).toBe('pseudo');
-      expect(settingsLocaleOptionDetails().map((option) => option.locale)).toEqual(['en', 'de', 'fr', 'pt', 'ar', 'ru', 'ja', 'tr', 'ko', 'zh', 'id']);
+      expect(settingsLocaleOptionDetails().map((option) => option.locale)).toEqual(['en', 'de', 'fr', 'pt', 'ar', 'ru', 'ja', 'tr', 'ko', 'zh', 'id', 'vi']);
       expect(settingsLocaleOptionDetails().some((option) => option.locale === 'pseudo')).toBe(false);
     } finally {
       cleanup();

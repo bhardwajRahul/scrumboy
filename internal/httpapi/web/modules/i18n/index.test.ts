@@ -161,6 +161,8 @@ describe("i18n locale detection", () => {
     expect(i18n.normalizeLocale("zh-TW")).toBe(null);
     expect(i18n.normalizeLocale("id")).toBe("id");
     expect(i18n.normalizeLocale("id-ID")).toBe("id");
+    expect(i18n.normalizeLocale("vi")).toBe("vi");
+    expect(i18n.normalizeLocale("vi-VN")).toBe("vi");
     expect(i18n.isRtlLocale("ar")).toBe(true);
     expect(i18n.documentDirection("ar")).toBe("rtl");
     expect(i18n.documentDirection("en")).toBe("ltr");
