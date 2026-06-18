@@ -145,7 +145,7 @@ func (s *Server) handleWallPatchNote(w http.ResponseWriter, r *http.Request, pro
 	}
 	noteID = strings.TrimSpace(noteID)
 	if noteID == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "noteId required", map[string]any{"field": "noteId"})
+		writeValidationError(w, "noteId required", "note_id_required", map[string]any{"field": "noteId"})
 		return
 	}
 	var in wallNotePatchJSON
@@ -171,7 +171,7 @@ func (s *Server) handleWallDeleteNote(w http.ResponseWriter, r *http.Request, pr
 	}
 	noteID = strings.TrimSpace(noteID)
 	if noteID == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "noteId required", map[string]any{"field": "noteId"})
+		writeValidationError(w, "noteId required", "note_id_required", map[string]any{"field": "noteId"})
 		return
 	}
 	if _, err := s.store.DeleteNote(s.requestContext(r), projectID, noteID); err != nil {
@@ -232,7 +232,7 @@ func (s *Server) handleWallTransient(w http.ResponseWriter, r *http.Request, pro
 		return
 	}
 	if strings.TrimSpace(in.NoteID) == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "noteId required", map[string]any{"field": "noteId"})
+		writeValidationError(w, "noteId required", "note_id_required", map[string]any{"field": "noteId"})
 		return
 	}
 	// requireWallWriter already verified the caller has contributor+; re-read
@@ -272,7 +272,7 @@ func (s *Server) handleWallCreateEdge(w http.ResponseWriter, r *http.Request, pr
 	from := strings.TrimSpace(in.From)
 	to := strings.TrimSpace(in.To)
 	if from == "" || to == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "from and to required", nil)
+		writeValidationError(w, "from and to required", "wall_edge_endpoints_required", nil)
 		return
 	}
 	edge, wall, err := s.store.CreateEdge(s.requestContext(r), projectID, from, to)
@@ -300,7 +300,7 @@ func (s *Server) handleWallDeleteEdge(w http.ResponseWriter, r *http.Request, pr
 	}
 	edgeID = strings.TrimSpace(edgeID)
 	if edgeID == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "edgeId required", map[string]any{"field": "edgeId"})
+		writeValidationError(w, "edgeId required", "edge_id_required", map[string]any{"field": "edgeId"})
 		return
 	}
 	if _, err := s.store.DeleteEdge(s.requestContext(r), projectID, edgeID); err != nil {

@@ -7,6 +7,7 @@ import {
   MERMAID_SEMANTIC_EDGES_URL,
   resetMermaidSemanticEdgeConfigCacheForTests,
 } from "./mermaid-semantic-edges.js";
+import deCatalog from "./i18n/locales/de.json";
 
 function installMarkdownVendors(): void {
   (window as any).markdownit = (preset?: string, options?: Record<string, unknown>) =>
@@ -50,7 +51,9 @@ describe("markdown preview rendering", () => {
     delete (window as any).mermaid;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    const i18n = await import("./i18n/index.js");
+    i18n.resetI18nForTests();
     vi.unstubAllGlobals();
   });
 
@@ -356,6 +359,62 @@ describe("markdown preview rendering", () => {
     expect(container.textContent).toContain("Could not render Mermaid diagram. Showing source instead.");
     expect(container.textContent).toContain("graph TD");
     expect(container.textContent).toContain("broken");
+  });
+
+  it("localizes mermaid loading, warning, and fallback messages after i18n initialization", async () => {
+    const i18n = await import("./i18n/index.js");
+    await i18n.initI18n({
+      locale: "de",
+      loadLocale: vi.fn(async () => deCatalog),
+    });
+    const pending: Array<() => void> = [];
+    installMermaidStub(() => new Promise<void>((resolve) => pending.push(resolve)));
+    const { renderMarkdownPreviewInto } = await import("./markdown-preview.js");
+    const loadingContainer = document.createElement("div");
+    document.body.appendChild(loadingContainer);
+
+    const loadingRender = renderMarkdownPreviewInto(
+      loadingContainer,
+      ["```mermaid", "graph TD", "A-->B", "```"].join("\n"),
+      { mermaidEnabled: true },
+    );
+    for (let i = 0; i < 10 && pending.length === 0; i += 1) {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    expect(loadingContainer.querySelector(".todo-mermaid-status")?.textContent).toBe(
+      deCatalog["todo.markdownPreview.rendering"],
+    );
+    expect(pending).toHaveLength(1);
+    pending[0]?.();
+    await loadingRender;
+
+    const warningContainer = document.createElement("div");
+    document.body.appendChild(warningContainer);
+    await renderMarkdownPreviewInto(
+      warningContainer,
+      [
+        "```mermaid",
+        '%%{init: { "theme": "dark" }}%%',
+        "```",
+      ].join("\n"),
+      { mermaidEnabled: true },
+    );
+    expect(warningContainer.textContent).toContain(deCatalog["todo.markdownPreview.directivesOnly"]);
+
+    installMermaidStub(() => {
+      throw new Error("bad diagram");
+    });
+    const errorContainer = document.createElement("div");
+    document.body.appendChild(errorContainer);
+    await renderMarkdownPreviewInto(
+      errorContainer,
+      ["```mermaid", "graph TD", "broken", "```"].join("\n"),
+      { mermaidEnabled: true },
+    );
+
+    expect(errorContainer.textContent).toContain(deCatalog["todo.markdownPreview.renderFailed"]);
   });
 
   it("shows a local warning for oversized mermaid diagrams without loading the runtime", async () => {

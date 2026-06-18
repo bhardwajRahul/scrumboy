@@ -1,7 +1,8 @@
-export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "de", "fr", "pt"] as const;
+export const PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
+export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
 export type MessageValues = Record<string, string | number | boolean | null | undefined>;
 
@@ -12,7 +13,26 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   de: "Deutsch",
   fr: "Français",
   pt: "Português (Brasil)",
+  ar: "العربية",
+  ru: "Русский",
+  ja: "日本語",
+  tr: "Türkçe",
+  ko: "한국어",
+  zh: "简体中文",
   pseudo: "Pseudo",
+};
+
+export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
+  en: "/assets/flags/us.svg",
+  de: "/assets/flags/de.svg",
+  fr: "/assets/flags/fr.svg",
+  pt: "/assets/flags/br.svg",
+  ar: "/assets/flags/sa.svg",
+  ru: "/assets/flags/ru.svg",
+  ja: "/assets/flags/jp.svg",
+  tr: "/assets/flags/tr.svg",
+  ko: "/assets/flags/kr.svg",
+  zh: "/assets/flags/cn.svg",
 };
 
 const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
@@ -191,6 +211,100 @@ const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
   "errors.SERVICE_UNAVAILABLE": "Service unavailable.",
   "errors.UNAUTHORIZED": "Unauthorized",
   "errors.VALIDATION_ERROR": "Please check the request and try again.",
+  "errors.VALIDATION_ERROR.active_sprint_only_end_at": "Only the end date can be changed for an active sprint.",
+  "errors.VALIDATION_ERROR.assignee_not_found": "Assignee not found.",
+  "errors.VALIDATION_ERROR.assignee_not_project_member": "Assignee is not a project member.",
+  "errors.VALIDATION_ERROR.assignment_not_allowed_anonymous": "Assignment is not available on anonymous boards.",
+  "errors.VALIDATION_ERROR.body_too_large": "The todo body is too large.",
+  "errors.VALIDATION_ERROR.cannot_delete_done_workflow_column": "The done workflow column cannot be deleted.",
+  "errors.VALIDATION_ERROR.cannot_delete_last_owner": "The last owner cannot be deleted.",
+  "errors.VALIDATION_ERROR.cannot_delete_self": "You cannot delete your own account.",
+  "errors.VALIDATION_ERROR.cannot_demote_last_owner": "The last owner cannot be demoted.",
+  "errors.VALIDATION_ERROR.cannot_link_todo_to_itself": "A todo cannot be linked to itself.",
+  "errors.VALIDATION_ERROR.cannot_remove_last_maintainer": "The last maintainer cannot be removed.",
+  "errors.VALIDATION_ERROR.closed_sprint_dates_locked": "Dates cannot be changed for a closed sprint.",
+  "errors.VALIDATION_ERROR.color_required": "Please choose a color.",
+  "errors.VALIDATION_ERROR.default_sprint_weeks_required": "Please choose a default sprint length.",
+  "errors.VALIDATION_ERROR.duplicate_workflow_column_key": "Workflow column keys must be unique.",
+  "errors.VALIDATION_ERROR.edge_id_required": "Wall edge ID is required.",
+  "errors.VALIDATION_ERROR.endpoint_required": "Endpoint is required.",
+  "errors.VALIDATION_ERROR.file_must_be_image": "Please choose an image file.",
+  "errors.VALIDATION_ERROR.image_too_large": "The image is too large.",
+  "errors.VALIDATION_ERROR.image_wallpaper_requires_upload": "Image wallpaper must be uploaded first.",
+  "errors.VALIDATION_ERROR.import_full_scope_anonymous_forbidden": "Full-scope imports are not allowed in anonymous mode.",
+  "errors.VALIDATION_ERROR.invalid_color": "Please enter a valid color.",
+  "errors.VALIDATION_ERROR.invalid_column_key": "Please choose a valid workflow column.",
+  "errors.VALIDATION_ERROR.invalid_default_sprint_weeks": "Default sprint length must be 1 or 2 weeks.",
+  "errors.VALIDATION_ERROR.invalid_email": "Please enter a valid email address.",
+  "errors.VALIDATION_ERROR.invalid_estimation_points": "Please choose valid estimation points.",
+  "errors.VALIDATION_ERROR.invalid_image": "Please choose a valid image.",
+  "errors.VALIDATION_ERROR.invalid_import_mode": "Please choose a valid import mode.",
+  "errors.VALIDATION_ERROR.invalid_json": "Please provide valid JSON.",
+  "errors.VALIDATION_ERROR.invalid_link": "Please choose a valid todo link.",
+  "errors.VALIDATION_ERROR.invalid_link_type": "Please choose a valid link type.",
+  "errors.VALIDATION_ERROR.invalid_name": "Please enter a valid name.",
+  "errors.VALIDATION_ERROR.invalid_project_id": "Please choose a valid project.",
+  "errors.VALIDATION_ERROR.invalid_project_name": "Please enter a valid project name.",
+  "errors.VALIDATION_ERROR.invalid_request_body": "Please provide a valid request body.",
+  "errors.VALIDATION_ERROR.invalid_role": "Please choose a valid role.",
+  "errors.VALIDATION_ERROR.invalid_slug": "Please enter a valid slug.",
+  "errors.VALIDATION_ERROR.invalid_sprint_id": "Please choose a valid sprint.",
+  "errors.VALIDATION_ERROR.invalid_sprint_name": "Please enter a valid sprint name.",
+  "errors.VALIDATION_ERROR.invalid_system_role": "Please choose a valid system role.",
+  "errors.VALIDATION_ERROR.invalid_tag": "Please enter a valid tag.",
+  "errors.VALIDATION_ERROR.invalid_tag_color": "Please choose a valid tag color.",
+  "errors.VALIDATION_ERROR.invalid_tag_id": "Please choose a valid tag.",
+  "errors.VALIDATION_ERROR.invalid_tag_name": "Please enter a valid tag name.",
+  "errors.VALIDATION_ERROR.invalid_target_local_id": "Please choose a valid target todo.",
+  "errors.VALIDATION_ERROR.invalid_title": "Please enter a valid title.",
+  "errors.VALIDATION_ERROR.invalid_todo_id": "Please choose a valid todo.",
+  "errors.VALIDATION_ERROR.invalid_todo_local_id": "Please choose a valid todo.",
+  "errors.VALIDATION_ERROR.invalid_token_id": "Please choose a valid token.",
+  "errors.VALIDATION_ERROR.invalid_trello_json": "Please provide valid Trello JSON.",
+  "errors.VALIDATION_ERROR.invalid_user_id": "Please choose a valid user.",
+  "errors.VALIDATION_ERROR.invalid_webhook_id": "Please choose a valid webhook.",
+  "errors.VALIDATION_ERROR.invalid_workflow_column_color": "Please choose a valid workflow column color.",
+  "errors.VALIDATION_ERROR.invalid_workflow_column_name": "Please enter a valid workflow column name.",
+  "errors.VALIDATION_ERROR.invalid_workflow_key": "Please choose a valid workflow column.",
+  "errors.VALIDATION_ERROR.missing_assignee_user_id": "Please choose an assignee.",
+  "errors.VALIDATION_ERROR.missing_body": "Please provide a request body.",
+  "errors.VALIDATION_ERROR.missing_data": "Please provide import data.",
+  "errors.VALIDATION_ERROR.missing_to_column_key": "Please choose a destination column.",
+  "errors.VALIDATION_ERROR.name_based_tag_route_not_allowed": "Please use the tag ID route for this project.",
+  "errors.VALIDATION_ERROR.name_required": "Please enter a name.",
+  "errors.VALIDATION_ERROR.note_id_required": "Wall note ID is required.",
+  "errors.VALIDATION_ERROR.password_required": "Please enter your password.",
+  "errors.VALIDATION_ERROR.processed_image_too_large": "The processed image is too large.",
+  "errors.VALIDATION_ERROR.project_missing_name": "The imported project is missing a name.",
+  "errors.VALIDATION_ERROR.project_missing_slug": "The imported project is missing a slug.",
+  "errors.VALIDATION_ERROR.project_workflow_done_column_required": "Workflow must have exactly one done column.",
+  "errors.VALIDATION_ERROR.project_workflow_min_columns": "Workflow must have at least 2 columns.",
+  "errors.VALIDATION_ERROR.push_subscription_keys_required": "Push subscription keys are required.",
+  "errors.VALIDATION_ERROR.replace_all_anonymous_forbidden": "Replace All is not allowed in anonymous mode.",
+  "errors.VALIDATION_ERROR.replace_confirmation_required": "Type REPLACE to confirm replace mode.",
+  "errors.VALIDATION_ERROR.self_edges_not_allowed": "A wall item cannot link to itself.",
+  "errors.VALIDATION_ERROR.setup_token_and_code_required": "Setup token and code are required.",
+  "errors.VALIDATION_ERROR.sprint_activate_requires_planned": "Only planned sprints can be activated.",
+  "errors.VALIDATION_ERROR.sprint_end_before_start": "Sprint end date must be on or after the start date.",
+  "errors.VALIDATION_ERROR.sprint_end_in_past": "Sprint end date must be in the future.",
+  "errors.VALIDATION_ERROR.sprint_name_exists": "A sprint with this name already exists.",
+  "errors.VALIDATION_ERROR.sprint_not_found": "Sprint not found.",
+  "errors.VALIDATION_ERROR.sprint_not_in_project": "Sprint does not belong to this project.",
+  "errors.VALIDATION_ERROR.target_board_not_anonymous": "The target board is not an anonymous board.",
+  "errors.VALIDATION_ERROR.target_local_id_required": "Please choose a target todo.",
+  "errors.VALIDATION_ERROR.temp_token_and_code_required": "Temporary token and code are required.",
+  "errors.VALIDATION_ERROR.todo_missing_local_id": "The imported todo is missing a local ID.",
+  "errors.VALIDATION_ERROR.todo_missing_title": "The imported todo is missing a title.",
+  "errors.VALIDATION_ERROR.too_many_tags": "There are too many tags.",
+  "errors.VALIDATION_ERROR.trello_import_validation_failed": "Trello import validation failed.",
+  "errors.VALIDATION_ERROR.unsupported_export_version": "This export version is not supported.",
+  "errors.VALIDATION_ERROR.use_null_to_clear_avatar": "Use null to clear the avatar.",
+  "errors.VALIDATION_ERROR.wall_edge_endpoints_required": "Wall edge endpoints are required.",
+  "errors.VALIDATION_ERROR.wall_edge_limit_reached": "Wall edge limit reached.",
+  "errors.VALIDATION_ERROR.wall_note_limit_reached": "Wall note limit reached.",
+  "errors.VALIDATION_ERROR.wall_note_too_long": "Wall note text is too long.",
+  "errors.VALIDATION_ERROR.workflow_column_limit_reached": "Workflow column limit reached.",
+  "errors.VALIDATION_ERROR.workflow_column_name_required": "Please enter a workflow column name.",
   "errors.generic": "Something went wrong.",
   "errors.httpStatus": "HTTP {status}",
   "nav.temporaryBoards.long": "Temporary Boards",
@@ -398,16 +512,43 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "de" || normalized.startsWith("de-")) return "de";
   if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
   if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
+  if (normalized === "ar" || normalized.startsWith("ar-")) return "ar";
+  if (normalized === "ru" || normalized.startsWith("ru-")) return "ru";
+  if (normalized === "ja" || normalized.startsWith("ja-")) return "ja";
+  if (normalized === "tr" || normalized.startsWith("tr-")) return "tr";
+  if (normalized === "ko" || normalized.startsWith("ko-")) return "ko";
+  if (
+    normalized === "zh"
+    || normalized === "zh-cn"
+    || normalized === "zh-hans"
+    || normalized === "zh-sg"
+    || normalized.startsWith("zh-cn-")
+    || normalized.startsWith("zh-hans-")
+  ) {
+    return "zh";
+  }
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
+}
+
+export function isRtlLocale(locale: LocaleId): boolean {
+  return locale === "ar";
+}
+
+export function documentDirection(locale: LocaleId): "ltr" | "rtl" {
+  return isRtlLocale(locale) ? "rtl" : "ltr";
 }
 
 export function isPublicLocale(locale: string): locale is PublicLocaleId {
   return (PUBLIC_LOCALES as readonly string[]).includes(locale);
 }
 
-export function publicLocaleOptions(): Array<{ id: PublicLocaleId; label: string }> {
-  return PUBLIC_LOCALES.map((id) => ({ id, label: LOCALE_LABELS[id] }));
+export function publicLocaleOptions(): PublicLocaleOption[] {
+  return PUBLIC_LOCALES.map((id) => ({
+    id,
+    label: LOCALE_LABELS[id],
+    flagSrc: PUBLIC_LOCALE_FLAG_PATHS[id],
+  }));
 }
 
 export function detectLocale(options: DetectLocaleOptions = {}): LocaleId {
@@ -474,6 +615,12 @@ function updateDocumentLang(locale: LocaleId, element = getDefaultDocumentElemen
   if (!element) return;
   element.lang = locale === "pseudo" ? "en" : intlLocale(locale);
   element.setAttribute("data-locale", locale);
+  const dir = documentDirection(locale);
+  if (dir === "rtl") {
+    element.setAttribute("dir", "rtl");
+  } else {
+    element.removeAttribute("dir");
+  }
 }
 
 function persistLocale(locale: LocaleId, storage = getDefaultStorage()): void {
@@ -640,6 +787,7 @@ export function hasI18nKey(key: string): boolean {
 function intlLocale(locale = activeLocale): string {
   if (locale === "pseudo") return "en";
   if (locale === "pt") return "pt-BR";
+  if (locale === "zh") return "zh-CN";
   return locale;
 }
 
@@ -732,6 +880,34 @@ export function apiErrorMessage(err: unknown, options: ApiErrorMessageOptions = 
   }
 
   return t("errors.generic");
+}
+
+export function apiErrorMessageOrRaw(
+  err: unknown,
+  options: ApiErrorMessageOptions = {},
+): string {
+  const body = extractErrorBody(err);
+  const error = body?.error;
+  const details = error?.details || undefined;
+  const reason = typeof details?.reason === "string" ? details.reason : "";
+  const code = typeof error?.code === "string" ? error.code : "";
+  const reasonKey = code && reason ? `errors.${code}.${reason}` : "";
+
+  if (reasonKey && hasI18nKey(reasonKey)) {
+    return apiErrorMessage(err, options);
+  }
+
+  const rawApiMessage = nonEmptyString(error?.message);
+  if (rawApiMessage) {
+    return rawApiMessage;
+  }
+
+  const rawMessage = nonEmptyString((err as { message?: unknown })?.message);
+  if (rawMessage) {
+    return rawMessage;
+  }
+
+  return t(options.fallbackKey || "errors.generic");
 }
 
 export function resetI18nForTests(): void {

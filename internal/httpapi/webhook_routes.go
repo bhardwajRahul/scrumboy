@@ -73,7 +73,7 @@ func (s *Server) handleWebhooks(w http.ResponseWriter, r *http.Request, rest []s
 	if len(rest) == 1 && r.Method == http.MethodDelete {
 		whID, ok := parseInt64(rest[0])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid webhook id", nil)
+			writeValidationError(w, "invalid webhook id", "invalid_webhook_id", nil)
 			return
 		}
 		if err := s.store.DeleteWebhook(ctx, userID, whID); err != nil {

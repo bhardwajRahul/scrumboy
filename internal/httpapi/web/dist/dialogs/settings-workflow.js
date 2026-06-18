@@ -4,7 +4,7 @@ import { recordLocalMutation } from '../realtime/guard.js';
 import { getBoard, getSearch, getSettingsActiveTab, getSlug, getSprintIdFromUrl, getTag, } from '../state/selectors.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
-import { t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, t } from '../i18n/index.js';
 const DEFAULT_WORKFLOW_LANE_COLOR = '#64748b';
 let workflowLaneCountsCache = null;
 let workflowLaneCountsFetchGeneration = 0;
@@ -220,7 +220,7 @@ async function addWorkflowLane(name, rerender) {
         showToast(t('settings.workflow.toast.laneAdded'));
     }
     catch (err) {
-        showToast(err.message || t('settings.workflow.toast.addFailed'));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.workflow.toast.addFailed' }));
     }
 }
 async function saveWorkflowDraftChanges(rerender) {
@@ -257,7 +257,7 @@ async function saveWorkflowDraftChanges(rerender) {
         showToast(t('settings.workflow.toast.updated'));
     }
     catch (err) {
-        showToast(err.message || t('settings.workflow.toast.updateFailed'));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.workflow.toast.updateFailed' }));
     }
 }
 async function deleteWorkflowLane(key, rerender) {
@@ -290,7 +290,7 @@ async function deleteWorkflowLane(key, rerender) {
         showToast(t('settings.workflow.toast.laneDeleted'));
     }
     catch (err) {
-        showToast(err.message || t('settings.workflow.toast.deleteFailed'));
+        showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.workflow.toast.deleteFailed' }));
     }
 }
 export function syncWorkflowLocaleState(root) {

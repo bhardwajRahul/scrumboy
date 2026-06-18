@@ -58,15 +58,15 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, rest []string)
 			} else {
 				var imgStr string
 				if err := json.Unmarshal(*in.Image, &imgStr); err != nil {
-					writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid image", map[string]any{"field": "image"})
+					writeValidationError(w, "invalid image", "invalid_image", map[string]any{"field": "image"})
 					return
 				}
 				if imgStr == "" {
-					writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "use null to clear avatar", map[string]any{"field": "image"})
+					writeValidationError(w, "use null to clear avatar", "use_null_to_clear_avatar", map[string]any{"field": "image"})
 					return
 				}
 				if len(imgStr) > 2_000_000 {
-					writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "image too large", map[string]any{"field": "image"})
+					writeValidationError(w, "image too large", "image_too_large", map[string]any{"field": "image"})
 					return
 				}
 				if err := s.store.UpdateUserImage(ctx, userID, &imgStr); err != nil {
@@ -137,7 +137,7 @@ func (s *Server) handleMeTokens(w http.ResponseWriter, r *http.Request, ctx cont
 		}
 		tokenID, err := strconv.ParseInt(rest[0], 10, 64)
 		if err != nil || tokenID <= 0 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid token id", map[string]any{"field": "id"})
+			writeValidationError(w, "invalid token id", "invalid_token_id", map[string]any{"field": "id"})
 			return
 		}
 		if err := s.store.RevokeUserAPIToken(ctx, userID, tokenID); err != nil {
@@ -221,7 +221,7 @@ func (s *Server) handleUserPreferences(w http.ResponseWriter, r *http.Request, u
 				return
 			}
 			if p.Mode == "image" {
-				writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "image wallpaper must be uploaded via POST /api/user/wallpaper/image", map[string]any{"field": "value"})
+				writeValidationError(w, "image wallpaper must be uploaded via POST /api/user/wallpaper/image", "image_wallpaper_requires_upload", map[string]any{"field": "value"})
 				return
 			}
 			if err := s.store.SetUserPreference(ctx, userID, in.Key, in.Value); err != nil {

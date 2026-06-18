@@ -2,6 +2,35 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.3] - 2026-06-17
+
+### Fixed
+
+- **Pre-bootstrap encryption key startup** - Invalid `SCRUMBOY_ENCRYPTION_KEY` values no longer crash startup before bootstrap when no encrypted auth/security data exists; encrypted state still requires the original valid key.
+- **Windows launcher key handoff** - Hardened local launcher key resolution so invalid existing candidates reach the Go startup checks instead of failing before database-aware validation.
+
+## [3.18.2] - 2026-06-17
+
+### Added
+
+- **Simplified Chinese UI** - Full frontend catalog (`zh`) with China flag in the public locale picker.
+- **Korean UI** - Full frontend catalog (`ko`) with South Korea flag in the public locale picker.
+- **Turkish UI** - Full frontend catalog (`tr`) with Turkey flag in the public locale picker.
+- **Japanese UI** - Full frontend catalog (`ja`) with Japan flag in the public locale picker.
+- **Russian UI** - Full frontend catalog (`ru`) with Russia flag in the public locale picker.
+- **Arabic UI (Modern Standard Arabic)** - Full frontend catalog (`ar`) with RTL document direction and minimal shell layout fixes for locale picker, auth, and dialogs.
+- **Pre-auth language selector** - Public locale picker on the auth shell (sign-in, bootstrap, 2FA, password reset) using the same shared helper as Settings.
+- **SVG flag icons for language selectors** - Auth and Settings language pickers now show vendored 3x2 SVG flags (from `country-flag-icons`, MIT) instead of emoji that degrade to regional letter codes on Windows/Chromium.
+
+### Improvements
+
+- **Custom locale picker** - Replaced native `<select>` with a small accessible listbox (keyboard navigation, click-outside close, flag + autonym labels).
+- **Browser translation opt-out** - App shell marks the document as non-translatable so Chrome/Google Translate does not double-translate Scrumboy’s own i18n UI.
+
+### Fixed
+
+- **Wallpaper import errors** - Preserve raw backend decode error text on wallpaper upload failures instead of replacing it with a generic localized fallback.
+
 ## [3.18.1] - 2026-06-12
 
 ### Fixed

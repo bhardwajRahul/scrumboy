@@ -1,4 +1,5 @@
 import { recordLocalMutation } from '../realtime/guard.js';
+import { voiceText } from './i18n.js';
 import { callMcpTool } from './mcp-client.js';
 export function buildMcpCall(ir) {
     switch (ir.intent) {
@@ -43,7 +44,7 @@ export function buildMcpCall(ir) {
 export async function executeCommandIR(ir, options = {}) {
     if (ir.intent === "open_todo") {
         if (!options.openTodo) {
-            throw new Error("Open todo action is unavailable.");
+            throw new Error(voiceText("voice.errors.openTodoUnavailable", "Open todo action is unavailable."));
         }
         await options.openTodo(ir.entities.localId);
         return { ok: true };

@@ -1,4 +1,5 @@
 @echo off
+setlocal DisableDelayedExpansion
 for %%I in ("%~dp0.") do set "REPO_ROOT=%%~fI"
 cd /d "%REPO_ROOT%"
 
@@ -60,7 +61,7 @@ echo Press Ctrl+C to stop the server.
 echo.
 
 REM ---- Configuration ----
-set SCRUMBOY_MODE=full
+set "SCRUMBOY_MODE=full"
 
 REM Resolve SCRUMBOY_ENCRYPTION_KEY with precedence:
 REM process env var -> data/scrumboy.env -> legacy root scrumboy.env
@@ -71,14 +72,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
-for /f "usebackq tokens=1,* delims==" %%A in ("%SCRUMBOY_KEY_TMP%") do (
-  if /I "%%A"=="SCRUMBOY_ENCRYPTION_KEY" set "SCRUMBOY_ENCRYPTION_KEY=%%B"
-)
-del "%SCRUMBOY_KEY_TMP%" >nul 2>&1
-
-if not defined SCRUMBOY_ENCRYPTION_KEY (
+if not exist "%SCRUMBOY_KEY_TMP%" (
   echo ERROR: failed to resolve SCRUMBOY_ENCRYPTION_KEY.
   exit /b 1
 )
+set "SCRUMBOY_ENCRYPTION_KEY="
+<"%SCRUMBOY_KEY_TMP%" set /p "SCRUMBOY_ENCRYPTION_KEY="
+del "%SCRUMBOY_KEY_TMP%" >nul 2>&1
 
 go run ./cmd/scrumboy

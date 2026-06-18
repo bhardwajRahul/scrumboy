@@ -9,7 +9,7 @@ import {
   sanitizeHexColor,
 } from '../utils.js';
 import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
-import { t } from '../i18n/index.js';
+import { hasI18nKey, t } from '../i18n/index.js';
 
 export type BoardColumn = { key: string; title: string; color?: string; isDone: boolean };
 export type ChipType = "tag" | "sprint";
@@ -63,7 +63,8 @@ type BuildBoardColumnsHtmlArgs = {
 };
 
 export function renderVoiceCommandTriggerHtml(): string {
-  return `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="VoiceFlow" title="VoiceFlow"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>`;
+  const title = hasI18nKey("voice.title") ? t("voice.title") : "VoiceFlow";
+  return `<button class="btn btn--ghost voice-command-trigger" id="voiceCommandBtn" type="button" aria-label="${escapeHTML(title)}" title="${escapeHTML(title)}"><img src="/mic.svg" class="voice-command-trigger__icon" alt="" aria-hidden="true" decoding="async" width="20" height="20" /></button>`;
 }
 
 export function getBoardColumns(board: Board): BoardColumn[] {

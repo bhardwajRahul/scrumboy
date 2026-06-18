@@ -39,7 +39,7 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request, rest []s
 
 	projectID, ok := parseInt64(rest[0])
 	if !ok {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid project id", map[string]any{"field": "projectId"})
+		writeValidationError(w, "invalid project id", "invalid_project_id", map[string]any{"field": "projectId"})
 		return
 	}
 
@@ -230,7 +230,7 @@ func (s *Server) handleProjectsProjectReads(w http.ResponseWriter, r *http.Reque
 		}
 		sprintFilter, err := s.parseSprintFilterFromQuery(r, projectID)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{"field": "sprintId"})
+			writeValidationError(w, err.Error(), "invalid_sprint_id", map[string]any{"field": "sprintId"})
 			return true
 		}
 		project, tags, workflow, cols, err := s.store.GetBoard(s.requestContext(r), &pc, tag, search, sprintFilter)
@@ -293,7 +293,7 @@ func (s *Server) handleProjectsProjectMembers(w http.ResponseWriter, r *http.Req
 
 		role, ok := store.ParseProjectRole(in.Role)
 		if !ok || !store.IsValidProjectRole(role) {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid role", map[string]any{"field": "role"})
+			writeValidationError(w, "invalid role", "invalid_role", map[string]any{"field": "role"})
 			return true
 		}
 
@@ -321,7 +321,7 @@ func (s *Server) handleProjectsProjectMembers(w http.ResponseWriter, r *http.Req
 	if len(rest) == 3 && rest[1] == "members" && r.Method == http.MethodDelete {
 		targetUserID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid user id", map[string]any{"field": "userId"})
+			writeValidationError(w, "invalid user id", "invalid_user_id", map[string]any{"field": "userId"})
 			return true
 		}
 
@@ -349,7 +349,7 @@ func (s *Server) handleProjectsProjectMembers(w http.ResponseWriter, r *http.Req
 	if len(rest) == 3 && rest[1] == "members" && r.Method == http.MethodPatch {
 		targetUserID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid user id", map[string]any{"field": "userId"})
+			writeValidationError(w, "invalid user id", "invalid_user_id", map[string]any{"field": "userId"})
 			return true
 		}
 		var in struct {
@@ -360,7 +360,7 @@ func (s *Server) handleProjectsProjectMembers(w http.ResponseWriter, r *http.Req
 		}
 		role, ok := store.ParseMemberRole(in.Role)
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid role", map[string]any{"field": "role"})
+			writeValidationError(w, "invalid role", "invalid_role", map[string]any{"field": "role"})
 			return true
 		}
 		requesterID, ok := store.UserIDFromContext(s.requestContext(r))
@@ -377,7 +377,7 @@ func (s *Server) handleProjectsProjectMembers(w http.ResponseWriter, r *http.Req
 			case errors.Is(err, store.ErrUnauthorized):
 				writeError(w, http.StatusForbidden, "FORBIDDEN", "forbidden", nil)
 			case errors.Is(err, store.ErrValidation):
-				writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{"field": "role"})
+				writeValidationError(w, err.Error(), validationReasonFromStoreError(err), map[string]any{"field": "role"})
 			default:
 				writeStoreErr(w, err, true)
 			}
@@ -450,7 +450,7 @@ func (s *Server) handleProjectsProjectTags(w http.ResponseWriter, r *http.Reques
 		ctx := s.requestContext(r)
 		var tagID int64
 		if _, err := fmt.Sscanf(rest[3], "%d", &tagID); err != nil || tagID <= 0 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid tagId", map[string]any{"field": "tagId"})
+			writeValidationError(w, "invalid tagId", "invalid_tag_id", map[string]any{"field": "tagId"})
 			return true
 		}
 		var in struct {
@@ -473,7 +473,7 @@ func (s *Server) handleProjectsProjectTags(w http.ResponseWriter, r *http.Reques
 	}
 
 	if len(rest) == 4 && rest[1] == "tags" && rest[3] == "color" && r.Method == http.MethodPatch {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name-based color update not allowed for durable projects; use /tags/id/{tagId}/color", nil)
+		writeValidationError(w, "name-based color update not allowed for durable projects; use /tags/id/{tagId}/color", "name_based_tag_route_not_allowed", nil)
 		return true
 	}
 
@@ -486,7 +486,7 @@ func (s *Server) handleProjectsProjectTags(w http.ResponseWriter, r *http.Reques
 		}
 		var tagID int64
 		if _, err := fmt.Sscanf(rest[3], "%d", &tagID); err != nil || tagID <= 0 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid tagId", map[string]any{"field": "tagId"})
+			writeValidationError(w, "invalid tagId", "invalid_tag_id", map[string]any{"field": "tagId"})
 			return true
 		}
 		if err := s.store.DeleteTag(ctx, userID, tagID, false); err != nil {
@@ -499,7 +499,7 @@ func (s *Server) handleProjectsProjectTags(w http.ResponseWriter, r *http.Reques
 	}
 
 	if len(rest) == 3 && rest[1] == "tags" && r.Method == http.MethodDelete {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name-based delete not allowed for durable projects; use /tags/id/{tagId}", nil)
+		writeValidationError(w, "name-based delete not allowed for durable projects; use /tags/id/{tagId}", "name_based_tag_route_not_allowed", nil)
 		return true
 	}
 

@@ -1,7 +1,8 @@
 import { normalizeLookup } from './normalize.js';
-import { commandFailure, isCommandFailure, validateCommandIR } from './schema.js';
+import { cloneCommandFailure, localizedCommandFailure, isCommandFailure, validateCommandIR } from './schema.js';
 import { BUILTIN_STATUS_ALIASES } from './vocabulary.js';
 import { resolveTodoTarget } from './target-resolver.js';
+import { voiceText } from './i18n.js';
 function boardLanes(board) {
     if (board.columnOrder && board.columnOrder.length > 0) {
         return board.columnOrder.map((lane) => ({
@@ -48,11 +49,11 @@ function resolveStatus(rawStatus, board) {
     const alias = normalizeLookup(rawStatus);
     const matches = buildLaneAliasMap(board).get(alias);
     if (!matches || matches.size === 0) {
-        return commandFailure("unknown_status", "Status was not found on this board.");
+        return localizedCommandFailure("unknown_status", "voice.errors.statusNotFound", "Status was not found on this board.");
     }
     const lanes = Array.from(matches);
     if (lanes.length > 1) {
-        return commandFailure("ambiguous_status", "Status matches more than one lane.");
+        return localizedCommandFailure("ambiguous_status", "voice.errors.statusAmbiguous", "Status matches more than one lane.");
     }
     return { ok: true, value: lanes[0] };
 }
@@ -84,15 +85,15 @@ async function resolveMember(rawUser, context) {
             }
         }
         catch {
-            return commandFailure("unknown_user", "Assignee was not found in this project.");
+            return localizedCommandFailure("unknown_user", "voice.errors.assigneeNotFound", "Assignee was not found in this project.");
         }
     }
     if (matches.length === 0) {
-        return commandFailure("unknown_user", "Assignee was not found in this project.");
+        return localizedCommandFailure("unknown_user", "voice.errors.assigneeNotFound", "Assignee was not found in this project.");
     }
     const uniqueById = new Map(matches.map((member) => [member.userId, member]));
     if (uniqueById.size > 1) {
-        return commandFailure("ambiguous_user", "Assignee matches more than one project member.");
+        return localizedCommandFailure("ambiguous_user", "voice.errors.assigneeAmbiguous", "Assignee matches more than one project member.");
     }
     return { ok: true, value: Array.from(uniqueById.values())[0] };
 }
@@ -104,7 +105,7 @@ function validateResolvedIR(ir, context) {
     });
 }
 function withDraft(failure, draft) {
-    return { ...failure, draft };
+    return cloneCommandFailure(failure, { draft });
 }
 async function resolveDraftTarget(draft, context, options) {
     const resolved = await resolveTodoTarget(draft.target, {
@@ -116,6 +117,58 @@ async function resolveDraftTarget(draft, context, options) {
         return resolved.code === "ambiguous_story" ? withDraft(resolved, draft) : resolved;
     }
     return resolved;
+}
+export function formatResolvedCommand(command) {
+    switch (command.ir.intent) {
+        case "todos.create": {
+            const title = command.ir.entities.title;
+            return {
+                summary: voiceText("voice.summary.create", "Create todo \"{title}\"", { title }),
+                confirmLabel: voiceText("voice.action.create", "Create"),
+            };
+        }
+        case "open_todo": {
+            const localId = command.ir.entities.localId;
+            const title = command.storyTitle ?? "";
+            return {
+                summary: voiceText("voice.summary.open", "Open todo #{localId}: {title}", { localId, title }),
+                confirmLabel: voiceText("voice.action.open", "Open"),
+            };
+        }
+        case "todos.delete": {
+            const localId = command.ir.entities.localId;
+            const title = command.storyTitle ?? "";
+            return {
+                summary: voiceText("voice.summary.delete", "Delete todo #{localId}: {title}", { localId, title }),
+                confirmLabel: voiceText("voice.action.delete", "Delete"),
+            };
+        }
+        case "todos.move": {
+            const localId = command.ir.entities.localId;
+            const title = command.storyTitle ?? "";
+            const statusName = command.statusName ?? "";
+            return {
+                summary: voiceText("voice.summary.move", "Move todo #{localId}: {title} to {statusName}", { localId, title, statusName }),
+                confirmLabel: voiceText("voice.action.move", "Move"),
+            };
+        }
+        case "todos.assign": {
+            const localId = command.ir.entities.localId;
+            const title = command.storyTitle ?? "";
+            const assigneeName = command.assigneeName ?? "";
+            return {
+                summary: voiceText("voice.summary.assign", "Assign todo #{localId}: {title} to {assigneeName}", { localId, title, assigneeName }),
+                confirmLabel: voiceText("voice.action.assign", "Assign"),
+            };
+        }
+        default: {
+            const exhaustive = command.ir;
+            return exhaustive;
+        }
+    }
+}
+function withResolvedCommandDisplay(command) {
+    return { ...command, ...formatResolvedCommand(command) };
 }
 export async function resolveCommandDraft(draft, context, options = {}) {
     if (draft.intent === "todos.create") {
@@ -130,13 +183,13 @@ export async function resolveCommandDraft(draft, context, options = {}) {
             return validated;
         return {
             ok: true,
-            value: {
+            value: withResolvedCommandDisplay({
                 ir: validated.value,
-                summary: `Create todo "${ir.entities.title}"`,
-                confirmLabel: "Create",
+                summary: "",
+                confirmLabel: "",
                 danger: false,
                 requiresConfirmation: true,
-            },
+            }),
         };
     }
     if (draft.intent === "open_todo") {
@@ -155,14 +208,14 @@ export async function resolveCommandDraft(draft, context, options = {}) {
             return validated;
         return {
             ok: true,
-            value: {
+            value: withResolvedCommandDisplay({
                 ir: validated.value,
-                summary: `Open todo #${todo.localId}: ${todo.title}`,
-                confirmLabel: "Open",
+                summary: "",
+                confirmLabel: "",
                 danger: false,
                 requiresConfirmation: !!target.value.ambiguousId,
                 storyTitle: todo.title,
-            },
+            }),
         };
     }
     if (draft.intent === "todos.delete") {
@@ -181,14 +234,14 @@ export async function resolveCommandDraft(draft, context, options = {}) {
             return validated;
         return {
             ok: true,
-            value: {
+            value: withResolvedCommandDisplay({
                 ir: validated.value,
-                summary: `Delete todo #${todo.localId}: ${todo.title}`,
-                confirmLabel: "Delete",
+                summary: "",
+                confirmLabel: "",
                 danger: true,
                 requiresConfirmation: true,
                 storyTitle: todo.title,
-            },
+            }),
         };
     }
     if (draft.intent === "todos.move") {
@@ -210,15 +263,15 @@ export async function resolveCommandDraft(draft, context, options = {}) {
             return validated;
         return {
             ok: true,
-            value: {
+            value: withResolvedCommandDisplay({
                 ir: validated.value,
-                summary: `Move todo #${todo.localId}: ${todo.title} to ${lane.value.name}`,
-                confirmLabel: "Move",
+                summary: "",
+                confirmLabel: "",
                 danger: false,
                 requiresConfirmation: true,
                 storyTitle: todo.title,
                 statusName: lane.value.name,
-            },
+            }),
         };
     }
     const member = await resolveMember(draft.rawUser, context);
@@ -239,14 +292,14 @@ export async function resolveCommandDraft(draft, context, options = {}) {
         return validated;
     return {
         ok: true,
-        value: {
+        value: withResolvedCommandDisplay({
             ir: validated.value,
-            summary: `Assign todo #${todo.localId}: ${todo.title} to ${member.value.name || member.value.email}`,
-            confirmLabel: "Assign",
+            summary: "",
+            confirmLabel: "",
             danger: false,
             requiresConfirmation: true,
             storyTitle: todo.title,
             assigneeName: member.value.name || member.value.email,
-        },
+        }),
     };
 }

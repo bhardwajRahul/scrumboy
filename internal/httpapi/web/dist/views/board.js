@@ -1051,6 +1051,20 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                     const authorityRoles = ["maintainer"];
                     const isRemovableRole = (r) => ["contributor", "editor", "viewer"].includes(roleLower(r));
                     const isAuthorityRole = (r) => authorityRoles.includes(roleLower(r));
+                    const renderAvailableUserOptions = (selectedValue = "") => `
+          <option value="" ${selectedValue ? "" : "selected"}>${escapeHTML(t("board.members.selectUser"))}</option>
+          ${available.map((u) => {
+                        const value = String(u.id);
+                        return `<option value="${escapeHTML(value)}" ${value === selectedValue ? "selected" : ""}>${escapeHTML(u.name)} (${escapeHTML(u.email)})</option>`;
+                    }).join("")}
+        `;
+                    const renderAddMemberRoleOptions = (selectedRole = "contributor") => `
+          <option value="viewer" ${selectedRole === "viewer" ? "selected" : ""}>${escapeHTML(memberRoleLabel("viewer"))}</option>
+          <option value="contributor" ${selectedRole === "contributor" ? "selected" : ""}>${escapeHTML(memberRoleLabel("contributor"))}</option>
+          <option value="maintainer" ${selectedRole === "maintainer" ? "selected" : ""}>${escapeHTML(memberRoleLabel("maintainer"))}</option>
+        `;
+                    const renderNoAvailableMembers = () => `<div id="membersAllUsersMessage" class="muted" style="padding: 12px; text-align: center; border-top: 1px solid var(--border, #e5e7eb); margin-top: 20px; padding-top: 20px;">${escapeHTML(t("board.members.allUsersAreMembers"))}</div>`;
+                    const renderMemberRoleLabel = () => fieldLabelHTML(t("board.members.role"), FIELD_TOOLTIPS.memberRole);
                     const renderMembersList = () => {
                         if (members.length === 0) {
                             return `<div class="muted" style="padding: 12px; text-align: center;">${escapeHTML(t("board.members.noMembers"))}</div>`;
@@ -1093,37 +1107,34 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                     dialog.innerHTML = `
           <form method="dialog" class="dialog__form" id="addMemberForm">
             <div class="dialog__header">
-              <div class="dialog__title">${escapeHTML(isMaintainer ? t("board.members.dialogTitle") : t("board.members.dialogTitleReadOnly"))}</div>
-              ${projectName ? `<div class="muted" style="font-size: 0.875rem; margin-top: 4px;">${escapeHTML(t("board.members.projectLabel", { name: projectName }))}</div>` : ""}
+              <div class="dialog__title" id="membersDialogTitle">${escapeHTML(isMaintainer ? t("board.members.dialogTitle") : t("board.members.dialogTitleReadOnly"))}</div>
+              ${projectName ? `<div class="muted" id="membersDialogProjectLabel" style="font-size: 0.875rem; margin-top: 4px;">${escapeHTML(t("board.members.projectLabel", { name: projectName }))}</div>` : ""}
               <button class="btn btn--ghost" type="button" id="addMemberDialogClose" aria-label="${escapeHTML(t("board.members.close"))}">✕</button>
             </div>
 
             <div style="margin-bottom: 20px;">
-              <div style="font-weight: 500; margin-bottom: 8px;">${escapeHTML(t("board.members.currentMembers"))}</div>
+              <div id="membersCurrentMembersLabel" style="font-weight: 500; margin-bottom: 8px;">${escapeHTML(t("board.members.currentMembers"))}</div>
               <div id="currentMembersList">${renderMembersList()}</div>
             </div>
 
             ${isMaintainer ? (available.length > 0 ? `
               <div style="border-top: 1px solid var(--border, #e5e7eb); padding-top: 20px; margin-top: 20px;">
-                <div style="font-weight: 500; margin-bottom: 12px;">${escapeHTML(t("board.members.addNewMember"))}</div>
+                <div id="membersAddNewMemberLabel" style="font-weight: 500; margin-bottom: 12px;">${escapeHTML(t("board.members.addNewMember"))}</div>
                 <label class="field">
-                  <div class="field__label">${escapeHTML(t("board.members.user"))}</div>
+                  <div class="field__label" id="membersUserFieldLabel">${escapeHTML(t("board.members.user"))}</div>
                   <select id="addMemberUser" class="input" required>
-                    <option value="">${escapeHTML(t("board.members.selectUser"))}</option>
-                    ${available.map((u) => `<option value="${u.id}">${escapeHTML(u.name)} (${escapeHTML(u.email)})</option>`).join('')}
+                    ${renderAvailableUserOptions()}
                   </select>
                 </label>
 
                 <label class="field">
-                  ${fieldLabelHTML(t("board.members.role"), FIELD_TOOLTIPS.memberRole)}
+                  <div id="membersRoleFieldLabel">${renderMemberRoleLabel()}</div>
                   <select id="addMemberRole" class="input" required${titleAttr(FIELD_TOOLTIPS.memberRole)}>
-                    <option value="viewer">${escapeHTML(memberRoleLabel("viewer"))}</option>
-                    <option value="contributor" selected>${escapeHTML(memberRoleLabel("contributor"))}</option>
-                    <option value="maintainer">${escapeHTML(memberRoleLabel("maintainer"))}</option>
+                    ${renderAddMemberRoleOptions("contributor")}
                   </select>
                 </label>
               </div>
-            ` : `<div class="muted" style="padding: 12px; text-align: center; border-top: 1px solid var(--border, #e5e7eb); margin-top: 20px; padding-top: 20px;">${escapeHTML(t("board.members.allUsersAreMembers"))}</div>`) : ''}
+            ` : renderNoAvailableMembers()) : ''}
 
             <div class="dialog__footer">
               <div class="spacer"></div>
@@ -1142,6 +1153,66 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                     const currentMembersList = document.getElementById("currentMembersList");
                     // Store references for cleanup
                     let isClosed = false;
+                    const relocalizeMembersDialog = () => {
+                        if (isClosed || !dialog.isConnected)
+                            return;
+                        const title = dialog.querySelector("#membersDialogTitle");
+                        if (title) {
+                            title.textContent = isMaintainer ? t("board.members.dialogTitle") : t("board.members.dialogTitleReadOnly");
+                        }
+                        const projectLabel = dialog.querySelector("#membersDialogProjectLabel");
+                        if (projectLabel && projectName) {
+                            projectLabel.textContent = t("board.members.projectLabel", { name: projectName });
+                        }
+                        const closeButton = dialog.querySelector("#addMemberDialogClose");
+                        if (closeButton) {
+                            closeButton.setAttribute("aria-label", t("board.members.close"));
+                        }
+                        const currentMembersLabel = dialog.querySelector("#membersCurrentMembersLabel");
+                        if (currentMembersLabel) {
+                            currentMembersLabel.textContent = t("board.members.currentMembers");
+                        }
+                        if (currentMembersList) {
+                            currentMembersList.innerHTML = renderMembersList();
+                        }
+                        const addNewMemberLabel = dialog.querySelector("#membersAddNewMemberLabel");
+                        if (addNewMemberLabel) {
+                            addNewMemberLabel.textContent = t("board.members.addNewMember");
+                        }
+                        const userLabel = dialog.querySelector("#membersUserFieldLabel");
+                        if (userLabel) {
+                            userLabel.textContent = t("board.members.user");
+                        }
+                        const addMemberSelect = dialog.querySelector("#addMemberUser");
+                        if (addMemberSelect) {
+                            const selectedUser = addMemberSelect.value;
+                            addMemberSelect.innerHTML = renderAvailableUserOptions(selectedUser);
+                        }
+                        const roleLabel = dialog.querySelector("#membersRoleFieldLabel");
+                        if (roleLabel) {
+                            roleLabel.innerHTML = renderMemberRoleLabel();
+                        }
+                        const addRoleSelect = dialog.querySelector("#addMemberRole");
+                        if (addRoleSelect) {
+                            const selectedRole = addRoleSelect.value || "contributor";
+                            addRoleSelect.innerHTML = renderAddMemberRoleOptions(selectedRole);
+                            addRoleSelect.setAttribute("title", FIELD_TOOLTIPS.memberRole);
+                        }
+                        const allUsersMessage = dialog.querySelector("#membersAllUsersMessage");
+                        if (allUsersMessage) {
+                            allUsersMessage.textContent = t("board.members.allUsersAreMembers");
+                        }
+                        const cancel = dialog.querySelector("#addMemberCancel");
+                        if (cancel) {
+                            cancel.textContent = t("board.members.close");
+                        }
+                        const submit = dialog.querySelector("#addMemberSubmit");
+                        if (submit) {
+                            submit.textContent = t("board.members.addMember");
+                        }
+                    };
+                    const onMembersDialogLocaleChange = () => relocalizeMembersDialog();
+                    document.addEventListener(I18N_LOCALE_CHANGED, onMembersDialogLocaleChange);
                     const handleMembersUpdated = (payload) => {
                         if (payload?.projectId !== projId || isClosed)
                             return;
@@ -1157,11 +1228,17 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                         }).catch(() => { });
                     };
                     on("members-updated", handleMembersUpdated);
-                    const close = () => {
+                    const cleanupMembersDialog = () => {
                         if (isClosed)
-                            return; // Prevent double-closing
+                            return false; // Prevent double-cleanup
                         isClosed = true;
                         off("members-updated", handleMembersUpdated);
+                        document.removeEventListener(I18N_LOCALE_CHANGED, onMembersDialogLocaleChange);
+                        return true;
+                    };
+                    const close = () => {
+                        if (!cleanupMembersDialog())
+                            return;
                         // Explicitly close the dialog before removing it to ensure state is updated
                         if (dialog.open) {
                             dialog.close();
@@ -1174,7 +1251,16 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                     // Handle dialog's native cancel event (from ESC key)
                     // Let the dialog close naturally via native behavior, then clean up DOM
                     dialog.addEventListener("cancel", () => {
+                        cleanupMembersDialog();
                         // Dialog closes automatically on cancel, just clean up DOM after a brief delay
+                        setTimeout(() => {
+                            if (dialog.parentNode) {
+                                document.body.removeChild(dialog);
+                            }
+                        }, 0);
+                    });
+                    dialog.addEventListener("close", () => {
+                        cleanupMembersDialog();
                         setTimeout(() => {
                             if (dialog.parentNode) {
                                 document.body.removeChild(dialog);
@@ -1272,10 +1358,7 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                                     available.push(...(Array.isArray(availableUsers) ? availableUsers : []));
                                     const addMemberSelect = dialog.querySelector("#addMemberUser");
                                     if (addMemberSelect) {
-                                        addMemberSelect.innerHTML = `
-                    <option value="">${escapeHTML(t("board.members.selectUser"))}</option>
-                    ${available.map((u) => `<option value="${u.id}">${escapeHTML(u.name)} (${escapeHTML(u.email)})</option>`).join("")}
-                  `;
+                                        addMemberSelect.innerHTML = renderAvailableUserOptions(addMemberSelect.value);
                                     }
                                 }
                                 catch {
@@ -1321,16 +1404,13 @@ function renderBoardFromData(board, projectId, tag, search, sprintId, opts = {})
                                 }
                                 // Update the user select dropdown
                                 if (userSelect) {
-                                    userSelect.innerHTML = `
-                  <option value="">${escapeHTML(t("board.members.selectUser"))}</option>
-                  ${available.map((u) => `<option value="${u.id}">${escapeHTML(u.name)} (${escapeHTML(u.email)})</option>`).join('')}
-                `;
+                                    userSelect.innerHTML = renderAvailableUserOptions(userSelect.value);
                                 }
                                 // Hide add section if no more users available
                                 if (available.length === 0) {
                                     const addSection = form.querySelector('div[style*="border-top"]');
                                     if (addSection) {
-                                        addSection.outerHTML = `<div class="muted" style="padding: 12px; text-align: center; border-top: 1px solid var(--border, #e5e7eb); margin-top: 20px; padding-top: 20px;">${escapeHTML(t("board.members.allUsersAreMembers"))}</div>`;
+                                        addSection.outerHTML = renderNoAvailableMembers();
                                     }
                                     const submitBtn = document.getElementById("addMemberSubmit");
                                     if (submitBtn) {

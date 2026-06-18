@@ -5,6 +5,7 @@ import { emit, on } from '../events.js';
 import { apiFetch } from '../api.js';
 import { getProjectId, getProjects } from '../state/selectors.js';
 import { escapeHTML } from '../utils.js';
+import { I18N_LOCALE_CHANGED, t } from '../i18n/index.js';
 import { resolveNotificationProjectSlugCore } from './notification-slug-resolve.js';
 const STORAGE_PREFIX = 'scrumboy_unread_v1_';
 const LIST_STORAGE_PREFIX = 'scrumboy_notifications_v1_';
@@ -32,6 +33,7 @@ let badgeEl = null;
 let notificationPanelOpen = false;
 let outsideCloseAttached = false;
 let escCloseAttached = false;
+let localeListenerAttached = false;
 function listStorageKey(userId) {
     return `${LIST_STORAGE_PREFIX}${userId}`;
 }
@@ -256,21 +258,21 @@ function tryHydrateSlugForNewItem(item) {
 function formatRelativeTime(ts) {
     const sec = Math.floor((Date.now() - ts) / 1000);
     if (sec < 45)
-        return 'Just now';
+        return t('notifications.relative.justNow');
     const m = Math.floor(sec / 60);
     if (m < 60)
-        return `${m}m ago`;
+        return t('notifications.relative.minutesAgo', { count: m });
     const h = Math.floor(m / 60);
     if (h < 24)
-        return `${h}h ago`;
+        return t('notifications.relative.hoursAgo', { count: h });
     const d = Math.floor(h / 24);
-    return `${d}d ago`;
+    return t('notifications.relative.daysAgo', { count: d });
 }
 function renderPanelList() {
     if (!listEl)
         return;
     if (notificationItems.length === 0) {
-        listEl.innerHTML = `<div class="notification-panel__empty muted" style="padding:16px;font-size:14px;">No notifications yet.</div>`;
+        listEl.innerHTML = `<div class="notification-panel__empty muted" style="padding:16px;font-size:14px;">${escapeHTML(t('notifications.panel.empty'))}</div>`;
         return;
     }
     const rows = [];
@@ -280,8 +282,8 @@ function renderPanelList() {
         const hasSlug = resolvedSlug != null && resolvedSlug.length > 0;
         const opacity = hasSlug ? '1' : '0.75';
         rows.push(`<button type="button" class="notification-panel__row${unreadCls}" data-notification-id="${escapeHTML(it.id)}" style="display:block;width:100%;text-align:left;padding:12px 14px;border:none;background:transparent;cursor:pointer;opacity:${opacity};border-bottom:1px solid var(--border, rgba(0,0,0,.08));font:inherit;" tabindex="0">
-      <div style="font-weight:${it.read ? '500' : '700'};font-size:14px;color:var(--text, #111);">${escapeHTML(it.title)}</div>
-      <div class="muted" style="font-size:12px;margin-top:4px;">Assigned to you</div>
+      <div style="font-weight:${it.read ? '500' : '700'};font-size:14px;color:var(--text, #111);">${escapeHTML(it.title || t('realtime.todoFallback'))}</div>
+      <div class="muted" style="font-size:12px;margin-top:4px;">${escapeHTML(t('notifications.row.assignedToYou'))}</div>
       <div class="muted" style="font-size:11px;margin-top:6px;">${escapeHTML(formatRelativeTime(it.timestamp))}</div>
     </button>`);
     }
@@ -431,12 +433,11 @@ function createPanel() {
     const wrap = document.createElement('div');
     wrap.id = 'global-notification-panel';
     wrap.setAttribute('role', 'dialog');
-    wrap.setAttribute('aria-label', 'Notifications');
     wrap.setAttribute('aria-hidden', 'true');
     wrap.innerHTML = `
     <div class="notification-panel__header">
-      <h2>Notifications</h2>
-      <button type="button" class="btn btn--small" id="notification-panel-mark-all">Mark all as read</button>
+      <h2></h2>
+      <button type="button" class="btn btn--small" id="notification-panel-mark-all"></button>
     </div>
     <div class="notification-panel__scroll" id="global-notification-panel-list"></div>
   `;
@@ -445,12 +446,42 @@ function createPanel() {
     document.body.appendChild(wrap);
     panelEl = wrap;
     listEl = wrap.querySelector('#global-notification-panel-list');
+    renderPanelChrome();
     listEl.addEventListener('click', (e) => handleListClick(e));
     const markAll = wrap.querySelector('#notification-panel-mark-all');
     markAll?.addEventListener('click', (e) => {
         e.stopPropagation();
         markAllRead();
     });
+}
+function renderPanelChrome() {
+    if (!panelEl)
+        return;
+    const title = t('notifications.panel.title');
+    panelEl.setAttribute('aria-label', title);
+    const heading = panelEl.querySelector('.notification-panel__header h2');
+    if (heading)
+        heading.textContent = title;
+    const markAll = panelEl.querySelector('#notification-panel-mark-all');
+    if (markAll)
+        markAll.textContent = t('notifications.panel.markAllRead');
+}
+function relocalizeNotifications() {
+    if (badgeEl?.isConnected) {
+        renderBadgeEl(badgeEl, getListUnreadCount());
+    }
+    if (panelEl?.isConnected) {
+        renderPanelChrome();
+    }
+    if (listEl?.isConnected) {
+        renderPanelList();
+    }
+}
+function ensureLocaleListener() {
+    if (localeListenerAttached)
+        return;
+    localeListenerAttached = true;
+    document.addEventListener(I18N_LOCALE_CHANGED, relocalizeNotifications);
 }
 function emitUpdated() {
     emit('notifications:updated', unreadCount);
@@ -500,14 +531,15 @@ export function clearUnread() {
 }
 function assignmentHoverText(count) {
     if (count === 1)
-        return '1 todo has been assigned to you';
-    return `${count} todos have been assigned to you`;
+        return t('notifications.badge.oneTodo');
+    return t('notifications.badge.multipleTodos', { count });
 }
 function renderBadgeEl(el, count) {
     if (count <= 0) {
         el.style.display = 'none';
         el.textContent = '';
         el.removeAttribute('title');
+        el.removeAttribute('aria-label');
         el.setAttribute('aria-hidden', 'true');
         return;
     }
@@ -541,7 +573,7 @@ export function appendTodoAssignedNotification(parsed) {
     const item = {
         id: wireId,
         type: 'todo.assigned',
-        title: titleStr || 'Todo',
+        title: titleStr,
         projectId,
         projectSlug: null,
         todoId: inner.todoId,
@@ -561,6 +593,7 @@ export function initNotificationBadge() {
     if (badgeInitialized)
         return;
     badgeInitialized = true;
+    ensureLocaleListener();
     let el = document.getElementById('global-notification-badge');
     if (!el) {
         el = document.createElement('button');

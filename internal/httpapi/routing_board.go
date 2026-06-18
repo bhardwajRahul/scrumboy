@@ -20,7 +20,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request, rest []stri
 
 	slug, ok := parseSlug(rest[0])
 	if !ok {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid slug", map[string]any{"field": "slug"})
+		writeValidationError(w, "invalid slug", "invalid_slug", map[string]any{"field": "slug"})
 		return
 	}
 
@@ -95,7 +95,7 @@ func (s *Server) handleBoardReadEventsAndSettings(w http.ResponseWriter, r *http
 		} else {
 			sprintFilter, err = s.parseSprintFilterFromQuery(r, project.ID)
 			if err != nil {
-				writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{"field": "sprintId"})
+				writeValidationError(w, err.Error(), "invalid_sprint_id", map[string]any{"field": "sprintId"})
 				return true
 			}
 		}
@@ -135,11 +135,11 @@ func (s *Server) handleBoardReadEventsAndSettings(w http.ResponseWriter, r *http
 			return true
 		}
 		if in.DefaultSprintWeeks == nil {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "defaultSprintWeeks required", map[string]any{"field": "defaultSprintWeeks"})
+			writeValidationError(w, "defaultSprintWeeks required", "default_sprint_weeks_required", map[string]any{"field": "defaultSprintWeeks"})
 			return true
 		}
 		if *in.DefaultSprintWeeks != 1 && *in.DefaultSprintWeeks != 2 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "defaultSprintWeeks must be 1 or 2", map[string]any{"field": "defaultSprintWeeks"})
+			writeValidationError(w, "defaultSprintWeeks must be 1 or 2", "invalid_default_sprint_weeks", map[string]any{"field": "defaultSprintWeeks"})
 			return true
 		}
 		if project.DefaultSprintWeeks == *in.DefaultSprintWeeks {
@@ -212,11 +212,11 @@ func (s *Server) handleBoardWorkflowRoutes(w http.ResponseWriter, r *http.Reques
 		}
 		in.Name = strings.TrimSpace(in.Name)
 		if in.Name == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name required", map[string]any{"field": "name"})
+			writeValidationError(w, "name required", "name_required", map[string]any{"field": "name"})
 			return true
 		}
 		if len(in.Name) > 200 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow column name", map[string]any{"field": "name"})
+			writeValidationError(w, "invalid workflow column name", "invalid_workflow_column_name", map[string]any{"field": "name"})
 			return true
 		}
 
@@ -251,7 +251,7 @@ func (s *Server) handleBoardWorkflowRoutes(w http.ResponseWriter, r *http.Reques
 		}
 		columnKey := strings.TrimSpace(rest[2])
 		if columnKey == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow key", map[string]any{"field": "key"})
+			writeValidationError(w, "invalid workflow key", "invalid_workflow_key", map[string]any{"field": "key"})
 			return true
 		}
 
@@ -265,19 +265,19 @@ func (s *Server) handleBoardWorkflowRoutes(w http.ResponseWriter, r *http.Reques
 		in.Name = strings.TrimSpace(in.Name)
 		in.Color = strings.TrimSpace(in.Color)
 		if in.Name == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name required", map[string]any{"field": "name"})
+			writeValidationError(w, "name required", "name_required", map[string]any{"field": "name"})
 			return true
 		}
 		if len(in.Name) > 200 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow column name", map[string]any{"field": "name"})
+			writeValidationError(w, "invalid workflow column name", "invalid_workflow_column_name", map[string]any{"field": "name"})
 			return true
 		}
 		if in.Color == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "color required", map[string]any{"field": "color"})
+			writeValidationError(w, "color required", "color_required", map[string]any{"field": "color"})
 			return true
 		}
 		if !store.ValidWorkflowColumnColor(in.Color) {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow column color", map[string]any{"field": "color"})
+			writeValidationError(w, "invalid workflow column color", "invalid_workflow_column_color", map[string]any{"field": "color"})
 			return true
 		}
 		if err := s.store.UpdateWorkflowColumn(ctx, project.ID, columnKey, in.Name, in.Color); err != nil {
@@ -304,7 +304,7 @@ func (s *Server) handleBoardWorkflowRoutes(w http.ResponseWriter, r *http.Reques
 		}
 		columnKey := strings.TrimSpace(rest[2])
 		if columnKey == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid workflow key", map[string]any{"field": "key"})
+			writeValidationError(w, "invalid workflow key", "invalid_workflow_key", map[string]any{"field": "key"})
 			return true
 		}
 		if err := s.store.DeleteWorkflowColumn(ctx, project.ID, columnKey); err != nil {
@@ -332,7 +332,7 @@ func (s *Server) handleBoardLaneRoutes(w http.ResponseWriter, r *http.Request, r
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	sprintFilter, err := s.parseSprintFilterFromQuery(r, project.ID)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{"field": "sprintId"})
+		writeValidationError(w, err.Error(), "invalid_sprint_id", map[string]any{"field": "sprintId"})
 		return true
 	}
 	limit := 20
@@ -497,7 +497,7 @@ func (s *Server) handleBoardLinkRoutes(w http.ResponseWriter, r *http.Request, r
 
 	localID, ok := parseInt64(rest[2])
 	if !ok {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid todo localId", map[string]any{"field": "localId"})
+		writeValidationError(w, "invalid todo localId", "invalid_todo_local_id", map[string]any{"field": "localId"})
 		return true
 	}
 
@@ -557,11 +557,11 @@ func (s *Server) handleBoardLinkRoutes(w http.ResponseWriter, r *http.Request, r
 			return true
 		}
 		if in.TargetLocalID <= 0 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "targetLocalId required", map[string]any{"field": "targetLocalId"})
+			writeValidationError(w, "targetLocalId required", "target_local_id_required", map[string]any{"field": "targetLocalId"})
 			return true
 		}
 		if in.TargetLocalID == localID {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "cannot link todo to itself", map[string]any{"field": "targetLocalId"})
+			writeValidationError(w, "cannot link todo to itself", "cannot_link_todo_to_itself", map[string]any{"field": "targetLocalId"})
 			return true
 		}
 		if in.LinkType == "" {
@@ -571,7 +571,7 @@ func (s *Server) handleBoardLinkRoutes(w http.ResponseWriter, r *http.Request, r
 		if err := s.store.AddLink(s.requestContext(r), project.ID, localID, in.TargetLocalID, in.LinkType, s.storeMode()); err != nil {
 			switch {
 			case errors.Is(err, store.ErrValidation):
-				writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid link", nil)
+				writeValidationError(w, "invalid link", "invalid_link", nil)
 			case errors.Is(err, store.ErrNotFound):
 				writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
 			case errors.Is(err, store.ErrUnauthorized):
@@ -588,7 +588,7 @@ func (s *Server) handleBoardLinkRoutes(w http.ResponseWriter, r *http.Request, r
 	case len(rest) == 5 && r.Method == http.MethodDelete:
 		targetLocalID, ok := parseInt64(rest[4])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid targetLocalId", map[string]any{"field": "targetLocalId"})
+			writeValidationError(w, "invalid targetLocalId", "invalid_target_local_id", map[string]any{"field": "targetLocalId"})
 			return true
 		}
 		if err := s.store.RemoveLink(s.requestContext(r), project.ID, localID, targetLocalID, s.storeMode()); err != nil {
@@ -618,7 +618,7 @@ func (s *Server) handleBoardTodoItemRoutes(w http.ResponseWriter, r *http.Reques
 	if len(rest) == 3 && rest[1] == "todos" && r.Method == http.MethodGet {
 		localID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid todo localId", map[string]any{"field": "localId"})
+			writeValidationError(w, "invalid todo localId", "invalid_todo_local_id", map[string]any{"field": "localId"})
 			return true
 		}
 		todo, err := s.store.GetTodoByLocalID(s.requestContext(r), project.ID, localID, s.storeMode())
@@ -644,7 +644,7 @@ func (s *Server) handleBoardTodoItemRoutes(w http.ResponseWriter, r *http.Reques
 	if len(rest) == 3 && rest[1] == "todos" && (r.Method == http.MethodPatch || r.Method == http.MethodDelete) {
 		localID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid todo localId", map[string]any{"field": "localId"})
+			writeValidationError(w, "invalid todo localId", "invalid_todo_local_id", map[string]any{"field": "localId"})
 			return true
 		}
 		switch r.Method {
@@ -654,7 +654,7 @@ func (s *Server) handleBoardTodoItemRoutes(w http.ResponseWriter, r *http.Reques
 				return true
 			}
 			if _, ok := raw["assigneeUserId"]; !ok {
-				writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "missing assigneeUserId", map[string]any{"field": "assigneeUserId"})
+				writeValidationError(w, "missing assigneeUserId", "missing_assignee_user_id", map[string]any{"field": "assigneeUserId"})
 				return true
 			}
 
@@ -668,11 +668,11 @@ func (s *Server) handleBoardTodoItemRoutes(w http.ResponseWriter, r *http.Reques
 			}
 			payload, err := json.Marshal(raw)
 			if err != nil {
-				writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid json payload", nil)
+				writeValidationError(w, "invalid json payload", "invalid_json", nil)
 				return true
 			}
 			if err := json.Unmarshal(payload, &in); err != nil {
-				writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid json payload", nil)
+				writeValidationError(w, "invalid json payload", "invalid_json", nil)
 				return true
 			}
 			updateIn := store.UpdateTodoInput{
@@ -723,7 +723,7 @@ func (s *Server) handleBoardTodoItemRoutes(w http.ResponseWriter, r *http.Reques
 	if len(rest) == 4 && rest[1] == "todos" && rest[3] == "move" && r.Method == http.MethodPost {
 		localID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid todo localId", map[string]any{"field": "localId"})
+			writeValidationError(w, "invalid todo localId", "invalid_todo_local_id", map[string]any{"field": "localId"})
 			return true
 		}
 		var in struct {
@@ -740,7 +740,7 @@ func (s *Server) handleBoardTodoItemRoutes(w http.ResponseWriter, r *http.Reques
 			toColumnKey = normalizeLaneKey(in.ToStatus)
 		}
 		if toColumnKey == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "missing toColumnKey", map[string]any{"field": "toColumnKey"})
+			writeValidationError(w, "missing toColumnKey", "missing_to_column_key", map[string]any{"field": "toColumnKey"})
 			return true
 		}
 		// Interpret afterId/beforeId as localIds for this project.
@@ -806,7 +806,7 @@ func (s *Server) handleBoardSprintRoutes(w http.ResponseWriter, r *http.Request,
 			return true
 		}
 		if in.Name == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name required", map[string]any{"field": "name"})
+			writeValidationError(w, "name required", "name_required", map[string]any{"field": "name"})
 			return true
 		}
 		sprint, err := s.store.CreateSprint(ctx, project.ID, in.Name, time.UnixMilli(in.PlannedStartAt), time.UnixMilli(in.PlannedEndAt))
@@ -838,7 +838,7 @@ func (s *Server) handleBoardSprintRoutes(w http.ResponseWriter, r *http.Request,
 	if len(rest) == 3 && rest[1] == "sprints" {
 		sprintID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid sprintId", map[string]any{"field": "sprintId"})
+			writeValidationError(w, "invalid sprintId", "invalid_sprint_id", map[string]any{"field": "sprintId"})
 			return true
 		}
 		sp, err := s.store.GetSprintByID(s.requestContext(r), sprintID)
@@ -924,7 +924,7 @@ func (s *Server) handleBoardSprintRoutes(w http.ResponseWriter, r *http.Request,
 	if len(rest) == 4 && rest[1] == "sprints" && rest[3] == "burndown" && r.Method == http.MethodGet {
 		sprintID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid sprintId", map[string]any{"field": "sprintId"})
+			writeValidationError(w, "invalid sprintId", "invalid_sprint_id", map[string]any{"field": "sprintId"})
 			return true
 		}
 		points, err := s.store.GetRealBurndownForSprint(s.requestContext(r), project.ID, sprintID, s.storeMode())
@@ -940,7 +940,7 @@ func (s *Server) handleBoardSprintRoutes(w http.ResponseWriter, r *http.Request,
 	if len(rest) == 4 && rest[1] == "sprints" && rest[3] == "activate" && r.Method == http.MethodPost {
 		sprintID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid sprintId", map[string]any{"field": "sprintId"})
+			writeValidationError(w, "invalid sprintId", "invalid_sprint_id", map[string]any{"field": "sprintId"})
 			return true
 		}
 		ctx := s.requestContext(r)
@@ -967,7 +967,7 @@ func (s *Server) handleBoardSprintRoutes(w http.ResponseWriter, r *http.Request,
 	if len(rest) == 4 && rest[1] == "sprints" && rest[3] == "close" && r.Method == http.MethodPost {
 		sprintID, ok := parseInt64(rest[2])
 		if !ok {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid sprintId", map[string]any{"field": "sprintId"})
+			writeValidationError(w, "invalid sprintId", "invalid_sprint_id", map[string]any{"field": "sprintId"})
 			return true
 		}
 		ctx := s.requestContext(r)
@@ -1039,7 +1039,7 @@ func (s *Server) handleBoardTagRoutes(w http.ResponseWriter, r *http.Request, re
 		ctx := s.requestContext(r)
 		var tagID int64
 		if _, err := fmt.Sscanf(rest[3], "%d", &tagID); err != nil || tagID <= 0 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid tagId", map[string]any{"field": "tagId"})
+			writeValidationError(w, "invalid tagId", "invalid_tag_id", map[string]any{"field": "tagId"})
 			return true
 		}
 		var in struct {
@@ -1071,7 +1071,7 @@ func (s *Server) handleBoardTagRoutes(w http.ResponseWriter, r *http.Request, re
 	// Durable projects must use /tags/id/{tagId}/color.
 	if len(rest) == 4 && rest[1] == "tags" && rest[3] == "color" && r.Method == http.MethodPatch {
 		if project.ExpiresAt == nil {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name-based color update not allowed for durable projects; use /tags/id/{tagId}/color", nil)
+			writeValidationError(w, "name-based color update not allowed for durable projects; use /tags/id/{tagId}/color", "name_based_tag_route_not_allowed", nil)
 			return true
 		}
 		linkTemporaryBoard := true
@@ -1104,7 +1104,7 @@ func (s *Server) handleBoardTagRoutes(w http.ResponseWriter, r *http.Request, re
 		ctx := s.requestContext(r)
 		var tagID int64
 		if _, err := fmt.Sscanf(rest[3], "%d", &tagID); err != nil || tagID <= 0 {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid tagId", map[string]any{"field": "tagId"})
+			writeValidationError(w, "invalid tagId", "invalid_tag_id", map[string]any{"field": "tagId"})
 			return true
 		}
 		userID, _ := store.UserIDFromContext(ctx)
@@ -1121,7 +1121,7 @@ func (s *Server) handleBoardTagRoutes(w http.ResponseWriter, r *http.Request, re
 	// Name-based mutation routes are anonymous-only. Durable projects must use tag_id.
 	if len(rest) == 3 && rest[1] == "tags" && r.Method == http.MethodDelete {
 		if !isAnonymousBoard {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "name-based delete not allowed for durable projects; use /tags/id/{tagId}", nil)
+			writeValidationError(w, "name-based delete not allowed for durable projects; use /tags/id/{tagId}", "name_based_tag_route_not_allowed", nil)
 			return true
 		}
 		ctx := s.requestContext(r)

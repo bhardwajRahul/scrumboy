@@ -1,4 +1,9 @@
 import { app } from '../dom/elements.js';
+import { hasI18nKey, t } from '../i18n/index.js';
+import { escapeHTML } from '../utils.js';
+function notFoundText(key, fallback) {
+    return hasI18nKey(key) ? t(key) : fallback;
+}
 export function renderNotFound() {
     app.innerHTML = `
     <div class="page">
@@ -7,10 +12,10 @@ export function renderNotFound() {
           <img src="/scrumboytext.png" alt="Scrumboy" class="brand-text" />
         </div>
         <div class="spacer"></div>
-        <button class="btn" id="homeBtn">Home</button>
+        <button class="btn" id="homeBtn" data-i18n-text="notFound.home">${escapeHTML(notFoundText("notFound.home", "Home"))}</button>
       </div>
       <div class="empty">
-        <div class="empty__title">Not found</div>
+        <div class="empty__title" data-i18n-text="notFound.title">${escapeHTML(notFoundText("notFound.title", "Not found"))}</div>
       </div>
     </div>
   `;

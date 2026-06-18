@@ -3,10 +3,38 @@
  * the user to reload so they get the latest app (avoids stale cache on mobile).
  * Pattern: C:\dev\project\pattern\pwa_update_dialog.md
  */
-import { getAppVersion } from './utils.js';
+import { hasI18nKey, I18N_LOCALE_CHANGED, t } from './i18n/index.js';
+import { escapeHTML, getAppVersion } from './utils.js';
 const PWA_UPDATE_PENDING_KEY = 'pwaUpdatePending';
 let serviceWorkerRegistration = null;
 let updateNotificationShown = false;
+let updateNotificationLocaleListener = null;
+function pwaText(key, fallback) {
+    return hasI18nKey(key) ? t(key) : fallback;
+}
+function renderUpdateNotificationCopy(notification = document.getElementById('updateNotification')) {
+    if (!notification)
+        return;
+    notification.innerHTML = `
+    <span>${escapeHTML(pwaText("pwaUpdate.message", "New version available!"))}</span>
+    <span style="display: inline-flex; gap: 8px; flex-shrink: 0;">
+      <button type="button" onclick="reloadForUpdate()" class="btn">${escapeHTML(pwaText("pwaUpdate.actions.updateNow", "Update now"))}</button>
+      <button type="button" onclick="dismissUpdateNotification()" class="btn btn--ghost">${escapeHTML(pwaText("pwaUpdate.actions.later", "Later"))}</button>
+    </span>
+  `;
+}
+function ensureUpdateNotificationLocaleListener() {
+    if (updateNotificationLocaleListener)
+        return;
+    updateNotificationLocaleListener = () => renderUpdateNotificationCopy();
+    document.addEventListener(I18N_LOCALE_CHANGED, updateNotificationLocaleListener);
+}
+function cleanupUpdateNotificationLocaleListener() {
+    if (!updateNotificationLocaleListener)
+        return;
+    document.removeEventListener(I18N_LOCALE_CHANGED, updateNotificationLocaleListener);
+    updateNotificationLocaleListener = null;
+}
 function showUpdateNotification() {
     if (document.getElementById('updateNotification') || updateNotificationShown)
         return;
@@ -33,20 +61,16 @@ function showUpdateNotification() {
     font-size: 0.9rem;
     max-width: 90%;
   `;
-    notification.innerHTML = `
-    <span>New version available!</span>
-    <span style="display: inline-flex; gap: 8px; flex-shrink: 0;">
-      <button type="button" onclick="reloadForUpdate()" class="btn">Update now</button>
-      <button type="button" onclick="dismissUpdateNotification()" class="btn btn--ghost">Later</button>
-    </span>
-  `;
+    renderUpdateNotificationCopy(notification);
     document.body.appendChild(notification);
+    ensureUpdateNotificationLocaleListener();
     localStorage.setItem(PWA_UPDATE_PENDING_KEY, '1');
 }
 function reloadForUpdate() {
     const notification = document.getElementById('updateNotification');
     if (notification)
         notification.remove();
+    cleanupUpdateNotificationLocaleListener();
     localStorage.removeItem(PWA_UPDATE_PENDING_KEY);
     if (serviceWorkerRegistration?.waiting) {
         serviceWorkerRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
@@ -58,6 +82,7 @@ function dismissUpdateNotification() {
     const notification = document.getElementById('updateNotification');
     if (notification)
         notification.remove();
+    cleanupUpdateNotificationLocaleListener();
     updateNotificationShown = false;
 }
 function registerServiceWorker() {

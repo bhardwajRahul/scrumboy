@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.18.1-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.18.3-blue" alt="version" />
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   </a>
@@ -83,6 +83,7 @@ Open [http://localhost:8080](http://localhost:8080).
 - If an existing database already has 2FA-enabled users, startup fails without this key.
 - The key is part of the same backup/restore unit as `data/app.db`. Back them up together.
 - Do **not** regenerate or replace the key casually after encrypted auth/security data exists, or you can break access to 2FA/password-reset data.
+- If a bad key is configured before any encrypted auth/security data exists, Scrumboy may warn and continue with 2FA setup/password reset disabled until you configure a valid key.
 
 Generate a key with: `openssl rand -base64 32`
 

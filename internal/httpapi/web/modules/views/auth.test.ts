@@ -67,6 +67,7 @@ const enCatalog = {
   "errors.UNAUTHORIZED": "Unauthorized",
   "errors.generic": "Something went wrong.",
   "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Language",
 } as const;
 
 const deCatalog = {
@@ -110,6 +111,7 @@ const deCatalog = {
   "errors.UNAUTHORIZED": "Nicht angemeldet",
   "errors.generic": "Etwas ist schiefgelaufen.",
   "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Sprache",
 } as const;
 
 const frCatalog = {
@@ -153,6 +155,7 @@ const frCatalog = {
   "errors.UNAUTHORIZED": "Connexion requise",
   "errors.generic": "Une erreur s’est produite.",
   "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Langue",
 } as const;
 
 const ptCatalog = {
@@ -196,6 +199,271 @@ const ptCatalog = {
   "errors.UNAUTHORIZED": "Login necessário",
   "errors.generic": "Algo deu errado.",
   "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Idioma",
+} as const;
+
+const arCatalog = {
+  "auth.2fa.accountFallback": "حسابك",
+  "auth.2fa.failed": "فشل التحقق.",
+  "auth.2fa.helper": "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة، أو رمز استرداد.",
+  "auth.2fa.placeholder": "رمز {account}",
+  "auth.2fa.submit": "تحقق",
+  "auth.2fa.title": "المصادقة الثنائية",
+  "auth.actions.bootstrap": "إعداد أولي",
+  "auth.actions.login": "تسجيل الدخول",
+  "auth.actions.resetPassword": "إعادة تعيين كلمة المرور",
+  "auth.bootstrap.failed": "فشل الإعداد.",
+  "auth.bootstrap.title": "الإعداد لأول مرة",
+  "auth.fields.confirmPassword.label": "تأكيد كلمة المرور",
+  "auth.fields.confirmPassword.placeholder": "تأكيد كلمة المرور الجديدة",
+  "auth.fields.email.placeholder": "البريد الإلكتروني",
+  "auth.fields.name.placeholder": "الاسم",
+  "auth.fields.newPassword.label": "كلمة مرور جديدة",
+  "auth.fields.newPassword.placeholder": "8 أحرف على الأقل",
+  "auth.fields.password.placeholder": "كلمة المرور",
+  "auth.login.failed": "فشل تسجيل الدخول.",
+  "auth.oidc.button": "المتابعة عبر SSO",
+  "auth.oidc.error.email": "يلزم عنوان بريد إلكتروني موثّق.",
+  "auth.oidc.error.generic": "فشلت المصادقة.",
+  "auth.oidc.error.provider": "أعاد مزوّد الهوية خطأ.",
+  "auth.oidc.error.state_invalid": "انتهت صلاحية جلسة تسجيل الدخول أو أنها غير صالحة. يرجى المحاولة مرة أخرى.",
+  "auth.oidc.error.token": "فشلت المصادقة. يرجى المحاولة مرة أخرى.",
+  "auth.password.hide": "إخفاء كلمة المرور",
+  "auth.password.show": "إظهار كلمة المرور",
+  "auth.reset.helper": "أدخل كلمة المرور الجديدة. ينتهي الرابط خلال 30 دقيقة.",
+  "auth.reset.invalidLink": "رابط إعادة التعيين غير صالح أو مفقود",
+  "auth.reset.invalidOrExpiredToken": "رمز إعادة التعيين غير صالح أو منتهٍ",
+  "auth.reset.passwordsMismatch": "كلمتا المرور غير متطابقتين",
+  "auth.reset.success": "تمت إعادة تعيين كلمة المرور بنجاح. يرجى تسجيل الدخول.",
+  "auth.reset.title": "إعادة تعيين كلمة المرور",
+  "auth.shared.helper": "المصادقة مفعّلة لهذه النسخة. تبقى اللوحات المجهولة قابلة للمشاركة عبر الرابط؛ المشاريع الدائمة تتطلب تسجيل الدخول.",
+  "auth.shared.or": "أو",
+  "auth.signIn.title": "تسجيل الدخول",
+  "errors.RATE_LIMITED": "محاولات كثيرة جداً. حاول مرة أخرى لاحقاً.",
+  "errors.UNAUTHORIZED": "غير مصرّح",
+  "errors.generic": "حدث خطأ ما.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "اللغة",
+} as const;
+
+const ruCatalog = {
+  "auth.2fa.accountFallback": "ваш аккаунт",
+  "auth.2fa.failed": "Проверка не удалась.",
+  "auth.2fa.helper": "Введите 6-значный код из приложения-аутентификатора или код восстановления.",
+  "auth.2fa.placeholder": "Код для {account}",
+  "auth.2fa.submit": "Проверить",
+  "auth.2fa.title": "Двухфакторная аутентификация",
+  "auth.actions.bootstrap": "Настройка",
+  "auth.actions.login": "Войти",
+  "auth.actions.resetPassword": "Сбросить пароль",
+  "auth.bootstrap.failed": "Настройка не удалась.",
+  "auth.bootstrap.title": "Первоначальная настройка",
+  "auth.fields.confirmPassword.label": "Подтвердите пароль",
+  "auth.fields.confirmPassword.placeholder": "Подтвердите новый пароль",
+  "auth.fields.email.placeholder": "Email",
+  "auth.fields.name.placeholder": "Имя",
+  "auth.fields.newPassword.label": "Новый пароль",
+  "auth.fields.newPassword.placeholder": "Минимум 8 символов",
+  "auth.fields.password.placeholder": "Пароль",
+  "auth.login.failed": "Вход не удался.",
+  "auth.oidc.button": "Продолжить через SSO",
+  "auth.oidc.error.email": "Требуется подтверждённый адрес email.",
+  "auth.oidc.error.generic": "Аутентификация не удалась.",
+  "auth.oidc.error.provider": "Провайдер идентификации вернул ошибку.",
+  "auth.oidc.error.state_invalid": "Сессия входа истекла или недействительна. Попробуйте снова.",
+  "auth.oidc.error.token": "Аутентификация не удалась. Попробуйте снова.",
+  "auth.password.hide": "Скрыть пароль",
+  "auth.password.show": "Показать пароль",
+  "auth.reset.helper": "Введите новый пароль. Ссылка действует 30 минут.",
+  "auth.reset.invalidLink": "Недействительная или отсутствующая ссылка сброса",
+  "auth.reset.invalidOrExpiredToken": "Недействительный или просроченный токен сброса",
+  "auth.reset.passwordsMismatch": "Пароли не совпадают",
+  "auth.reset.success": "Пароль успешно сброшен. Войдите в систему.",
+  "auth.reset.title": "Сброс пароля",
+  "auth.shared.helper": "Для этого экземпляра включена аутентификация. Анонимные доски остаются доступными по URL; постоянные проекты требуют входа.",
+  "auth.shared.or": "или",
+  "auth.signIn.title": "Вход",
+  "errors.RATE_LIMITED": "Слишком много попыток. Попробуйте позже.",
+  "errors.UNAUTHORIZED": "Не авторизован",
+  "errors.generic": "Что-то пошло не так.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Язык",
+} as const;
+
+const jaCatalog = {
+  "auth.2fa.accountFallback": "あなたのアカウント",
+  "auth.2fa.failed": "認証に失敗しました。",
+  "auth.2fa.helper": "認証アプリの6桁コード、またはリカバリーコードを入力してください。",
+  "auth.2fa.placeholder": "{account} のコード",
+  "auth.2fa.submit": "確認",
+  "auth.2fa.title": "二要素認証",
+  "auth.actions.bootstrap": "初期設定",
+  "auth.actions.login": "ログイン",
+  "auth.actions.resetPassword": "パスワードをリセット",
+  "auth.bootstrap.failed": "セットアップに失敗しました。",
+  "auth.bootstrap.title": "初回セットアップ",
+  "auth.fields.confirmPassword.label": "パスワードの確認",
+  "auth.fields.confirmPassword.placeholder": "新しいパスワードを再入力",
+  "auth.fields.email.placeholder": "メールアドレス",
+  "auth.fields.name.placeholder": "名前",
+  "auth.fields.newPassword.label": "新しいパスワード",
+  "auth.fields.newPassword.placeholder": "8文字以上",
+  "auth.fields.password.placeholder": "パスワード",
+  "auth.login.failed": "ログインに失敗しました。",
+  "auth.oidc.button": "SSO で続行",
+  "auth.oidc.error.email": "確認済みのメールアドレスが必要です。",
+  "auth.oidc.error.generic": "認証に失敗しました。",
+  "auth.oidc.error.provider": "ID プロバイダーがエラーを返しました。",
+  "auth.oidc.error.state_invalid": "ログインセッションの有効期限が切れたか無効です。もう一度お試しください。",
+  "auth.oidc.error.token": "認証に失敗しました。もう一度お試しください。",
+  "auth.password.hide": "パスワードを非表示",
+  "auth.password.show": "パスワードを表示",
+  "auth.reset.helper": "新しいパスワードを入力してください。リンクは30分で失効します。",
+  "auth.reset.invalidLink": "リセットリンクが無効または見つかりません",
+  "auth.reset.invalidOrExpiredToken": "リセットトークンが無効または期限切れです",
+  "auth.reset.passwordsMismatch": "パスワードが一致しません",
+  "auth.reset.success": "パスワードをリセットしました。ログインしてください。",
+  "auth.reset.title": "パスワードをリセット",
+  "auth.shared.helper": "このインスタンスでは認証が有効です。匿名ボードは URL で共有可能です。永続的なプロジェクトにはサインインが必要です。",
+  "auth.shared.or": "または",
+  "auth.signIn.title": "サインイン",
+  "errors.RATE_LIMITED": "試行回数が多すぎます。しばらくしてから再度お試しください。",
+  "errors.UNAUTHORIZED": "認証が必要です",
+  "errors.generic": "問題が発生しました。",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "言語",
+} as const;
+
+const trCatalog = {
+  "auth.2fa.accountFallback": "hesabınız",
+  "auth.2fa.failed": "Doğrulama başarısız.",
+  "auth.2fa.helper": "Kimlik doğrulama uygulamanızdaki 6 haneli kodu veya bir kurtarma kodunu girin.",
+  "auth.2fa.placeholder": "{account} için kod",
+  "auth.2fa.submit": "Doğrula",
+  "auth.2fa.title": "İki faktörlü kimlik doğrulama",
+  "auth.actions.bootstrap": "Kurulum",
+  "auth.actions.login": "Giriş yap",
+  "auth.actions.resetPassword": "Parolayı sıfırla",
+  "auth.bootstrap.failed": "Kurulum başarısız.",
+  "auth.bootstrap.title": "İlk kurulum",
+  "auth.fields.confirmPassword.label": "Parolayı onayla",
+  "auth.fields.confirmPassword.placeholder": "Yeni parolayı onayla",
+  "auth.fields.email.placeholder": "E-posta",
+  "auth.fields.name.placeholder": "Ad",
+  "auth.fields.newPassword.label": "Yeni parola",
+  "auth.fields.newPassword.placeholder": "En az 8 karakter",
+  "auth.fields.password.placeholder": "Parola",
+  "auth.login.failed": "Giriş başarısız.",
+  "auth.oidc.button": "SSO ile devam et",
+  "auth.oidc.error.email": "Doğrulanmış bir e-posta adresi gerekli.",
+  "auth.oidc.error.generic": "Kimlik doğrulama başarısız.",
+  "auth.oidc.error.provider": "Kimlik sağlayıcı bir hata döndürdü.",
+  "auth.oidc.error.state_invalid": "Oturum açma oturumu süresi doldu veya geçersiz. Lütfen tekrar deneyin.",
+  "auth.oidc.error.token": "Kimlik doğrulama başarısız. Lütfen tekrar deneyin.",
+  "auth.password.hide": "Parolayı gizle",
+  "auth.password.show": "Parolayı göster",
+  "auth.reset.helper": "Yeni parolanızı girin. Bağlantının süresi 30 dakika içinde dolacak.",
+  "auth.reset.invalidLink": "Geçersiz veya eksik sıfırlama bağlantısı",
+  "auth.reset.invalidOrExpiredToken": "Geçersiz veya süresi dolmuş sıfırlama jetonu",
+  "auth.reset.passwordsMismatch": "Parolalar eşleşmiyor",
+  "auth.reset.success": "Parola başarıyla sıfırlandı. Lütfen giriş yapın.",
+  "auth.reset.title": "Parolayı sıfırla",
+  "auth.shared.helper": "Bu örnek için kimlik doğrulama etkin. Anonim panolar URL ile paylaşılabilir; kalıcı projeler için oturum açmanız gerekir.",
+  "auth.shared.or": "veya",
+  "auth.signIn.title": "Oturum aç",
+  "errors.RATE_LIMITED": "Çok fazla deneme. Daha sonra tekrar deneyin.",
+  "errors.UNAUTHORIZED": "Yetkisiz",
+  "errors.generic": "Bir şeyler ters gitti.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "Dil",
+} as const;
+
+const koCatalog = {
+  "auth.2fa.accountFallback": "내 계정",
+  "auth.2fa.failed": "인증에 실패했습니다.",
+  "auth.2fa.helper": "인증 앱의 6자리 코드 또는 복구 코드를 입력하세요.",
+  "auth.2fa.placeholder": "{account}용 코드",
+  "auth.2fa.submit": "인증",
+  "auth.2fa.title": "2단계 인증",
+  "auth.actions.bootstrap": "초기 설정",
+  "auth.actions.login": "로그인",
+  "auth.actions.resetPassword": "비밀번호 재설정",
+  "auth.bootstrap.failed": "설정에 실패했습니다.",
+  "auth.bootstrap.title": "최초 설정",
+  "auth.fields.confirmPassword.label": "비밀번호 확인",
+  "auth.fields.confirmPassword.placeholder": "새 비밀번호 확인",
+  "auth.fields.email.placeholder": "이메일",
+  "auth.fields.name.placeholder": "이름",
+  "auth.fields.newPassword.label": "새 비밀번호",
+  "auth.fields.newPassword.placeholder": "최소 8자",
+  "auth.fields.password.placeholder": "비밀번호",
+  "auth.login.failed": "로그인에 실패했습니다.",
+  "auth.oidc.button": "SSO로 계속",
+  "auth.oidc.error.email": "인증된 이메일 주소가 필요합니다.",
+  "auth.oidc.error.generic": "인증에 실패했습니다.",
+  "auth.oidc.error.provider": "ID 공급자가 오류를 반환했습니다.",
+  "auth.oidc.error.state_invalid": "로그인 세션이 만료되었거나 유효하지 않습니다. 다시 시도하세요.",
+  "auth.oidc.error.token": "인증에 실패했습니다. 다시 시도하세요.",
+  "auth.password.hide": "비밀번호 숨기기",
+  "auth.password.show": "비밀번호 표시",
+  "auth.reset.helper": "새 비밀번호를 입력하세요. 링크는 30분 후 만료됩니다.",
+  "auth.reset.invalidLink": "재설정 링크가 없거나 유효하지 않습니다",
+  "auth.reset.invalidOrExpiredToken": "재설정 토큰이 유효하지 않거나 만료되었습니다",
+  "auth.reset.passwordsMismatch": "비밀번호가 일치하지 않습니다",
+  "auth.reset.success": "비밀번호가 재설정되었습니다. 로그인하세요.",
+  "auth.reset.title": "비밀번호 재설정",
+  "auth.shared.helper": "이 인스턴스에서는 인증이 활성화되어 있습니다. 익명 보드는 URL로 공유할 수 있으며, 영구 프로젝트에는 로그인이 필요합니다.",
+  "auth.shared.or": "또는",
+  "auth.signIn.title": "로그인",
+  "errors.RATE_LIMITED": "시도 횟수가 너무 많습니다. 나중에 다시 시도하세요.",
+  "errors.UNAUTHORIZED": "인증되지 않음",
+  "errors.generic": "문제가 발생했습니다.",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "언어",
+} as const;
+
+const zhCatalog = {
+  "auth.2fa.accountFallback": "你的账户",
+  "auth.2fa.failed": "验证失败。",
+  "auth.2fa.helper": "输入认证器应用中的 6 位验证码，或输入恢复码。",
+  "auth.2fa.placeholder": "{account} 的验证码",
+  "auth.2fa.submit": "验证",
+  "auth.2fa.title": "双因素认证",
+  "auth.actions.bootstrap": "初始化",
+  "auth.actions.login": "登录",
+  "auth.actions.resetPassword": "重置密码",
+  "auth.bootstrap.failed": "设置失败。",
+  "auth.bootstrap.title": "首次设置",
+  "auth.fields.confirmPassword.label": "确认密码",
+  "auth.fields.confirmPassword.placeholder": "确认新密码",
+  "auth.fields.email.placeholder": "邮箱",
+  "auth.fields.name.placeholder": "姓名",
+  "auth.fields.newPassword.label": "新密码",
+  "auth.fields.newPassword.placeholder": "至少 8 个字符",
+  "auth.fields.password.placeholder": "密码",
+  "auth.login.failed": "登录失败。",
+  "auth.oidc.button": "使用 SSO 继续",
+  "auth.oidc.error.email": "需要已验证的邮箱地址。",
+  "auth.oidc.error.generic": "认证失败。",
+  "auth.oidc.error.provider": "身份提供商返回了错误。",
+  "auth.oidc.error.state_invalid": "登录会话已过期或无效。请重试。",
+  "auth.oidc.error.token": "认证失败。请重试。",
+  "auth.password.hide": "隐藏密码",
+  "auth.password.show": "显示密码",
+  "auth.reset.helper": "输入新密码。链接将在 30 分钟后过期。",
+  "auth.reset.invalidLink": "重置链接无效或缺失",
+  "auth.reset.invalidOrExpiredToken": "重置令牌无效或已过期",
+  "auth.reset.passwordsMismatch": "两次输入的密码不一致",
+  "auth.reset.success": "密码重置成功。请登录。",
+  "auth.reset.title": "重置密码",
+  "auth.shared.helper": "此实例已启用认证。匿名看板仍可通过 URL 分享；持久项目需要登录。",
+  "auth.shared.or": "或",
+  "auth.signIn.title": "登录",
+  "errors.RATE_LIMITED": "尝试次数过多。请稍后再试。",
+  "errors.UNAUTHORIZED": "未授权",
+  "errors.generic": "出了点问题。",
+  "errors.httpStatus": "HTTP {status}",
+  "settings.language.selectLabel": "语言",
 } as const;
 
 const pseudoCatalog = {
@@ -239,9 +507,10 @@ const pseudoCatalog = {
   "errors.UNAUTHORIZED": "[!! Unauthorized !!]",
   "errors.generic": "[!! Something went wrong. !!]",
   "errors.httpStatus": "[!! HTTP {status} !!]",
+  "settings.language.selectLabel": "[!! Language !!]",
 } as const;
 
-type TestLocale = "en" | "de" | "fr" | "pt" | "pseudo";
+type TestLocale = "en" | "de" | "fr" | "pt" | "ar" | "ru" | "ja" | "tr" | "ko" | "zh" | "pseudo";
 
 function loader() {
   return vi.fn(async (locale: TestLocale) => {
@@ -250,6 +519,12 @@ function loader() {
       de: deCatalog,
       fr: frCatalog,
       pt: ptCatalog,
+      ar: arCatalog,
+      ru: ruCatalog,
+      ja: jaCatalog,
+      tr: trCatalog,
+      ko: koCatalog,
+      zh: zhCatalog,
       pseudo: pseudoCatalog,
     };
     return catalogs[locale];
@@ -269,6 +544,56 @@ async function flushPromises(count = 8): Promise<void> {
   for (let i = 0; i < count; i += 1) {
     await Promise.resolve();
   }
+}
+
+function getAuthLocaleSelect(): HTMLButtonElement {
+  const button = document.getElementById("authLocaleSelect") as HTMLButtonElement | null;
+  if (!button) throw new Error("missing auth locale selector");
+  return button;
+}
+
+function authLocaleOptionDetails(): Array<{ locale: string; label: string; flagSrc: string }> {
+  const list = getAuthLocaleSelect().closest(".locale-picker")?.querySelector(".locale-picker__list");
+  return Array.from(list?.querySelectorAll('[role="option"]') ?? []).map((option) => ({
+    locale: option.getAttribute("data-locale") ?? "",
+    label: option.querySelector(".locale-picker__label")?.textContent ?? "",
+    flagSrc: (option.querySelector(".locale-picker__flag") as HTMLImageElement | null)?.getAttribute("src") ?? "",
+  }));
+}
+
+function authLocaleOptionValues(): string[] {
+  return authLocaleOptionDetails().map((option) => option.locale);
+}
+
+const EXPECTED_LOCALE_FLAG_PATHS = [
+  "/assets/flags/us.svg",
+  "/assets/flags/de.svg",
+  "/assets/flags/fr.svg",
+  "/assets/flags/br.svg",
+  "/assets/flags/sa.svg",
+  "/assets/flags/ru.svg",
+  "/assets/flags/jp.svg",
+  "/assets/flags/tr.svg",
+  "/assets/flags/kr.svg",
+  "/assets/flags/cn.svg",
+];
+
+const EXPECTED_PUBLIC_LOCALES = ["en", "de", "fr", "pt", "ar", "ru", "ja", "tr", "ko", "zh"];
+
+async function selectAuthLocale(locale: string): Promise<void> {
+  const button = getAuthLocaleSelect();
+  button.click();
+  const option = button.closest(".locale-picker")?.querySelector(`[role="option"][data-locale="${locale}"]`) as HTMLElement | null;
+  if (!option) throw new Error(`missing auth locale option: ${locale}`);
+  option.click();
+  await flushPromises();
+}
+
+function getAuthLocalePickerSelectedLocale(): string {
+  const selected = getAuthLocaleSelect()
+    .closest(".locale-picker")
+    ?.querySelector('[role="option"][aria-selected="true"]');
+  return selected?.getAttribute("data-locale") ?? "";
 }
 
 describe("auth view i18n", () => {
@@ -307,6 +632,128 @@ describe("auth view i18n", () => {
     expect((document.getElementById("authPassword") as HTMLInputElement | null)?.placeholder).toBe("Password");
     expect(document.getElementById("loginBtn")?.textContent).toBe("Login");
     expect(document.getElementById("authPasswordToggle")?.getAttribute("aria-label")).toBe("Show password");
+  });
+
+  it("renders a public language selector in every auth shell", async () => {
+    await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
+    expect(authLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
+    expect(authLocaleOptionDetails().map((option) => option.label)).toEqual([
+      "English",
+      "Deutsch",
+      "Français",
+      "Português (Brasil)",
+      "العربية",
+      "Русский",
+      "日本語",
+      "Türkçe",
+      "한국어",
+      "简体中文",
+    ]);
+    expect(authLocaleOptionValues()).not.toContain("pseudo");
+    expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
+
+    auth.renderAuth({ next: "/projects", bootstrap: true, oidcEnabled: false, localAuthEnabled: true });
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
+
+    auth.renderResetPassword("reset-token");
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
+
+    apiFetchMock.mockResolvedValueOnce({
+      requires2fa: true,
+      tempToken: "temp-token",
+      user: { id: 7, email: "user@example.com" },
+    });
+    auth.renderAuth({ next: "/dashboard", localAuthEnabled: true });
+    (document.getElementById("authEmail") as HTMLInputElement).value = "user@example.com";
+    (document.getElementById("authPassword") as HTMLInputElement).value = "password";
+    document.getElementById("authForm")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flushPromises();
+
+    expect(document.querySelector(".panel__title")?.textContent).toBe("Two-factor authentication");
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
+    expect(authLocaleOptionValues()).not.toContain("pseudo");
+  });
+
+  it("selecting Arabic in the auth selector sets RTL document direction", async () => {
+    const i18n = await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
+    await selectAuthLocale("ar");
+
+    expect(i18n.getLocale()).toBe("ar");
+    expect(document.documentElement.getAttribute("dir")).toBe("rtl");
+    expect(document.documentElement.lang).toBe("ar");
+    expect(document.querySelector(".panel__title")?.textContent).toBe("تسجيل الدخول");
+  });
+
+  it("selecting German in the auth selector persists locale and updates chrome without clearing sign-in fields", async () => {
+    const i18n = await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard?tab=mine", oidcEnabled: true, localAuthEnabled: true });
+    const emailEl = document.getElementById("authEmail") as HTMLInputElement;
+    const pwEl = document.getElementById("authPassword") as HTMLInputElement;
+    emailEl.value = "user@example.com";
+    pwEl.value = "secret";
+    emailEl.dispatchEvent(new Event("input", { bubbles: true }));
+    pwEl.dispatchEvent(new Event("input", { bubbles: true }));
+
+    await selectAuthLocale("de");
+
+    expect(i18n.getLocale()).toBe("de");
+    expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+    expect(getAuthLocalePickerSelectedLocale()).toBe("de");
+    expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Sprache");
+    expect(document.querySelector(".panel__title")?.textContent).toBe("Anmelden");
+    expect(document.getElementById("authSsoBtn")?.textContent).toBe("Mit SSO fortfahren");
+    expect((document.getElementById("authEmail") as HTMLInputElement).value).toBe("user@example.com");
+    expect((document.getElementById("authPassword") as HTMLInputElement).value).toBe("secret");
+  });
+
+  it("selecting a locale in bootstrap preserves typed admin fields", async () => {
+    const i18n = await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/projects", bootstrap: true, localAuthEnabled: true });
+    const nameEl = document.getElementById("authName") as HTMLInputElement;
+    const emailEl = document.getElementById("authEmail") as HTMLInputElement;
+    const pwEl = document.getElementById("authPassword") as HTMLInputElement;
+    nameEl.value = "Admin";
+    emailEl.value = "admin@example.com";
+    pwEl.value = "bootstrap-secret";
+    nameEl.dispatchEvent(new Event("input", { bubbles: true }));
+    emailEl.dispatchEvent(new Event("input", { bubbles: true }));
+    pwEl.dispatchEvent(new Event("input", { bubbles: true }));
+
+    await selectAuthLocale("fr");
+    await flushPromises();
+
+    expect(i18n.getLocale()).toBe("fr");
+    expect(document.querySelector(".panel__title")?.textContent).toBe("Configuration initiale");
+    expect(getAuthLocalePickerSelectedLocale()).toBe("fr");
+    expect((document.getElementById("authName") as HTMLInputElement).value).toBe("Admin");
+    expect((document.getElementById("authEmail") as HTMLInputElement).value).toBe("admin@example.com");
+    expect((document.getElementById("authPassword") as HTMLInputElement).value).toBe("bootstrap-secret");
+  });
+
+  it("keeps pseudo hidden from the auth selector while displaying a public fallback", async () => {
+    const i18n = await setupI18n("pseudo");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
+
+    expect(i18n.getLocale()).toBe("pseudo");
+    expect(document.querySelector(".panel__title")?.textContent).toBe("[!! Sign in !!]");
+    expect(authLocaleOptionValues()).toEqual(EXPECTED_PUBLIC_LOCALES);
+    expect(authLocaleOptionDetails().map((option) => option.flagSrc)).toEqual(EXPECTED_LOCALE_FLAG_PATHS);
+    expect(authLocaleOptionValues()).not.toContain("pseudo");
+    expect(getAuthLocalePickerSelectedLocale()).toBe("en");
+    expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("[!! Language !!]");
   });
 
   it("renders English bootstrap and reset-password copy", async () => {

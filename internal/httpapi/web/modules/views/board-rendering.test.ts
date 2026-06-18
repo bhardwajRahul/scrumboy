@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Board } from '../types.js';
 import { buildTopbarHtml, renderTodoCard } from './board-rendering.js';
 import { buildTopbarHtml as buildTopbarHtmlDist } from '../../dist/views/board-rendering.js';
+import enCatalog from '../i18n/locales/en.json';
+import pseudoCatalog from '../i18n/locales/pseudo.json';
 
 function board(): Board {
   return {
@@ -34,6 +36,11 @@ function renderTopbar(showVoiceCommands: boolean): string {
 }
 
 describe('board topbar rendering', () => {
+  afterEach(async () => {
+    const i18n = await import('../i18n/index.js');
+    i18n.resetI18nForTests();
+  });
+
   it('renders the voice command trigger only when explicitly enabled', () => {
     expect(renderTopbar(true)).toContain('topbar--voice-commands-on');
     expect(renderTopbar(true)).toContain('id="voiceCommandBtn"');
@@ -44,6 +51,19 @@ describe('board topbar rendering', () => {
     expect(renderTopbar(true)).toContain('height="20"');
     expect(renderTopbar(false)).toContain('topbar--voice-commands-off');
     expect(renderTopbar(false)).not.toContain('id="voiceCommandBtn"');
+  });
+
+  it('uses the VoiceFlow title catalog key for trigger aria and title text', async () => {
+    const i18n = await import('../i18n/index.js');
+    await i18n.initI18n({
+      locale: 'pseudo',
+      loadLocale: vi.fn(async (locale: 'en' | 'pseudo') => (locale === 'pseudo' ? pseudoCatalog : enCatalog)),
+    });
+
+    const html = renderTopbar(true);
+
+    expect(html).toContain(`aria-label="${pseudoCatalog['voice.title']}"`);
+    expect(html).toContain(`title="${pseudoCatalog['voice.title']}"`);
   });
 
   it('renders the mic button to the left of the search input (desktop)', () => {

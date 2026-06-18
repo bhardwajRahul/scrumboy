@@ -281,6 +281,43 @@ describe('settings-workflow', () => {
     expect(rerender).toHaveBeenCalledTimes(1);
   });
 
+  it('shows a localized backend validation reason when adding a workflow lane fails', async () => {
+    const rerender = vi.fn().mockResolvedValue(undefined);
+    const mod = await loadWorkflowModule('de');
+    await primeOkWorkflowState(mod, rerender);
+
+    render(mod.loadWorkflowTabContent({ slug: 'alpha', rerender }));
+    mod.bindWorkflowTabInteractions({
+      signal: new AbortController().signal,
+      settingsDialog: null,
+      closeSettingsBtn: null,
+      rerender,
+    });
+
+    const addInput = document.querySelector('[data-workflow-ghost-input]');
+    const addBtn = document.querySelector('[data-workflow-add]');
+    if (!(addInput instanceof HTMLInputElement)) throw new Error('missing workflow add input');
+    if (!(addBtn instanceof HTMLElement)) throw new Error('missing workflow add button');
+
+    const err = new Error('validation: name required') as Error & { data?: unknown };
+    err.data = {
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'validation: name required',
+        details: { reason: 'name_required', field: 'name' },
+      },
+    };
+    apiFetchMock.mockRejectedValueOnce(err);
+
+    addInput.value = 'Review';
+    addBtn.click();
+    await flushPromises();
+
+    expect(showToastMock).toHaveBeenCalledWith(deCatalog['errors.VALIDATION_ERROR.name_required']);
+    expect(invalidateBoardMock).not.toHaveBeenCalled();
+    expect(rerender).not.toHaveBeenCalled();
+  });
+
   it('patches only changed workflow lanes and then rerenders', async () => {
     const rerender = vi.fn().mockResolvedValue(undefined);
     const mod = await loadWorkflowModule();

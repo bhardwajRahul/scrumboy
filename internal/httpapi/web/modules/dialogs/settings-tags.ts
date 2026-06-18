@@ -12,7 +12,7 @@ import {
 } from '../state/selectors.js';
 import { setTagColors } from '../state/mutations.js';
 import { escapeHTML, sanitizeHexColor, showConfirmDialog, showToast } from '../utils.js';
-import { t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, t } from '../i18n/index.js';
 
 type BindTagTabInteractionsOptions = {
   signal: AbortSignal;
@@ -66,7 +66,7 @@ async function applyTagColorSuccess(tagName: string, color: string | null): Prom
 
     showToast(t('settings.tagColors.toast.colorUpdated'));
   } catch (err: any) {
-    showToast(err.message);
+    showToast(apiErrorMessageOrRaw(err));
   }
 }
 
@@ -93,7 +93,7 @@ async function updateTagColor(
       });
       await applyTagColorSuccess(tagName, color);
     } catch (err: any) {
-      showToast(err.message);
+      showToast(apiErrorMessageOrRaw(err));
     }
     return;
   }
@@ -113,7 +113,7 @@ async function updateTagColor(
       });
       await applyTagColorSuccess(tagName, color);
     } catch (err: any) {
-      showToast(err.message);
+      showToast(apiErrorMessageOrRaw(err));
     }
     return;
   }
@@ -173,7 +173,7 @@ async function deleteTag(
 
     showToast(t('settings.tagColors.toast.deleted', { name: tagName }));
   } catch (err: any) {
-    showToast(err.message);
+    showToast(apiErrorMessageOrRaw(err));
   }
 }
 

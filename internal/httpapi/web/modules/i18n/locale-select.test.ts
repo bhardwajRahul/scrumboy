@@ -1,0 +1,122 @@
+// @vitest-environment happy-dom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const enCatalog = {
+  "settings.language.selectLabel": "Language",
+};
+
+const deCatalog = {
+  "settings.language.selectLabel": "Sprache",
+};
+
+function loader(catalogs: Record<string, Record<string, string>>) {
+  return vi.fn(async (locale: "en" | "de") => catalogs[locale]);
+}
+
+async function flushPromises(count = 8): Promise<void> {
+  for (let i = 0; i < count; i += 1) {
+    await Promise.resolve();
+  }
+}
+
+async function setupI18n(locale: "en" | "de" = "en") {
+  const i18n = await import("./index.js");
+  await i18n.initI18n({
+    locale,
+    loadLocale: loader({ en: enCatalog, de: deCatalog }),
+  });
+  return i18n;
+}
+
+describe("locale-select custom picker", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    document.body.innerHTML = "";
+    localStorage.clear();
+  });
+
+  afterEach(async () => {
+    const i18n = await import("./index.js");
+    i18n.resetI18nForTests();
+    document.body.innerHTML = "";
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("opens and closes on button click and outside click", async () => {
+    await setupI18n("en");
+    const localeSelect = await import("./locale-select.js");
+    document.body.innerHTML = localeSelect.renderPublicLocaleSelectHTML({ id: "testLocaleSelect" });
+    const button = document.getElementById("testLocaleSelect") as HTMLButtonElement;
+    localeSelect.bindPublicLocaleSelect(button);
+
+    const list = button.closest(".locale-picker")?.querySelector(".locale-picker__list") as HTMLUListElement;
+    expect(list.hidden).toBe(true);
+
+    button.click();
+    expect(list.hidden).toBe(false);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+
+    document.body.click();
+    expect(list.hidden).toBe(true);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("selects a locale from the listbox and persists it", async () => {
+    const i18n = await setupI18n("en");
+    const localeSelect = await import("./locale-select.js");
+    document.body.innerHTML = localeSelect.renderPublicLocaleSelectHTML({ id: "testLocaleSelect" });
+    const button = document.getElementById("testLocaleSelect") as HTMLButtonElement;
+    localeSelect.bindPublicLocaleSelect(button);
+
+    button.click();
+    const deOption = button.closest(".locale-picker")?.querySelector('[role="option"][data-locale="de"]') as HTMLElement;
+    deOption.click();
+    await flushPromises();
+
+    expect(i18n.getLocale()).toBe("de");
+    expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+    expect(button.querySelector(".locale-picker__label")?.textContent).toBe("Deutsch");
+    expect((button.querySelector(".locale-picker__flag") as HTMLImageElement).getAttribute("src")).toBe("/assets/flags/de.svg");
+  });
+
+  it("supports keyboard navigation and Enter to select", async () => {
+    const i18n = await setupI18n("en");
+    const localeSelect = await import("./locale-select.js");
+    document.body.innerHTML = localeSelect.renderPublicLocaleSelectHTML({ id: "testLocaleSelect" });
+    const button = document.getElementById("testLocaleSelect") as HTMLButtonElement;
+    localeSelect.bindPublicLocaleSelect(button);
+
+    button.focus();
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    const list = button.closest(".locale-picker")?.querySelector(".locale-picker__list") as HTMLUListElement;
+    expect(list.hidden).toBe(false);
+
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    const highlighted = list.querySelector(".locale-picker__option--highlight");
+    expect(highlighted?.getAttribute("data-locale")).toBe("de");
+
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushPromises();
+
+    expect(i18n.getLocale()).toBe("de");
+    expect(list.hidden).toBe(true);
+  });
+
+  it("syncPublicLocaleSelect refreshes aria-label and selected option", async () => {
+    const i18n = await setupI18n("en");
+    const localeSelect = await import("./locale-select.js");
+    document.body.innerHTML = localeSelect.renderPublicLocaleSelectHTML({ id: "testLocaleSelect" });
+    const button = document.getElementById("testLocaleSelect") as HTMLButtonElement;
+    localeSelect.bindPublicLocaleSelect(button);
+
+    await i18n.setLocale("de");
+    localeSelect.syncPublicLocaleSelect(button);
+
+    expect(button.getAttribute("aria-label")).toBe("Sprache");
+    expect(button.querySelector(".locale-picker__label")?.textContent).toBe("Deutsch");
+    expect(
+      button.closest(".locale-picker")?.querySelector('[role="option"][aria-selected="true"]')?.getAttribute("data-locale"),
+    ).toBe("de");
+  });
+});

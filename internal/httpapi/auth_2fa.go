@@ -50,7 +50,7 @@ func (s *Server) handleLogin2FA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.TempToken == "" || in.Code == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "tempToken and code required", nil)
+		writeValidationError(w, "tempToken and code required", "temp_token_and_code_required", nil)
 		return
 	}
 
@@ -206,7 +206,7 @@ func (s *Server) handle2FAEnable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.SetupToken == "" || in.Code == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "setupToken and code required", nil)
+		writeValidationError(w, "setupToken and code required", "setup_token_and_code_required", nil)
 		return
 	}
 
@@ -282,7 +282,7 @@ func (s *Server) handle2FADisable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if in.Password == "" {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "password required", nil)
+		writeValidationError(w, "password required", "password_required", nil)
 		return
 	}
 

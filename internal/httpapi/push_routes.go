@@ -47,7 +47,7 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, rest []strin
 			return
 		}
 		if in.Endpoint == "" || in.Keys.P256dh == "" || in.Keys.Auth == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "endpoint and keys.p256dh, keys.auth required", nil)
+			writeValidationError(w, "endpoint and keys.p256dh, keys.auth required", "push_subscription_keys_required", nil)
 			return
 		}
 		ua := r.UserAgent()
@@ -74,7 +74,7 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, rest []strin
 			return
 		}
 		if in.Endpoint == "" {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "endpoint required", nil)
+			writeValidationError(w, "endpoint required", "endpoint_required", nil)
 			return
 		}
 		if err := s.store.DeletePushSubscription(ctx, userID, in.Endpoint); err != nil {

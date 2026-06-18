@@ -11,7 +11,7 @@ import {
 } from '../state/selectors.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, titleAttr } from '../field-tooltips.js';
-import { t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, t } from '../i18n/index.js';
 
 type WorkflowLaneCountsState =
   | { status: 'loading' }
@@ -262,7 +262,7 @@ async function addWorkflowLane(name: string, rerender: RerenderFn): Promise<void
     await rerender();
     showToast(t('settings.workflow.toast.laneAdded'));
   } catch (err: any) {
-    showToast(err.message || t('settings.workflow.toast.addFailed'));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.workflow.toast.addFailed' }));
   }
 }
 
@@ -299,7 +299,7 @@ async function saveWorkflowDraftChanges(rerender: RerenderFn): Promise<void> {
     await rerender();
     showToast(t('settings.workflow.toast.updated'));
   } catch (err: any) {
-    showToast(err.message || t('settings.workflow.toast.updateFailed'));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.workflow.toast.updateFailed' }));
   }
 }
 
@@ -335,7 +335,7 @@ async function deleteWorkflowLane(key: string, rerender: RerenderFn): Promise<vo
     await rerender();
     showToast(t('settings.workflow.toast.laneDeleted'));
   } catch (err: any) {
-    showToast(err.message || t('settings.workflow.toast.deleteFailed'));
+    showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.workflow.toast.deleteFailed' }));
   }
 }
 

@@ -41,7 +41,7 @@ func (s *Server) handleTrelloPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	bundle, err := trelloimport.BuildImportBundle(body, time.Now().UTC())
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid Trello JSON", map[string]any{"detail": err.Error()})
+		writeValidationError(w, "invalid Trello JSON", "invalid_trello_json", map[string]any{"detail": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, bundle.Preview)
@@ -54,11 +54,11 @@ func (s *Server) handleTrelloImport(w http.ResponseWriter, r *http.Request) {
 	}
 	bundle, err := trelloimport.BuildImportBundle(body, time.Now().UTC())
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "invalid Trello JSON", map[string]any{"detail": err.Error()})
+		writeValidationError(w, "invalid Trello JSON", "invalid_trello_json", map[string]any{"detail": err.Error()})
 		return
 	}
 	if len(bundle.Preview.HardErrors) > 0 || bundle.ExportData == nil {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "Trello import validation failed", map[string]any{
+		writeValidationError(w, "Trello import validation failed", "trello_import_validation_failed", map[string]any{
 			"hardErrors": bundle.Preview.HardErrors,
 			"warnings":   bundle.Preview.Warnings,
 		})

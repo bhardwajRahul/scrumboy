@@ -343,7 +343,7 @@ html {
 body {
   margin: 0;
   min-height: 100%;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Tahoma, Roboto, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -1185,6 +1185,80 @@ html[data-wallpaper-active] #settingsDialog.dialog {
 }
 
 /* Auth page: password row and toggle use same dark background as email field (all viewports). */
+.page--auth .topbar {
+  overflow: visible;
+  z-index: 20;
+}
+
+.page--auth .topbar .auth-locale-select {
+  width: auto;
+  min-width: 150px;
+  max-width: min(42vw, 220px);
+  flex: 0 0 auto;
+}
+
+.locale-picker {
+  position: relative;
+  display: inline-block;
+}
+
+.locale-picker__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.locale-picker__flag {
+  display: block;
+  width: auto;
+  height: 16px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 1px;
+}
+
+.locale-picker__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.locale-picker__list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 100%;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.locale-picker__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.locale-picker__option:hover,
+.locale-picker__option--highlight {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.06));
+}
+
+.locale-picker__option[aria-selected="true"] {
+  font-weight: 600;
+}
+
 .page--auth .password-row {
   background: var(--bg);
 }
@@ -4843,6 +4917,15 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   }
 }
 
+@media (max-width: 767px) {
+  .page--auth .topbar .auth-locale-select {
+    order: 1;
+    margin-left: auto;
+    min-width: min(148px, 45vw);
+    max-width: 48vw;
+  }
+}
+
 
 /* ==========================================================================
    Scrumbaby sticky-note wall dialog (Postbaby-parity).
@@ -5209,3 +5292,47 @@ label:has(input[type="radio"][name="importMode"]:disabled) {
   pointer-events: none;
 }
 .wall-empty .muted { color: var(--wall-fg-muted); opacity: 0.75; }
+
+/* ============================================
+   RTL LAYOUT (Arabic)
+   ============================================ */
+
+[dir="rtl"] .locale-picker__button {
+  text-align: right;
+}
+
+[dir="rtl"] .locale-picker__list {
+  left: auto;
+  right: 0;
+}
+
+[dir="rtl"] .todo-notes-tabs {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[dir="rtl"] .password-toggle {
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+
+[dir="rtl"] .dialog__footer .spacer {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+@media (max-width: 767px) {
+  [dir="rtl"] .dialog__footer .btn--danger {
+    margin-left: 0;
+    margin-right: auto;
+  }
+}
+
+[dir="rtl"] .voice-command__tab {
+  border-right: 0;
+  border-left: 1px solid var(--border);
+}
+
+[dir="rtl"] .voice-command__tab:last-child {
+  border-left: 0;
+}

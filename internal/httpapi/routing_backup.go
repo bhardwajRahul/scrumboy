@@ -71,7 +71,7 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request, rest []str
 		}
 
 		if in.Data == nil {
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "missing data", nil)
+			writeValidationError(w, "missing data", "missing_data", nil)
 			return
 		}
 
@@ -110,14 +110,14 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request, rest []str
 
 		if in.Data == nil {
 			s.logger.Printf("BACKUP IMPORT: ERROR - missing data")
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "missing data", nil)
+			writeValidationError(w, "missing data", "missing_data", nil)
 			return
 		}
 
 		// Validate confirmation for replace mode
 		if in.ImportMode == "replace" && in.Confirmation != "REPLACE" {
 			s.logger.Printf("BACKUP IMPORT: ERROR - replace mode requires confirmation")
-			writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "replace mode requires confirmation: type REPLACE", nil)
+			writeValidationError(w, "replace mode requires confirmation: type REPLACE", "replace_confirmation_required", nil)
 			return
 		}
 

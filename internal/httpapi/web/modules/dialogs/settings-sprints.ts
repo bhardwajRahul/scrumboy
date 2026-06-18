@@ -7,7 +7,7 @@ import { setBoard } from '../state/mutations.js';
 import { normalizeSprints } from '../sprints.js';
 import { escapeHTML, showConfirmDialog, showToast } from '../utils.js';
 import { FIELD_TOOLTIPS, fieldLabelHTML, titleAttr } from '../field-tooltips.js';
-import { formatDate, t } from '../i18n/index.js';
+import { apiErrorMessageOrRaw, formatDate, t } from '../i18n/index.js';
 
 type BindSprintsTabInteractionsOptions = {
   signal: AbortSignal;
@@ -309,7 +309,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           refreshSprintsAndChips(getSlug() ?? '').catch(() => {});
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.createFailed'));
+          showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.createFailed' }));
         }
       },
       { signal }
@@ -345,7 +345,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           emit('sprint-updated', { sprintId: parseInt(sprintId, 10), state: 'ACTIVE' });
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.activateFailed'));
+          showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.activateFailed' }));
         }
       },
       { signal }
@@ -367,7 +367,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           emit('sprint-updated', { sprintId: parseInt(sprintId, 10), state: 'CLOSED' });
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.closeFailed'));
+          showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.closeFailed' }));
         }
       },
       { signal }
@@ -439,7 +439,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           refreshSprintsAndChips(getSlug() ?? '').catch(() => {});
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.updateFailed'));
+          showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.updateFailed' }));
         }
       },
       { signal }
@@ -481,7 +481,7 @@ export function bindSprintsTabInteractions(options: BindSprintsTabInteractionsOp
           refreshSprintsAndChips(getSlug() ?? '').catch(() => {});
           await rerender();
         } catch (err: any) {
-          showToast(err.message || t('settings.sprints.toast.deleteFailed'));
+          showToast(apiErrorMessageOrRaw(err, { fallbackKey: 'settings.sprints.toast.deleteFailed' }));
         }
       },
       { signal }

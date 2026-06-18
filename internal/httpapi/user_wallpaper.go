@@ -198,7 +198,7 @@ func (s *Server) uploadUserWallpaperImage(w http.ResponseWriter, r *http.Request
 		ct = "application/octet-stream"
 	}
 	if !strings.HasPrefix(strings.ToLower(ct), "image/") {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "file must be an image", map[string]any{"field": "file"})
+		writeValidationError(w, "file must be an image", "file_must_be_image", map[string]any{"field": "file"})
 		return
 	}
 
@@ -209,7 +209,7 @@ func (s *Server) uploadUserWallpaperImage(w http.ResponseWriter, r *http.Request
 	}
 	img, err := decodeWallpaperUpload(data, ct)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error(), map[string]any{"field": "file"})
+		writeValidationError(w, err.Error(), "", map[string]any{"field": "file"})
 		return
 	}
 
@@ -219,7 +219,7 @@ func (s *Server) uploadUserWallpaperImage(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if buf.Len() > 3<<20 {
-		writeError(w, http.StatusBadRequest, "VALIDATION_ERROR", "processed image too large", nil)
+		writeValidationError(w, "processed image too large", "processed_image_too_large", nil)
 		return
 	}
 

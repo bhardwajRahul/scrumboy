@@ -18,6 +18,7 @@ const enCatalog = {
   "errors.CONFLICT": "Conflict",
   "errors.NOT_FOUND": "Not found",
   "errors.VALIDATION_ERROR": "Please check the request and try again.",
+  "errors.VALIDATION_ERROR.invalid_workflow_column_color": "Enter a valid workflow column color.",
   "errors.VALIDATION_ERROR.name_required": "Please enter a name.",
   "errors.generic": "Something went wrong.",
   "errors.httpStatus": "HTTP {status}",
@@ -53,6 +54,7 @@ const pseudoCatalog = {
   "errors.CONFLICT": "[!! Conflict !!]",
   "errors.NOT_FOUND": "[!! Not found !!]",
   "errors.VALIDATION_ERROR": "[!! Please check the request and try again. !!]",
+  "errors.VALIDATION_ERROR.invalid_workflow_column_color": "[!! Enter a valid workflow column color. !!]",
   "errors.VALIDATION_ERROR.name_required": "[!! Please enter a name. !!]",
   "errors.generic": "[!! Something went wrong. !!]",
   "errors.httpStatus": "[!! HTTP {status} !!]",
@@ -88,6 +90,7 @@ const deCatalog = {
   "errors.CONFLICT": "Konflikt",
   "errors.NOT_FOUND": "Nicht gefunden",
   "errors.VALIDATION_ERROR": "Bitte prüfe die Eingabe und versuche es erneut.",
+  "errors.VALIDATION_ERROR.invalid_workflow_column_color": "Bitte gib eine gültige Workflow-Spaltenfarbe ein.",
   "errors.VALIDATION_ERROR.name_required": "Bitte gib einen Namen ein.",
   "errors.generic": "Etwas ist schiefgelaufen.",
   "errors.httpStatus": "HTTP {status}",
@@ -112,7 +115,7 @@ async function loadModule() {
 }
 
 function loader(catalogs: Record<string, Record<string, string>>) {
-  return vi.fn(async (locale: "en" | "de" | "pseudo") => catalogs[locale]);
+  return vi.fn(async (locale: string) => catalogs[locale]);
 }
 
 describe("i18n locale detection", () => {
@@ -142,6 +145,23 @@ describe("i18n locale detection", () => {
     expect(i18n.normalizeLocale("fr-FR")).toBe("fr");
     expect(i18n.normalizeLocale("pt")).toBe("pt");
     expect(i18n.normalizeLocale("pt-BR")).toBe("pt");
+    expect(i18n.normalizeLocale("ar")).toBe("ar");
+    expect(i18n.normalizeLocale("ar-SA")).toBe("ar");
+    expect(i18n.normalizeLocale("ru")).toBe("ru");
+    expect(i18n.normalizeLocale("ru-RU")).toBe("ru");
+    expect(i18n.normalizeLocale("ja")).toBe("ja");
+    expect(i18n.normalizeLocale("ja-JP")).toBe("ja");
+    expect(i18n.normalizeLocale("tr")).toBe("tr");
+    expect(i18n.normalizeLocale("tr-TR")).toBe("tr");
+    expect(i18n.normalizeLocale("ko")).toBe("ko");
+    expect(i18n.normalizeLocale("ko-KR")).toBe("ko");
+    expect(i18n.normalizeLocale("zh")).toBe("zh");
+    expect(i18n.normalizeLocale("zh-CN")).toBe("zh");
+    expect(i18n.normalizeLocale("zh-Hans")).toBe("zh");
+    expect(i18n.normalizeLocale("zh-TW")).toBe(null);
+    expect(i18n.isRtlLocale("ar")).toBe(true);
+    expect(i18n.documentDirection("ar")).toBe("rtl");
+    expect(i18n.documentDirection("en")).toBe("ltr");
   });
 });
 
@@ -150,6 +170,7 @@ describe("i18n catalog loading", () => {
     localStorage.clear();
     document.documentElement.lang = "en";
     document.documentElement.removeAttribute("data-locale");
+    document.documentElement.removeAttribute("dir");
   });
 
   afterEach(async () => {
@@ -182,7 +203,26 @@ describe("i18n catalog loading", () => {
     expect(i18n.getLocale()).toBe("de");
     expect(document.documentElement.lang).toBe("de");
     expect(document.documentElement.getAttribute("data-locale")).toBe("de");
+    expect(document.documentElement.hasAttribute("dir")).toBe(false);
     expect(i18n.t("common.cancel")).toBe("Abbrechen");
+  });
+
+  it("sets dir=rtl for Arabic and clears it when switching back to English", async () => {
+    const i18n = await loadModule();
+    const arCatalog = { "common.cancel": "إلغاء" };
+    const loadLocale = loader({ en: enCatalog, ar: arCatalog });
+
+    await i18n.initI18n({ locale: "en", loadLocale });
+    expect(document.documentElement.hasAttribute("dir")).toBe(false);
+
+    await i18n.setLocale("ar");
+    expect(document.documentElement.getAttribute("dir")).toBe("rtl");
+    expect(document.documentElement.lang).toBe("ar");
+    expect(document.documentElement.getAttribute("data-locale")).toBe("ar");
+
+    await i18n.setLocale("en");
+    expect(document.documentElement.hasAttribute("dir")).toBe(false);
+    expect(document.documentElement.lang).toBe("en");
   });
 
   it("keeps the bootstrap English fallback when a custom loader fails loading English", async () => {
@@ -340,11 +380,40 @@ describe("i18n catalog loading", () => {
     expect(i18n.apiErrorMessage({
       data: {
         error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+          details: { reason: "invalid_workflow_column_color", field: "color" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Bitte gib eine gültige Workflow-Spaltenfarbe ein.");
+
+    expect(i18n.apiErrorMessage({
+      data: {
+        error: {
           code: "CONFLICT",
           message: "raw english",
         },
       },
     }, { fallbackKey: "todo.saveFailed" })).toBe("Konflikt");
+
+    expect(i18n.apiErrorMessage({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+          details: { reason: "unknown_reason" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Bitte prüfe die Eingabe und versuche es erneut.");
+
+    expect(i18n.apiErrorMessage({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("Bitte prüfe die Eingabe und versuche es erneut.");
   });
 
   it("uses the provided localized fallback key before raw API messages", async () => {
@@ -393,6 +462,77 @@ describe("i18n catalog loading", () => {
 
     expect(i18n.apiErrorMessage({ status: 503 })).toBe("HTTP 503");
     expect(i18n.apiErrorMessage({ data: { error: { code: "UNMAPPED", message: "   " } } })).toBe("Something went wrong.");
+  });
+
+  it("apiErrorMessageOrRaw returns a localized reason-specific message when the reason key exists", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw english",
+          details: { reason: "name_required" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe(deCatalog["errors.VALIDATION_ERROR.name_required"]);
+  });
+
+  it("apiErrorMessageOrRaw preserves raw API messages for unknown or missing reasons", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw unknown reason",
+          details: { reason: "unknown_reason" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("raw unknown reason");
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "raw missing reason",
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe("raw missing reason");
+  });
+
+  it("apiErrorMessageOrRaw uses raw thrown messages before localized fallbacks", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    const err = new Error("top-level raw fallback") as Error & { data?: unknown };
+    err.data = { error: { code: "VALIDATION_ERROR", details: { reason: "unknown_reason" } } };
+
+    expect(i18n.apiErrorMessageOrRaw(err, { fallbackKey: "todo.saveFailed" })).toBe("top-level raw fallback");
+  });
+
+  it("apiErrorMessageOrRaw uses explicit and default localized fallbacks only when no raw message exists", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "de", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          details: { reason: "unknown_reason" },
+        },
+      },
+    }, { fallbackKey: "todo.saveFailed" })).toBe(deCatalog["todo.saveFailed"]);
+
+    expect(i18n.apiErrorMessageOrRaw({
+      data: {
+        error: {
+          code: "VALIDATION_ERROR",
+          details: { reason: "unknown_reason" },
+        },
+      },
+    })).toBe(deCatalog["errors.generic"]);
   });
 
   it("hydrates text and safe attributes within only the provided root", async () => {

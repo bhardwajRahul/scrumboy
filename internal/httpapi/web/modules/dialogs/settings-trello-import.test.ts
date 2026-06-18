@@ -5,6 +5,7 @@ import enCatalog from '../i18n/locales/en.json';
 import deCatalog from '../i18n/locales/de.json';
 
 const apiFetchMock = vi.fn();
+const showToastMock = vi.fn();
 
 vi.mock('../api.js', () => ({
   apiFetch: apiFetchMock,
@@ -22,7 +23,7 @@ vi.mock('../utils.js', () => ({
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll("'", '&#039;'),
-  showToast: vi.fn(),
+  showToast: showToastMock,
   getAppVersion: () => 'test-version',
   showConfirmDialog: vi.fn(),
   confirmDelete: vi.fn(),
@@ -153,6 +154,8 @@ describe('settings-trello-import', () => {
   beforeEach(async () => {
     vi.resetModules();
     installBaseDOM();
+    apiFetchMock.mockReset();
+    showToastMock.mockClear();
     await initI18nFor('en');
   });
 
@@ -160,6 +163,7 @@ describe('settings-trello-import', () => {
     const i18n = await import('../i18n/index.js');
     i18n.resetI18nForTests();
     document.body.innerHTML = '';
+    showToastMock.mockClear();
   });
 
   it('renders the Trello import section and only enables import after a clean preview', async () => {
@@ -449,5 +453,29 @@ describe('settings-trello-import', () => {
       method: 'POST',
       body: raw,
     });
+  });
+
+  it('shows a localized backend validation reason when Trello preview fails', async () => {
+    const mod = await loadSettingsModule();
+    const mutations = await loadStateMutations();
+    const i18n = await import('../i18n/index.js');
+    await i18n.setLocale('de');
+
+    document.body.innerHTML += mod.renderBackupTabHTML();
+    mutations.setTrelloImportData('not json');
+
+    const err = new Error('invalid Trello JSON') as Error & { data?: unknown };
+    err.data = {
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'invalid Trello JSON',
+        details: { reason: 'invalid_trello_json', detail: 'bad json' },
+      },
+    };
+    apiFetchMock.mockRejectedValueOnce(err);
+
+    await mod.handleTrelloPreview();
+
+    expect(showToastMock).toHaveBeenCalledWith(deCatalog['errors.VALIDATION_ERROR.invalid_trello_json']);
   });
 });

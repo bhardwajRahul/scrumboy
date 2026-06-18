@@ -441,7 +441,7 @@ describe('settings customization i18n', () => {
     const titleLabel = document.getElementById('settingsDialogTitleLabel');
     const version = document.getElementById('settingsDialogVersion');
     const themeLight = document.querySelector<HTMLInputElement>('input[name="theme"][value="light"]');
-    const languageSelect = document.getElementById('settingsLocaleSelect') as HTMLSelectElement | null;
+    const languageSelect = document.getElementById('settingsLocaleSelect') as HTMLButtonElement | null;
     const wallpaperRemoveBtn = document.getElementById('wallpaperRemoveBtn');
 
     if (!titleLabel || !version || !themeLight || !languageSelect || !wallpaperRemoveBtn) {
@@ -451,20 +451,36 @@ describe('settings customization i18n', () => {
     themeLight.checked = true;
     const versionBefore = version.textContent;
 
-    languageSelect.value = 'de';
-    languageSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    languageSelect.click();
+    const deOption = languageSelect.closest('.locale-picker')?.querySelector('[role="option"][data-locale="de"]') as HTMLElement | null;
+    if (!deOption) throw new Error('missing German locale option');
+    deOption.click();
     await flushPromises();
 
     expect(i18n.getLocale()).toBe('de');
     expect(titleLabel.textContent).toBe('DE Settings');
     expect(version.textContent).toBe(versionBefore);
     expect(themeLight.checked).toBe(true);
-    expect(languageSelect.value).toBe('de');
-    expect(Array.from(languageSelect.options).map((option) => [option.value, option.textContent])).toEqual([
-      ['en', 'English'],
-      ['de', 'Deutsch'],
-      ['fr', 'Français'],
-      ['pt', 'Português (Brasil)'],
+    expect(
+      languageSelect.closest('.locale-picker')?.querySelector('[role="option"][aria-selected="true"]')?.getAttribute('data-locale'),
+    ).toBe('de');
+    expect(
+      Array.from(languageSelect.closest('.locale-picker')?.querySelectorAll('[role="option"]') ?? []).map((option) => [
+        option.getAttribute('data-locale'),
+        option.querySelector('.locale-picker__label')?.textContent,
+        (option.querySelector('.locale-picker__flag') as HTMLImageElement | null)?.getAttribute('src'),
+      ]),
+    ).toEqual([
+      ['en', 'English', '/assets/flags/us.svg'],
+      ['de', 'Deutsch', '/assets/flags/de.svg'],
+      ['fr', 'Français', '/assets/flags/fr.svg'],
+      ['pt', 'Português (Brasil)', '/assets/flags/br.svg'],
+      ['ar', 'العربية', '/assets/flags/sa.svg'],
+      ['ru', 'Русский', '/assets/flags/ru.svg'],
+      ['ja', '日本語', '/assets/flags/jp.svg'],
+      ['tr', 'Türkçe', '/assets/flags/tr.svg'],
+      ['ko', '한국어', '/assets/flags/kr.svg'],
+      ['zh', '简体中文', '/assets/flags/cn.svg'],
     ]);
     expect(wallpaperRemoveBtn.textContent).toBe('DE Remove wallpaper');
   });

@@ -1,3 +1,4 @@
+import { voiceText } from './i18n.js';
 function getSpeechRecognitionCtor() {
     return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null;
 }
@@ -8,7 +9,7 @@ export function startOneShotRecognition(options = {}) {
     return new Promise((resolve, reject) => {
         const Recognition = getSpeechRecognitionCtor();
         if (!Recognition) {
-            reject(new Error("Speech recognition is not available in this browser."));
+            reject(new Error(voiceText("voice.errors.speechUnavailable", "Speech recognition is not available in this browser.")));
             return;
         }
         const recognition = new Recognition();
@@ -47,7 +48,7 @@ export function startOneShotRecognition(options = {}) {
             reject(err);
         };
         const onAbort = () => {
-            settleReject(new Error("Listening canceled."));
+            settleReject(new Error(voiceText("voice.errors.listeningCanceled", "Listening canceled.")));
         };
         recognition.continuous = false;
         recognition.interimResults = false;
@@ -66,7 +67,7 @@ export function startOneShotRecognition(options = {}) {
                 }
             }
             if (alternatives.length === 0) {
-                settleReject(new Error("No speech was recognized."));
+                settleReject(new Error(voiceText("voice.errors.noSpeechRecognized", "No speech was recognized.")));
                 return;
             }
             settleResolve({ alternatives });
@@ -78,12 +79,12 @@ export function startOneShotRecognition(options = {}) {
             }
         };
         recognition.onerror = (event) => {
-            const message = event.message || event.error || "Speech recognition failed.";
+            const message = event.message || event.error || voiceText("voice.errors.speechRecognitionFailed", "Speech recognition failed.");
             settleReject(new Error(message));
         };
         recognition.onend = () => {
             if (!settled && !sawResult) {
-                settleReject(new Error("No speech was recognized."));
+                settleReject(new Error(voiceText("voice.errors.noSpeechRecognized", "No speech was recognized.")));
             }
         };
         if (options.signal?.aborted) {
@@ -92,13 +93,13 @@ export function startOneShotRecognition(options = {}) {
         }
         options.signal?.addEventListener("abort", onAbort, { once: true });
         timeoutId = setTimeout(() => {
-            settleReject(new Error("Listening timed out."));
+            settleReject(new Error(voiceText("voice.errors.listeningTimedOut", "Listening timed out.")));
         }, timeoutMs);
         try {
             recognition.start();
         }
         catch (err) {
-            settleReject(new Error(err?.message || "Speech recognition could not start."));
+            settleReject(new Error(err?.message || voiceText("voice.errors.speechStartFailed", "Speech recognition could not start.")));
         }
     });
 }
