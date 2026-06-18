@@ -112,6 +112,40 @@ func TestWebStyles_CardDoingAliasForWorkflowKey(t *testing.T) {
 	}
 }
 
+func TestWebStyles_SettingsDialog_RtlMobileCentering(t *testing.T) {
+	css, err := embeddedWeb.ReadFile("web/styles.css")
+	if err != nil {
+		t.Fatalf("read embedded styles.css: %v", err)
+	}
+	s := string(css)
+	if !strings.Contains(s, `[dir="rtl"] #settingsDialog.dialog`) {
+		t.Fatalf("expected RTL mobile Settings dialog centering selector")
+	}
+	re := regexp.MustCompile(`(?s)@media \(max-width: 767px\)\s*\{\s*\[dir="rtl"\] #settingsDialog\.dialog\s*\{[^}]+\}`)
+	if !re.Match(css) {
+		t.Fatalf("expected @media (max-width: 767px) block for RTL Settings dialog centering")
+	}
+	block := re.FindString(s)
+	for _, needle := range []string{
+		"margin-left: auto",
+		"margin-right: auto",
+		"transform: translateY(-50%)",
+		"max-width: calc(100vw - 24px)",
+	} {
+		if !strings.Contains(block, needle) {
+			t.Fatalf("expected RTL Settings mobile centering block to contain %q", needle)
+		}
+	}
+	re620 := regexp.MustCompile(`(?s)@media \(max-width: 620px\)\s*\{\s*\[dir="rtl"\] #settingsDialog\.dialog\s*\{[^}]+\}`)
+	if !re620.Match(css) {
+		t.Fatalf("expected @media (max-width: 620px) block for RTL Settings dialog width")
+	}
+	block620 := re620.FindString(s)
+	if !strings.Contains(block620, "max-width: calc(100vw - 16px)") {
+		t.Fatalf("expected narrow-mobile RTL Settings block to cap width at calc(100vw - 16px)")
+	}
+}
+
 func TestWebBoard_MobileTabLegacyResolutionAndSync(t *testing.T) {
 	boardTs, err := embeddedWeb.ReadFile("web/modules/views/board.ts")
 	if err != nil {
