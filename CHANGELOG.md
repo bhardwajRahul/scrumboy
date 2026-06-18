@@ -2,13 +2,13 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
-## [3.18.10] - 2026-06-17
+## [3.18.10] - 2026-06-18
 
 ### Added
 
 - **Spanish (Latin America) UI** - Full frontend catalog (`es`) with Mexico flag in the public locale picker.
 
-## [3.18.9] - 2026-06-17
+## [3.18.9] - 2026-06-18
 
 ### Added
 
@@ -18,13 +18,13 @@
 
 - **Locale flag SVGs** - Optimized all vendored flags under `internal/httpapi/web/assets/flags/` with SVGO (`--multipass --final-newline`); normalized UTF-16/BOM encodings on `cn.svg`, `kr.svg`, `tr.svg`, `pk.svg`, and `th.svg` so the assets parse cleanly. Total flag payload ~12% smaller with unchanged visuals.
 
-## [3.18.8] - 2026-06-17
+## [3.18.8] - 2026-06-18
 
 ### Added
 
 - **Urdu UI** - Full frontend catalog (`ur`) with RTL document direction and Pakistan flag in the public locale picker.
 
-## [3.18.7] - 2026-06-17
+## [3.18.7] - 2026-06-18
 
 ### Added
 
@@ -34,13 +34,13 @@
 
 - **Auth topbar on mobile** - Pre-auth language selector stays on the right and the Scrumboy logo on the left on narrow viewports, including Arabic/RTL, instead of inheriting board topbar flex ordering.
 
-## [3.18.6] - 2026-06-17
+## [3.18.6] - 2026-06-18
 
 ### Added
 
 - **Vietnamese UI** - Full frontend catalog (`vi`) with Vietnam flag in the public locale picker.
 
-## [3.18.5] - 2026-06-17
+## [3.18.5] - 2026-06-18
 
 ### Added
 
