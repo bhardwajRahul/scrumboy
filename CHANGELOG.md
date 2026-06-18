@@ -2,6 +2,13 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.3] - 2026-06-17
+
+### Fixed
+
+- **Pre-bootstrap encryption key startup** - Invalid `SCRUMBOY_ENCRYPTION_KEY` values no longer crash startup before bootstrap when no encrypted auth/security data exists; encrypted state still requires the original valid key.
+- **Windows launcher key handoff** - Hardened local launcher key resolution so invalid existing candidates reach the Go startup checks instead of failing before database-aware validation.
+
 ## [3.18.2] - 2026-06-17
 
 ### Added
@@ -23,8 +30,6 @@
 ### Fixed
 
 - **Wallpaper import errors** - Preserve raw backend decode error text on wallpaper upload failures instead of replacing it with a generic localized fallback.
-- **Pre-bootstrap encryption key startup** - Invalid `SCRUMBOY_ENCRYPTION_KEY` values no longer crash startup before bootstrap when no encrypted auth/security data exists; encrypted state still requires the original valid key.
-- **Windows launcher key handoff** - Hardened local launcher key resolution so invalid existing candidates reach the Go startup checks instead of failing before database-aware validation.
 
 ## [3.18.1] - 2026-06-12
 
