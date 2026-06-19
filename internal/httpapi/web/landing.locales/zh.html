@@ -275,12 +275,68 @@
       line-height: 1.04;
     }
 
-    html[lang="ur-PK"] .title-w-the,
-    html[lang="ur-PK"] .title-line2,
     html[lang="ar"] .title-w-the,
     html[lang="ar"] .title-line2 {
       direction: rtl;
       unicode-bidi: isolate;
+    }
+
+    html[lang="ur-PK"] .title-local-subline {
+      direction: rtl;
+      unicode-bidi: isolate;
+    }
+
+    html[lang="ur-PK"] .title-local-subline .title-w-the,
+    html[lang="ur-PK"] .title-local-subline .title-line2 {
+      direction: inherit;
+      unicode-bidi: normal;
+    }
+
+    /* Urdu desktop: Kanban / line1Rest / line2 — each phrase nowrap so RTL copy does not split mid-sentence. */
+    @media (min-width: 681px) {
+      html.landing-hero-local .title-backdrop {
+        display: block;
+        width: max-content;
+        max-width: 100%;
+      }
+
+      html.landing-hero-local .title-line1 {
+        display: block;
+      }
+
+      html.landing-hero-local .title-accent {
+        display: block;
+      }
+
+      html.landing-hero-local .title-w-the {
+        display: block;
+        white-space: nowrap;
+        writing-mode: horizontal-tb;
+      }
+
+      html[lang="ur-PK"] .title-line1 {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      html[lang="ur-PK"] .title-local-subline {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      html[lang="ur-PK"] .title-local-subline .title-br-m {
+        display: none;
+      }
+
+      html[lang="ur-PK"] .title-local-subline .title-w-the,
+      html[lang="ur-PK"] .title-local-subline .title-line2 {
+        display: block;
+        width: max-content;
+        max-width: 100%;
+        white-space: nowrap;
+      }
     }
 
     .dek {
@@ -1319,7 +1375,7 @@
           <div class="intro-lead">
             <div class="title-figure">
               <div class="title-wrap">
-                <h1 id="page-title"><span class="title-backdrop"><span class="title-line1"><span class="title-accent">Kanban Boards</span> <span class="title-w-the">简单上手</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2"></span></span></h1>
+                <h1 id="page-title"><span class="title-backdrop"><span class="title-line1"><span class="title-accent">Kanban Boards</span> <span class="title-w-the">简单上手</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2"></span></h1>
               </div>
               <div class="hero-mascot-frame">
                 <img class="hero-mascot" src="/scrumboylanding.png" alt="" width="400" height="400" decoding="async" fetchpriority="high" aria-hidden="true">

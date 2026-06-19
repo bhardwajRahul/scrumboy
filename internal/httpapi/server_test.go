@@ -1500,7 +1500,7 @@ func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
 		}
 	}
 	switch locale {
-	case "ar":
+	case "ar", "ur":
 		if strings.Contains(html, `class="notranslate landing-hero-local"`) {
 			t.Fatalf("expected /%s/ to keep original mobile hero layout without landing-hero-local", locale)
 		}

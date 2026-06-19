@@ -21,9 +21,10 @@ const MULTILINGUAL_ARIA_KEY = "landing.features.multilingual.imageAriaLabel";
 const LOCALIZED_LANDING_HERO_LOCALES = new Set([
   "ar", "hi", "ur", "zh", "es", "fr", "pt", "id", "ru", "de", "ja", "vi", "tr", "ko", "it", "th",
 ]);
-// Arabic keeps its original mobile hero layout; other localized taglines stack on small screens.
+// Arabic and Urdu keep the original mobile hero layout (line1Rest + line2 on two lines);
+// other localized taglines stack accent/rest on small screens.
 const LOCALIZED_LANDING_HERO_MOBILE_STACK_LOCALES = new Set([
-  "hi", "ur", "zh", "es", "fr", "pt", "id", "ru", "de", "ja", "vi", "tr", "ko", "it", "th",
+  "hi", "zh", "es", "fr", "pt", "id", "ru", "de", "ja", "vi", "tr", "ko", "it", "th",
 ]);
 const LOCALIZED_LANDING_HERO_KEYS = [
   "landing.hero.title.line1Rest",
@@ -256,6 +257,16 @@ function landingHeroLocalClass(locale) {
   return LOCALIZED_LANDING_HERO_MOBILE_STACK_LOCALES.has(locale) ? " landing-hero-local" : "";
 }
 
+// Urdu-only bidi wrapper in the template; other locales keep the original flat hero markup.
+const LANDING_HERO_SUBLINE_RE = /<span class="title-line1"><span class="title-accent">([\s\S]*?)<\/span> <span class="title-local-subline"><span class="title-w-the">([\s\S]*?)<\/span><br class="title-br-m" aria-hidden="true"><span class="title-line2">([\s\S]*?)<\/span><\/span><\/span>/;
+
+function flattenLandingHeroSubline(html) {
+  return html.replace(
+    LANDING_HERO_SUBLINE_RE,
+    '<span class="title-line1"><span class="title-accent">$1</span> <span class="title-w-the">$2</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2">$3</span>',
+  );
+}
+
 function renderLanding(template, locale, catalog, publicLocales) {
   let html = template
     .replaceAll("{{htmlLang}}", INTL_LOCALES[locale])
@@ -270,6 +281,9 @@ function renderLanding(template, locale, catalog, publicLocales) {
   const leftover = html.match(/\{\{(?!VERSION\b)[^}]+\}\}/);
   if (leftover) {
     throw new Error(`Unresolved landing template token for ${locale}: ${leftover[0]}`);
+  }
+  if (locale !== "ur") {
+    html = flattenLandingHeroSubline(html);
   }
   if (locale !== "en") {
     html = reorderLocalizedFeatureGrid(html);
