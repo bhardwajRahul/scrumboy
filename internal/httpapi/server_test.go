@@ -1426,8 +1426,22 @@ var landingLocalizedHeroTitleByLocale = map[string]struct {
 	rest  string
 	line2 string
 }{
+	"ar": {rest: "بدون تعقيد"},
+	"de": {rest: "ohne Umwege"},
+	"es": {rest: "sin complicaciones"},
+	"fr": {rest: "sans complication"},
 	"hi": {rest: "बिना झंझट", line2: "के."},
+	"id": {rest: "tanpa ribet"},
+	"it": {rest: "senza complicazioni"},
+	"ja": {rest: "をシンプルに"},
+	"ko": {rest: "더 쉽게"},
+	"pt": {rest: "sem complicação"},
+	"ru": {rest: "без лишней сложности"},
+	"th": {rest: "แบบไม่ยุ่งยาก"},
+	"tr": {rest: "zahmetsiz"},
 	"ur": {rest: "آسان اور", line2: "بےفکر۔"},
+	"vi": {rest: "thật đơn giản"},
+	"zh": {rest: "简单上手"},
 }
 
 func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
@@ -1445,6 +1459,16 @@ func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
 	if want.line2 != "" {
 		if !strings.Contains(html, `<span class="title-line2">`+want.line2+`</span>`) {
 			t.Fatalf("expected /%s/ landing hero line2 %q", locale, want.line2)
+		}
+	}
+	switch locale {
+	case "ar":
+		if strings.Contains(html, `class="notranslate landing-hero-local"`) {
+			t.Fatalf("expected /%s/ to keep original mobile hero layout without landing-hero-local", locale)
+		}
+	default:
+		if !strings.Contains(html, `class="notranslate landing-hero-local"`) {
+			t.Fatalf("expected /%s/ landing page to use landing-hero-local mobile hero layout", locale)
 		}
 	}
 }
