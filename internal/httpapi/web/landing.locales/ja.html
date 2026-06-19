@@ -292,6 +292,10 @@
       unicode-bidi: normal;
     }
 
+    .title-w-the:empty {
+      display: none;
+    }
+
     /* Urdu desktop: Kanban / line1Rest / line2 — each phrase nowrap so RTL copy does not split mid-sentence. */
     @media (min-width: 681px) {
       html.landing-hero-local .title-backdrop {
@@ -1104,6 +1108,12 @@
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
         gap: clamp(24px, 3vw, 48px);
+        --hero-title-z: 2;
+      }
+
+      .title-wrap {
+        position: relative;
+        z-index: var(--hero-title-z);
       }
 
       .title-figure .title-wrap h1 {
@@ -1115,6 +1125,7 @@
         width: fit-content;
         max-width: 480px;
         position: relative;
+        z-index: calc(var(--hero-title-z) - 1);
         vertical-align: bottom;
         justify-self: end;
         transform: translateX(clamp(144px, 18vw, 360px));
@@ -1357,6 +1368,55 @@
       }
 
     }
+
+    /* ja landing hero: native copy colors + desktop three-line stack (カンバン / を / シンプルに). */
+    html[lang="ja"] .title-accent {
+      color: var(--on-navy);
+    }
+
+    html[lang="ja"] .title-w-the {
+      color: var(--primary-color-1);
+    }
+
+    html[lang="ja"] .title-line2 {
+      color: var(--primary-color-1);
+    }
+
+    html[lang="ja"] h1 {
+      letter-spacing: 0;
+      line-height: 1.04;
+    }
+
+    @media (min-width: 681px) {
+      html[lang="ja"] .title-accent,
+      html[lang="ja"] .title-w-the,
+      html[lang="ja"] .title-line2 {
+        display: block;
+        white-space: nowrap;
+        writing-mode: horizontal-tb;
+        width: max-content;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 680px) {
+      html[lang="ja"] .title-w-the,
+      html[lang="ja"] .title-line2 {
+        display: inline;
+        white-space: nowrap;
+      }
+    }
+
+    html[lang="ja"] #capabilities-title {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    html[lang="ja"] #capabilities-title .capabilities-mid:empty {
+      display: none;
+    }
+
   </style>
 </head>
 <body translate="no">
@@ -1375,7 +1435,7 @@
           <div class="intro-lead">
             <div class="title-figure">
               <div class="title-wrap">
-                <h1 id="page-title"><span class="title-backdrop"><span class="title-line1"><span class="title-accent">Kanban Boards</span> <span class="title-w-the">をシンプルに</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2"></span></h1>
+                <h1 id="page-title"><span class="title-backdrop"><span class="title-line1"><span class="title-accent">カンバン</span> <span class="title-w-the">を</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2">シンプルに</span></h1>
               </div>
               <div class="hero-mascot-frame">
                 <img class="hero-mascot" src="/scrumboylanding.png" alt="" width="400" height="400" decoding="async" fetchpriority="high" aria-hidden="true">
@@ -1392,7 +1452,7 @@
                 <span></span>
                 <span class="status">GitHub / deploy</span>
               </div>
-              <h2>Deploy it locally.</h2>
+              <h2>ローカルで動かす</h2>
               <p>self-host it. customize it. solo dev, or small teams.</p>
             </div>
             <div class="choice-bottom">
@@ -1409,7 +1469,7 @@
                 <span></span>
                 <span class="status">Anonymous board</span>
               </div>
-              <h2>Create a board now.</h2>
+              <h2>今すぐ作る</h2>
               <p>No account wall. No setup ritual. Make a board, share the link with anyone.</p>
             </div>
             <div class="choice-bottom">
@@ -1431,7 +1491,7 @@
     <section class="showcase" id="capabilities" aria-labelledby="capabilities-title">
       <div class="shell">
         <div class="section-head">
-          <h2 id="capabilities-title"><span class="capabilities-accent">Can your</span> <span class="capabilities-mid">project management tool</span> <span class="capabilities-accent">do this?</span></h2>
+          <h2 id="capabilities-title"><span class="capabilities-accent">あなたのプロジェクト管理ツール、</span> <span class="capabilities-mid"></span> <span class="capabilities-accent">これできますか？</span></h2>
           <p class="section-note"></p>
         </div>
 

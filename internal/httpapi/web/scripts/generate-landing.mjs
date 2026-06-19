@@ -30,6 +30,16 @@ const LOCALIZED_LANDING_HERO_KEYS = [
   "landing.hero.title.line1Rest",
   "landing.hero.title.line2",
 ];
+// Japanese hero uses native カンバン in the accent slot (not English "Kanban Boards").
+const LOCALIZED_LANDING_HERO_ACCENT_LOCALES = new Set(["ja"]);
+const LOCALIZED_LANDING_SECTION_TITLE_LOCALES = new Set(["ja"]);
+const LOCALIZED_LANDING_SECTION_TITLE_KEYS = [
+  "landing.section.title.part1",
+  "landing.section.title.part2",
+  "landing.section.title.part3",
+  "landing.deploy.title",
+  "landing.anon.title",
+];
 const FEATURE_ARTICLE_RE = /<article class="feature" data-feature="[^"]+">[\s\S]*?<\/article>/g;
 
 const INTL_LOCALES = {
@@ -195,6 +205,22 @@ function landingDisplayCatalog(locale, localeCatalog, englishCatalog, keys) {
     }
   }
 
+  if (LOCALIZED_LANDING_HERO_ACCENT_LOCALES.has(locale)) {
+    const accent = localeCatalog["landing.hero.title.line1Accent"];
+    if (typeof accent === "string") {
+      catalog["landing.hero.title.line1Accent"] = accent;
+    }
+  }
+
+  if (LOCALIZED_LANDING_SECTION_TITLE_LOCALES.has(locale)) {
+    for (const key of LOCALIZED_LANDING_SECTION_TITLE_KEYS) {
+      const value = localeCatalog[key];
+      if (typeof value === "string") {
+        catalog[key] = value;
+      }
+    }
+  }
+
   if (locale !== "en") {
     const multilingualText = localeCatalog[MULTILINGUAL_TEXT_KEY]?.trim();
     if (multilingualText) {
@@ -267,6 +293,117 @@ function flattenLandingHeroSubline(html) {
   );
 }
 
+// Injected into landing.locales/ja.html only — not the shared template.
+const JAPANESE_LANDING_STYLE_BLOCK = `
+    /* ja landing hero: native copy colors + desktop three-line stack (カンバン / を / シンプルに). */
+    html[lang="ja"] .title-accent {
+      color: var(--on-navy);
+    }
+
+    html[lang="ja"] .title-w-the {
+      color: var(--primary-color-1);
+    }
+
+    html[lang="ja"] .title-line2 {
+      color: var(--primary-color-1);
+    }
+
+    html[lang="ja"] h1 {
+      letter-spacing: 0;
+      line-height: 1.04;
+    }
+
+    @media (min-width: 681px) {
+      html[lang="ja"] .title-accent,
+      html[lang="ja"] .title-w-the,
+      html[lang="ja"] .title-line2 {
+        display: block;
+        white-space: nowrap;
+        writing-mode: horizontal-tb;
+        width: max-content;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 680px) {
+      html[lang="ja"] .title-w-the,
+      html[lang="ja"] .title-line2 {
+        display: inline;
+        white-space: nowrap;
+      }
+    }
+
+    html[lang="ja"] #capabilities-title {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    html[lang="ja"] #capabilities-title .capabilities-mid:empty {
+      display: none;
+    }
+`;
+
+function injectJapaneseLandingStyles(html) {
+  const marker = "  </style>";
+  const idx = html.lastIndexOf(marker);
+  if (idx === -1) {
+    throw new Error("Cannot inject Japanese landing styles: missing </style>");
+  }
+  return `${html.slice(0, idx)}${JAPANESE_LANDING_STYLE_BLOCK}\n${html.slice(idx)}`;
+}
+
+// Desktop-only hero line2 break; injected into matching landing.locales/*.html only.
+const LOCALIZED_LANDING_HERO_LINE2_BREAK = {
+  vi: "vi landing hero: desktop-only line break before giản (thật đơn / giản).",
+  de: "de landing hero: desktop-only line break before Umwege (ohne / Umwege).",
+  fr: "fr landing hero: desktop-only line break before complication (sans / complication).",
+  es: "es landing hero: desktop-only line break before complicaciones (sin / complicaciones).",
+  id: "id landing hero: desktop-only line break before ribet (tanpa / ribet).",
+  ru: "ru landing hero: desktop-only line break before лишней сложности (без / лишней сложности).",
+  th: "th landing hero: desktop-only line break before ไม่ยุ่งยาก (แบบ / ไม่ยุ่งยาก).",
+};
+
+function buildHeroLine2BreakStyleBlock(htmlLang, comment) {
+  return `
+    /* ${comment} */
+    @media (min-width: 681px) {
+      html[lang="${htmlLang}"] .title-line2 {
+        display: block;
+        white-space: nowrap;
+        writing-mode: horizontal-tb;
+        width: max-content;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 680px) {
+      html[lang="${htmlLang}"] .title-w-the,
+      html[lang="${htmlLang}"] .title-line2 {
+        display: inline;
+        white-space: nowrap;
+      }
+    }
+`;
+}
+
+function injectLocalizedLandingHeroLine2BreakStyles(locale, html) {
+  const comment = LOCALIZED_LANDING_HERO_LINE2_BREAK[locale];
+  if (!comment) {
+    return html;
+  }
+  const htmlLang = INTL_LOCALES[locale];
+  if (!htmlLang) {
+    throw new Error(`Cannot inject hero line2 break styles for ${locale}: missing INTL_LOCALES entry`);
+  }
+  const marker = "  </style>";
+  const idx = html.lastIndexOf(marker);
+  if (idx === -1) {
+    throw new Error(`Cannot inject hero line2 break styles for ${locale}: missing </style>`);
+  }
+  return `${html.slice(0, idx)}${buildHeroLine2BreakStyleBlock(htmlLang, comment)}\n${html.slice(idx)}`;
+}
+
 function renderLanding(template, locale, catalog, publicLocales) {
   let html = template
     .replaceAll("{{htmlLang}}", INTL_LOCALES[locale])
@@ -288,6 +425,10 @@ function renderLanding(template, locale, catalog, publicLocales) {
   if (locale !== "en") {
     html = reorderLocalizedFeatureGrid(html);
   }
+  if (locale === "ja") {
+    html = injectJapaneseLandingStyles(html);
+  }
+  html = injectLocalizedLandingHeroLine2BreakStyles(locale, html);
   return html;
 }
 

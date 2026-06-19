@@ -293,6 +293,10 @@
       unicode-bidi: normal;
     }
 
+    .title-w-the:empty {
+      display: none;
+    }
+
     /* Urdu desktop: Kanban / line1Rest / line2 — each phrase nowrap so RTL copy does not split mid-sentence. */
     @media (min-width: 681px) {
       html.landing-hero-local .title-backdrop {
@@ -1105,6 +1109,12 @@
         grid-template-columns: minmax(0, 1fr) auto;
         align-items: center;
         gap: clamp(24px, 3vw, 48px);
+        --hero-title-z: 2;
+      }
+
+      .title-wrap {
+        position: relative;
+        z-index: var(--hero-title-z);
       }
 
       .title-figure .title-wrap h1 {
@@ -1116,6 +1126,7 @@
         width: fit-content;
         max-width: 480px;
         position: relative;
+        z-index: calc(var(--hero-title-z) - 1);
         vertical-align: bottom;
         justify-self: end;
         transform: translateX(clamp(144px, 18vw, 360px));

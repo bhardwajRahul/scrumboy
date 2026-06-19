@@ -1188,6 +1188,8 @@ func TestAnonymousMode_LocalizedLandingRoutes(t *testing.T) {
 		assertLandingMultilingualSlotTagline(t, locale, html)
 		assertLandingDisplayCopy(t, locale, html)
 		assertLandingLocalizedHeroTitle(t, locale, html)
+		assertLandingJapaneseHeroStyles(t, locale, html)
+		assertLandingHeroLine2BreakStyles(t, locale, html)
 		assertLandingGeneratedComment(t, html)
 		rootTag := htmlRootTag(t, html)
 		if strings.Contains(rootTag, `dir="rtl"`) {
@@ -1410,15 +1412,31 @@ func landingMultilingualFeatureArticle(html string) string {
 
 func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 	t.Helper()
-	for _, want := range []string{
-		"Kanban Boards",
-		"Deploy it locally.",
-		"Create a board now.",
-		"Can your",
-		"project management tool",
+	if locale == "ja" {
+		if !strings.Contains(html, "カンバン") || !strings.Contains(html, "を") || !strings.Contains(html, "シンプルに") {
+			t.Fatalf("expected /%s/ landing page to contain localized hero copy", locale)
+		}
+		if !strings.Contains(html, "あなたのプロジェクト管理ツール、") || !strings.Contains(html, "これできますか？") {
+			t.Fatalf("expected /%s/ landing page to contain localized section title copy", locale)
+		}
+		if !strings.Contains(html, "ローカルで動かす") {
+			t.Fatalf("expected /%s/ landing page to contain localized deploy card title", locale)
+		}
+		if !strings.Contains(html, "今すぐ作る") {
+			t.Fatalf("expected /%s/ landing page to contain localized anon card title", locale)
+		}
+	} else if !strings.Contains(html, "Kanban Boards") {
+		t.Fatalf("expected /%s/ landing page to contain English copy %q", locale, "Kanban Boards")
+	}
+	englishCopy := []string{
 		"markdown + mermaid",
 		"Use Markdown and Mermaid diagrams in task notes",
-	} {
+	}
+	if locale != "ja" {
+		englishCopy = append([]string{"Deploy it locally.", "Create a board now."}, englishCopy...)
+		englishCopy = append(englishCopy, "Can your", "project management tool")
+	}
+	for _, want := range englishCopy {
 		if !strings.Contains(html, want) {
 			t.Fatalf("expected /%s/ landing page to contain English copy %q", locale, want)
 		}
@@ -1461,24 +1479,25 @@ func assertLandingMultilingualFeatureText(t *testing.T, locale, html string) {
 }
 
 var landingLocalizedHeroTitleByLocale = map[string]struct {
-	rest  string
-	line2 string
+	accent string
+	rest   string
+	line2  string
 }{
 	"ar": {rest: "بدون تعقيد"},
-	"de": {rest: "ohne Umwege"},
-	"es": {rest: "sin complicaciones"},
-	"fr": {rest: "sans complication"},
+	"de": {rest: "ohne", line2: "Umwege"},
+	"es": {rest: "sin", line2: "complicaciones"},
+	"fr": {rest: "sans", line2: "complication"},
 	"hi": {rest: "बिना झंझट", line2: "के."},
-	"id": {rest: "tanpa ribet"},
+	"id": {rest: "tanpa", line2: "ribet"},
 	"it": {rest: "senza complicazioni"},
-	"ja": {rest: "をシンプルに"},
+	"ja": {accent: "カンバン", rest: "を", line2: "シンプルに"},
 	"ko": {rest: "더 쉽게"},
 	"pt": {rest: "sem complicação"},
-	"ru": {rest: "без лишней сложности"},
-	"th": {rest: "แบบไม่ยุ่งยาก"},
+	"ru": {rest: "без", line2: "лишней сложности"},
+	"th": {rest: "แบบ", line2: "ไม่ยุ่งยาก"},
 	"tr": {rest: "zahmetsiz"},
 	"ur": {rest: "آسان اور", line2: "بےفکر۔"},
-	"vi": {rest: "thật đơn giản"},
+	"vi": {rest: "thật đơn", line2: "giản"},
 	"zh": {rest: "简单上手"},
 }
 
@@ -1488,11 +1507,17 @@ func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
 	if !ok {
 		return
 	}
-	if !strings.Contains(html, `<span class="title-accent">Kanban Boards</span>`) {
-		t.Fatalf("expected /%s/ landing hero accent to stay English %q", locale, "Kanban Boards")
+	accent := "Kanban Boards"
+	if want.accent != "" {
+		accent = want.accent
 	}
-	if !strings.Contains(html, `<span class="title-w-the">`+want.rest+`</span>`) {
-		t.Fatalf("expected /%s/ landing hero rest %q", locale, want.rest)
+	if !strings.Contains(html, `<span class="title-accent">`+accent+`</span>`) {
+		t.Fatalf("expected /%s/ landing hero accent %q", locale, accent)
+	}
+	if want.rest != "" {
+		if !strings.Contains(html, `<span class="title-w-the">`+want.rest+`</span>`) {
+			t.Fatalf("expected /%s/ landing hero rest %q", locale, want.rest)
+		}
 	}
 	if want.line2 != "" {
 		if !strings.Contains(html, `<span class="title-line2">`+want.line2+`</span>`) {
@@ -1507,6 +1532,69 @@ func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
 	default:
 		if !strings.Contains(html, `class="notranslate landing-hero-local"`) {
 			t.Fatalf("expected /%s/ landing page to use landing-hero-local mobile hero layout", locale)
+		}
+	}
+}
+
+func assertLandingJapaneseHeroStyles(t *testing.T, locale, html string) {
+	t.Helper()
+	marker := "ja landing hero: native copy colors"
+	if locale != "ja" {
+		if strings.Contains(html, marker) {
+			t.Fatalf("expected /%s/ not to contain Japanese-only landing hero styles", locale)
+		}
+		return
+	}
+	for _, want := range []string{
+		marker,
+		`html[lang="ja"] .title-accent`,
+		`html[lang="ja"] .title-line2`,
+		"white-space: nowrap",
+		"writing-mode: horizontal-tb",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected /ja/ landing page to include Japanese hero layout CSS %q", want)
+		}
+	}
+}
+
+func assertLandingHeroLine2BreakStyles(t *testing.T, locale, html string) {
+	t.Helper()
+	markersByLocale := map[string]string{
+		"vi": "vi landing hero: desktop-only line break before giản",
+		"de": "de landing hero: desktop-only line break before Umwege",
+		"fr": "fr landing hero: desktop-only line break before complication",
+		"es": "es landing hero: desktop-only line break before complicaciones",
+		"id": "id landing hero: desktop-only line break before ribet",
+		"ru": "ru landing hero: desktop-only line break before лишней сложности",
+		"th": "th landing hero: desktop-only line break before ไม่ยุ่งยาก",
+	}
+	htmlLangByLocale := map[string]string{
+		"vi": "vi",
+		"de": "de",
+		"fr": "fr",
+		"es": "es-MX",
+		"id": "id-ID",
+		"ru": "ru",
+		"th": "th-TH",
+	}
+	for loc, marker := range markersByLocale {
+		contains := strings.Contains(html, marker)
+		if loc == locale {
+			if !contains {
+				t.Fatalf("expected /%s/ landing page to include hero line2 break CSS", locale)
+			}
+			htmlLang := htmlLangByLocale[loc]
+			if !strings.Contains(html, `html[lang="`+htmlLang+`"] .title-line2`) {
+				t.Fatalf("expected /%s/ landing page to target html lang %q for hero line2 break", locale, htmlLang)
+			}
+			if !strings.Contains(html, "white-space: nowrap") {
+				t.Fatalf("expected /%s/ landing page hero line2 break CSS to keep nowrap", locale)
+			}
+			continue
+		}
+		if contains {
+			t.Fatalf("expected /%s/ not to contain hero line2 break CSS for %s", locale, loc)
 		}
 	}
 }
