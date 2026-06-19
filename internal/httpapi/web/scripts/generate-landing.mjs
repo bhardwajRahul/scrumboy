@@ -21,13 +21,24 @@ const MULTILINGUAL_ARIA_KEY = "landing.features.multilingual.imageAriaLabel";
 const LOCALIZED_LANDING_HERO_LOCALES = new Set([
   "ar", "hi", "ur", "zh", "es", "fr", "pt", "id", "ru", "de", "ja", "vi", "tr", "ko", "it", "th",
 ]);
-// Arabic keeps its original mobile hero layout; other localized taglines stack on small screens.
+// Arabic and Urdu keep the original mobile hero layout (line1Rest + line2 on two lines);
+// other localized taglines stack accent/rest on small screens.
 const LOCALIZED_LANDING_HERO_MOBILE_STACK_LOCALES = new Set([
-  "hi", "ur", "zh", "es", "fr", "pt", "id", "ru", "de", "ja", "vi", "tr", "ko", "it", "th",
+  "hi", "zh", "es", "fr", "pt", "id", "ru", "de", "ja", "vi", "tr", "ko", "it", "th",
 ]);
 const LOCALIZED_LANDING_HERO_KEYS = [
   "landing.hero.title.line1Rest",
   "landing.hero.title.line2",
+];
+// Japanese hero uses native カンバン in the accent slot (not English "Kanban Boards").
+const LOCALIZED_LANDING_HERO_ACCENT_LOCALES = new Set(["ja"]);
+const LOCALIZED_LANDING_SECTION_TITLE_LOCALES = new Set(["ja"]);
+const LOCALIZED_LANDING_SECTION_TITLE_KEYS = [
+  "landing.section.title.part1",
+  "landing.section.title.part2",
+  "landing.section.title.part3",
+  "landing.deploy.title",
+  "landing.anon.title",
 ];
 const FEATURE_ARTICLE_RE = /<article class="feature" data-feature="[^"]+">[\s\S]*?<\/article>/g;
 
@@ -116,14 +127,29 @@ function landingUrl(locale) {
   return locale === "en" ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}/${locale}/`;
 }
 
+// Non-root locale landings stay shareable (follow) but noindex while visible copy is mostly English; `/` stays indexable.
+function landingRobotsMeta(locale) {
+  return locale === "en"
+    ? ""
+    : '  <meta name="robots" content="noindex,follow">\n';
+}
+
+// While non-root locale landings are noindex, only the indexable English root participates in hreflang.
+function renderHreflangLinks(locale) {
+  if (locale !== "en") {
+    return [];
+  }
+  return [
+    `<link rel="alternate" hreflang="en" href="${SITE_ORIGIN}/" />`,
+    `<link rel="alternate" hreflang="x-default" href="${SITE_ORIGIN}/" />`,
+  ];
+}
+
 function renderHeadMeta(locale, catalog, publicLocales) {
   const title = escapeHtml(catalog["landing.meta.title"]);
   const description = escapeHtml(catalog["landing.meta.description"]);
   const canonicalUrl = landingUrl(locale);
-  const alternateLinks = publicLocales.map((alternateLocale) => (
-    `<link rel="alternate" hreflang="${INTL_LOCALES[alternateLocale]}" href="${landingUrl(alternateLocale)}" />`
-  ));
-  alternateLinks.push(`<link rel="alternate" hreflang="x-default" href="${SITE_ORIGIN}/" />`);
+  const alternateLinks = renderHreflangLinks(locale);
 
   const ogLocaleAlternates = publicLocales
     .filter((alternateLocale) => alternateLocale !== locale)
@@ -172,6 +198,22 @@ function landingDisplayCatalog(locale, localeCatalog, englishCatalog, keys) {
 
   if (LOCALIZED_LANDING_HERO_LOCALES.has(locale)) {
     for (const key of LOCALIZED_LANDING_HERO_KEYS) {
+      const value = localeCatalog[key];
+      if (typeof value === "string") {
+        catalog[key] = value;
+      }
+    }
+  }
+
+  if (LOCALIZED_LANDING_HERO_ACCENT_LOCALES.has(locale)) {
+    const accent = localeCatalog["landing.hero.title.line1Accent"];
+    if (typeof accent === "string") {
+      catalog["landing.hero.title.line1Accent"] = accent;
+    }
+  }
+
+  if (LOCALIZED_LANDING_SECTION_TITLE_LOCALES.has(locale)) {
+    for (const key of LOCALIZED_LANDING_SECTION_TITLE_KEYS) {
       const value = localeCatalog[key];
       if (typeof value === "string") {
         catalog[key] = value;
@@ -241,23 +283,152 @@ function landingHeroLocalClass(locale) {
   return LOCALIZED_LANDING_HERO_MOBILE_STACK_LOCALES.has(locale) ? " landing-hero-local" : "";
 }
 
+// Urdu-only bidi wrapper in the template; other locales keep the original flat hero markup.
+const LANDING_HERO_SUBLINE_RE = /<span class="title-line1"><span class="title-accent">([\s\S]*?)<\/span> <span class="title-local-subline"><span class="title-w-the">([\s\S]*?)<\/span><br class="title-br-m" aria-hidden="true"><span class="title-line2">([\s\S]*?)<\/span><\/span><\/span>/;
+
+function flattenLandingHeroSubline(html) {
+  return html.replace(
+    LANDING_HERO_SUBLINE_RE,
+    '<span class="title-line1"><span class="title-accent">$1</span> <span class="title-w-the">$2</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2">$3</span>',
+  );
+}
+
+// Injected into landing.locales/ja.html only — not the shared template.
+const JAPANESE_LANDING_STYLE_BLOCK = `
+    /* ja landing hero: native copy colors + desktop three-line stack (カンバン / を / シンプルに). */
+    html[lang="ja"] .title-accent {
+      color: var(--on-navy);
+    }
+
+    html[lang="ja"] .title-w-the {
+      color: var(--primary-color-1);
+    }
+
+    html[lang="ja"] .title-line2 {
+      color: var(--primary-color-1);
+    }
+
+    html[lang="ja"] h1 {
+      letter-spacing: 0;
+      line-height: 1.04;
+    }
+
+    @media (min-width: 681px) {
+      html[lang="ja"] .title-accent,
+      html[lang="ja"] .title-w-the,
+      html[lang="ja"] .title-line2 {
+        display: block;
+        white-space: nowrap;
+        writing-mode: horizontal-tb;
+        width: max-content;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 680px) {
+      html[lang="ja"] .title-w-the,
+      html[lang="ja"] .title-line2 {
+        display: inline;
+        white-space: nowrap;
+      }
+    }
+
+    html[lang="ja"] #capabilities-title {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    html[lang="ja"] #capabilities-title .capabilities-mid:empty {
+      display: none;
+    }
+`;
+
+function injectJapaneseLandingStyles(html) {
+  const marker = "  </style>";
+  const idx = html.lastIndexOf(marker);
+  if (idx === -1) {
+    throw new Error("Cannot inject Japanese landing styles: missing </style>");
+  }
+  return `${html.slice(0, idx)}${JAPANESE_LANDING_STYLE_BLOCK}\n${html.slice(idx)}`;
+}
+
+// Desktop-only hero line2 break; injected into matching landing.locales/*.html only.
+const LOCALIZED_LANDING_HERO_LINE2_BREAK = {
+  vi: "vi landing hero: desktop-only line break before giản (thật đơn / giản).",
+  de: "de landing hero: desktop-only line break before Umwege (ohne / Umwege).",
+  fr: "fr landing hero: desktop-only line break before complication (sans / complication).",
+  es: "es landing hero: desktop-only line break before complicaciones (sin / complicaciones).",
+  id: "id landing hero: desktop-only line break before ribet (tanpa / ribet).",
+  ru: "ru landing hero: desktop-only line break before лишней сложности (без / лишней сложности).",
+  th: "th landing hero: desktop-only line break before ไม่ยุ่งยาก (แบบ / ไม่ยุ่งยาก).",
+};
+
+function buildHeroLine2BreakStyleBlock(htmlLang, comment) {
+  return `
+    /* ${comment} */
+    @media (min-width: 681px) {
+      html[lang="${htmlLang}"] .title-line2 {
+        display: block;
+        white-space: nowrap;
+        writing-mode: horizontal-tb;
+        width: max-content;
+        max-width: 100%;
+      }
+    }
+
+    @media (max-width: 680px) {
+      html[lang="${htmlLang}"] .title-w-the,
+      html[lang="${htmlLang}"] .title-line2 {
+        display: inline;
+        white-space: nowrap;
+      }
+    }
+`;
+}
+
+function injectLocalizedLandingHeroLine2BreakStyles(locale, html) {
+  const comment = LOCALIZED_LANDING_HERO_LINE2_BREAK[locale];
+  if (!comment) {
+    return html;
+  }
+  const htmlLang = INTL_LOCALES[locale];
+  if (!htmlLang) {
+    throw new Error(`Cannot inject hero line2 break styles for ${locale}: missing INTL_LOCALES entry`);
+  }
+  const marker = "  </style>";
+  const idx = html.lastIndexOf(marker);
+  if (idx === -1) {
+    throw new Error(`Cannot inject hero line2 break styles for ${locale}: missing </style>`);
+  }
+  return `${html.slice(0, idx)}${buildHeroLine2BreakStyleBlock(htmlLang, comment)}\n${html.slice(idx)}`;
+}
+
 function renderLanding(template, locale, catalog, publicLocales) {
   let html = template
     .replaceAll("{{htmlLang}}", INTL_LOCALES[locale])
     .replaceAll("{{htmlDirAttr}}", LANDING_RTL_LOCALES.has(locale) ? ' dir="rtl"' : "")
     .replaceAll("{{landingHeroLocalClass}}", landingHeroLocalClass(locale))
     .replaceAll("{{landingHeadMeta}}", renderHeadMeta(locale, catalog, publicLocales))
+    .replaceAll("{{landingRobotsMeta}}", landingRobotsMeta(locale))
     .replace(/\{\{t:([^}]+)\}\}/g, (_match, key) => escapeHtml(catalog[key]));
 
-  html = html.replace("<!doctype html>\n", `<!doctype html>\n${GENERATED_COMMENT}\n`);
+  html = html.replace(/^<!doctype html>\r?\n/, `$&${GENERATED_COMMENT}\n`);
 
   const leftover = html.match(/\{\{(?!VERSION\b)[^}]+\}\}/);
   if (leftover) {
     throw new Error(`Unresolved landing template token for ${locale}: ${leftover[0]}`);
   }
+  if (locale !== "ur") {
+    html = flattenLandingHeroSubline(html);
+  }
   if (locale !== "en") {
     html = reorderLocalizedFeatureGrid(html);
   }
+  if (locale === "ja") {
+    html = injectJapaneseLandingStyles(html);
+  }
+  html = injectLocalizedLandingHeroLine2BreakStyles(locale, html);
   return html;
 }
 
