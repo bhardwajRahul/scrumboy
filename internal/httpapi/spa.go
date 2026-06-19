@@ -93,7 +93,12 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 		// If not a valid ID, fall through to SPA (might be a static file or other route)
 	}
 
-	// FOURTH: Root routing is idempotent in all modes
+	// FOURTH: Localized landing routes in anonymous mode only.
+	if s.handleLocalizedLanding(w, r, path) {
+		return
+	}
+
+	// FIFTH: Root routing is idempotent in all modes
 	if path == "" && s.mode == "anonymous" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
@@ -101,8 +106,60 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// FOURTH: Serve SPA index.html for all other routes
+	// SIXTH: Serve SPA index.html for all other routes
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(s.indexHTML)
+}
+
+func (s *Server) handleLocalizedLanding(w http.ResponseWriter, r *http.Request, path string) bool {
+	if s.mode != "anonymous" {
+		return false
+	}
+
+	locale, singleSegment := singleSegmentPath(path)
+	if !singleSegment {
+		return false
+	}
+
+	if locale == "en" {
+		http.Redirect(w, r, appendRawQuery("/", r.URL.RawQuery), http.StatusMovedPermanently)
+		return true
+	}
+	if locale == "pseudo" {
+		http.NotFound(w, r)
+		return true
+	}
+
+	html, ok := s.landingHTMLByLocale[locale]
+	if !ok {
+		return false
+	}
+	if !strings.HasSuffix(path, "/") {
+		http.Redirect(w, r, appendRawQuery("/"+locale+"/", r.URL.RawQuery), http.StatusMovedPermanently)
+		return true
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(html)
+	return true
+}
+
+func singleSegmentPath(path string) (string, bool) {
+	if path == "" {
+		return "", false
+	}
+	trimmed := strings.TrimSuffix(path, "/")
+	if trimmed == "" || strings.Contains(trimmed, "/") {
+		return "", false
+	}
+	return trimmed, true
+}
+
+func appendRawQuery(targetPath, rawQuery string) string {
+	if rawQuery == "" {
+		return targetPath
+	}
+	return targetPath + "?" + rawQuery
 }

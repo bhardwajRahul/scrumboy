@@ -2,6 +2,18 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.13] - 2026-06-18
+
+### Added
+
+- **Localized landing pages** - Public locale routes (e.g. `/de/`, `/hi/`) serve generated marketing HTML with per-locale `lang`, canonical, and hreflang metadata; hero titles keep **Kanban Boards** in English with a locale-specific taglines.
+- **Landing generator** - `landing.template.html` and `scripts/generate-landing.mjs` build `landing.html` and `landing.locales/*.html` from i18n catalogs; npm `generate:landing` / `verify:landing` wired into the web build and test scripts.
+
+### Changed
+
+- **Landing feature cards** - Multilingual card leads on localized pages (locale slot taglines, **i18n** on English, `earth.svg` backdrop); markdown card uses **markdown + mermaid** image and copy; footer disclaimer also disclaims Mermaid affiliation.
+
+
 ## [3.18.12] - 2026-06-18
 
 ### Documentation

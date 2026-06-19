@@ -75,13 +75,14 @@ type Server struct {
 
 	passwordResetAdminLimiter *ratelimit.Limiter // 10 resets/min per admin
 
-	webFS        fs.FS
-	fileSrv      http.Handler
-	indexHTML    []byte
-	landingHTML  []byte
-	swJS         []byte // Service worker with version injected
-	mcpHandler   http.Handler
-	agoraHandler http.Handler
+	webFS               fs.FS
+	fileSrv             http.Handler
+	indexHTML           []byte
+	landingHTML         []byte
+	landingHTMLByLocale map[string][]byte
+	swJS                []byte // Service worker with version injected
+	mcpHandler          http.Handler
+	agoraHandler        http.Handler
 
 	vapidPublicKey      string
 	pushVapidConfigured bool // full mode + both VAPID keys present; subscribe and push notify use this
@@ -250,6 +251,30 @@ type storeAPI interface {
 //go:embed web/vendor/**
 var embeddedWeb embed.FS
 
+func readLocalizedLandingHTML(webFS fs.FS) (map[string][]byte, error) {
+	entries, err := fs.ReadDir(webFS, "landing.locales")
+	if err != nil {
+		return nil, err
+	}
+
+	landingByLocale := make(map[string][]byte)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".html") {
+			continue
+		}
+		locale := strings.TrimSuffix(entry.Name(), ".html")
+		if locale == "" || locale == "en" || locale == "pseudo" {
+			continue
+		}
+		html, err := fs.ReadFile(webFS, "landing.locales/"+entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		landingByLocale[locale] = []byte(strings.ReplaceAll(string(html), "{{VERSION}}", version.Version))
+	}
+	return landingByLocale, nil
+}
+
 func NewServer(st storeAPI, opts Options) *Server {
 	logger := opts.Logger
 	if logger == nil {
@@ -273,6 +298,11 @@ func NewServer(st storeAPI, opts Options) *Server {
 	}
 	// Inject version into landing.html
 	landingHTML = []byte(strings.ReplaceAll(string(landingHTML), "{{VERSION}}", version.Version))
+
+	landingHTMLByLocale, err := readLocalizedLandingHTML(webFS)
+	if err != nil {
+		panic(err)
+	}
 
 	swJS, err := fs.ReadFile(webFS, "sw.js")
 	if err != nil {
@@ -342,6 +372,7 @@ func NewServer(st storeAPI, opts Options) *Server {
 		fileSrv:                   http.FileServer(http.FS(webFS)),
 		indexHTML:                 indexHTML,
 		landingHTML:               landingHTML,
+		landingHTMLByLocale:       landingHTMLByLocale,
 		swJS:                      swJS,
 		mcpHandler:                opts.MCPHandler,
 		agoraHandler:              opts.AgoraHandler,

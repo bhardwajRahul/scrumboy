@@ -7,9 +7,11 @@
     "sync:vendor": "node scripts/sync-vendor.mjs",
     "verify:vendor": "node scripts/verify-vendor.mjs",
     "verify:i18n": "node scripts/verify-i18n-locales.mjs",
+    "generate:landing": "node scripts/generate-landing.mjs",
+    "verify:landing": "node scripts/generate-landing.mjs --check",
     "copy:i18n": "node scripts/copy-i18n-locales.mjs",
-    "build": "node scripts/verify-vendor.mjs && npm run verify:i18n && tsc && npm run copy:i18n",
-    "test": "node scripts/verify-vendor.mjs && npm run verify:i18n && vitest run",
+    "build": "node scripts/verify-vendor.mjs && npm run verify:i18n && npm run generate:landing && tsc && npm run copy:i18n",
+    "test": "node scripts/verify-vendor.mjs && npm run verify:i18n && npm run verify:landing && vitest run",
     "lint:delete-confirms": "node scripts/check-delete-confirms.mjs"
   },
   "devDependencies": {
