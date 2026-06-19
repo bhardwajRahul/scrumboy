@@ -1113,6 +1113,14 @@ func TestAnonymousMode_RootServesLandingAndIsIdempotent(t *testing.T) {
 	if !strings.Contains(string(b), `href="/anon"`) {
 		t.Fatalf("expected landing page to include /anon CTA")
 	}
+	html := string(b)
+	if got := strings.Count(html, `class="feature"`); got != 12 {
+		t.Fatalf("expected landing page to render 12 feature cards, got %d", got)
+	}
+	if !strings.Contains(html, "markdown + mermaid") {
+		t.Fatalf("expected landing page to include Markdown + Mermaid feature")
+	}
+	assertLandingMultilingualSlotTagline(t, "en", html)
 
 	var after int
 	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&after); err != nil {
@@ -1121,6 +1129,337 @@ func TestAnonymousMode_RootServesLandingAndIsIdempotent(t *testing.T) {
 	if after != before {
 		t.Fatalf("expected GET / to be idempotent, count %d -> %d", before, after)
 	}
+}
+
+func TestAnonymousMode_LocalizedLandingRoutes(t *testing.T) {
+	ts, sqlDB, cleanup := newTestHTTPServer(t, "anonymous")
+	defer cleanup()
+
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	locales := generatedLandingLocales(t)
+	if len(locales) == 0 {
+		t.Fatal("expected generated localized landing pages")
+	}
+
+	var before int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&before); err != nil {
+		t.Fatalf("count before: %v", err)
+	}
+
+	for _, locale := range locales {
+		resp, err := client.Get(ts.URL + "/" + locale + "/")
+		if err != nil {
+			t.Fatalf("GET /%s/: %v", locale, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 for /%s/, got %d body=%s", locale, resp.StatusCode, string(body))
+		}
+		if resp.Header.Get("Content-Type") != "text/html; charset=utf-8" {
+			t.Fatalf("expected HTML for /%s/, got %s", locale, resp.Header.Get("Content-Type"))
+		}
+		html := string(body)
+		if !strings.Contains(html, `href="/anon"`) {
+			t.Fatalf("expected /%s/ landing page to keep /anon CTA", locale)
+		}
+		if !strings.Contains(html, `rel="canonical" href="https://scrumboy.com/`+locale+`/"`) {
+			t.Fatalf("expected /%s/ canonical URL", locale)
+		}
+		if !strings.Contains(html, `hreflang="x-default" href="https://scrumboy.com/"`) {
+			t.Fatalf("expected /%s/ hreflang x-default", locale)
+		}
+		if strings.Contains(html, "pseudo/") {
+			t.Fatalf("expected /%s/ hreflang cluster to exclude pseudo", locale)
+		}
+		if got := strings.Count(html, `class="feature"`); got != 12 {
+			t.Fatalf("expected /%s/ to render 12 feature cards, got %d", locale, got)
+		}
+		assertLocalizedLandingMultilingualFeatureFirst(t, locale, html)
+		assertLandingMultilingualSlotTagline(t, locale, html)
+		assertLandingDisplayCopy(t, locale, html)
+		assertLandingLocalizedHeroTitle(t, locale, html)
+		rootTag := htmlRootTag(t, html)
+		if strings.Contains(rootTag, `dir="rtl"`) {
+			t.Fatalf("expected /%s/ not to be RTL", locale)
+		}
+	}
+
+	resp, err := client.Get(ts.URL + "/de")
+	if err != nil {
+		t.Fatalf("GET /de: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("expected 301 for /de, got %d", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); loc != "/de/" {
+		t.Fatalf("expected /de/ redirect target, got %q", loc)
+	}
+
+	resp, err = client.Get(ts.URL + "/en/?utm=test")
+	if err != nil {
+		t.Fatalf("GET /en/: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusMovedPermanently {
+		t.Fatalf("expected 301 for /en/, got %d", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); loc != "/?utm=test" {
+		t.Fatalf("expected English canonical redirect, got %q", loc)
+	}
+
+	resp, err = client.Get(ts.URL + "/pseudo/")
+	if err != nil {
+		t.Fatalf("GET /pseudo/: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("expected 404 for /pseudo/, got %d", resp.StatusCode)
+	}
+
+	resp, err = client.Get(ts.URL + "/zz/")
+	if err != nil {
+		t.Fatalf("GET /zz/: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected existing SPA fallback for /zz/, got %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(body), `<div id="app"></div>`) {
+		t.Fatalf("expected /zz/ to remain SPA fallback")
+	}
+
+	var after int
+	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&after); err != nil {
+		t.Fatalf("count after: %v", err)
+	}
+	if after != before {
+		t.Fatalf("expected localized landing routes to be idempotent, count %d -> %d", before, after)
+	}
+}
+
+func TestFullMode_LocalizedLandingPathsRemainSPA(t *testing.T) {
+	ts, _, cleanup := newTestHTTPServer(t, "full")
+	defer cleanup()
+
+	resp, err := http.Get(ts.URL + "/de/")
+	if err != nil {
+		t.Fatalf("GET /de/: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected full-mode SPA fallback for /de/, got %d", resp.StatusCode)
+	}
+	html := string(body)
+	if !strings.Contains(html, `<div id="app"></div>`) {
+		t.Fatalf("expected full-mode /de/ to serve SPA")
+	}
+	if strings.Contains(html, "Generated by scripts/generate-landing.mjs") {
+		t.Fatalf("expected full-mode /de/ not to serve localized landing")
+	}
+}
+
+func generatedLandingLocales(t *testing.T) []string {
+	t.Helper()
+	entries, err := embeddedWeb.ReadDir("web/landing.locales")
+	if err != nil {
+		t.Fatalf("read generated landing locales: %v", err)
+	}
+
+	locales := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".html") {
+			continue
+		}
+		locales = append(locales, strings.TrimSuffix(entry.Name(), ".html"))
+	}
+	return locales
+}
+
+func assertLocalizedLandingMultilingualFeatureFirst(t *testing.T, locale, html string) {
+	t.Helper()
+	gridIdx := strings.Index(html, `<div class="feature-grid">`)
+	if gridIdx == -1 {
+		t.Fatalf("expected /%s/ feature grid", locale)
+	}
+	rest := html[gridIdx:]
+	articleIdx := strings.Index(rest, `<article class="feature"`)
+	if articleIdx == -1 {
+		t.Fatalf("expected /%s/ feature cards", locale)
+	}
+	firstArticle := rest[articleIdx : articleIdx+120]
+	if !strings.Contains(firstArticle, `data-feature="multilingual"`) {
+		t.Fatalf("expected /%s/ multilingual feature card first, got %q", locale, firstArticle)
+	}
+}
+
+var landingMultilingualSlotTaglineByLocale = map[string]string{
+	"en": "i18n",
+	"ar": "نعم، نحن نتكلم العربية",
+	"de": "Ja, wir sprechen Deutsch!",
+	"es": "¡Sí, hablamos español!",
+	"fr": "Oui, on parle français !",
+	"hi": "जी, हम हिंदी भी बोलते हैं!",
+	"id": "Ya, kami bisa bahasa Indonesia!",
+	"it": "Sì, parliamo italiano!",
+	"ja": "日本語が使えます！",
+	"ko": "네, 한국어도 지원해요!",
+	"pt": "Sim, falamos português!",
+	"ru": "Да, мы говорим по-русски!",
+	"th": "ใช่ เราพูดภาษาไทย!",
+	"tr": "Evet, Türkçe konuşuyoruz!",
+	"ur": "جی ہاں، ہم اردو بولتے ہیں",
+	"vi": "Có, chúng tôi nói tiếng Việt!",
+	"zh": "没错，我们说中文！",
+}
+
+func assertLandingMultilingualSlotTagline(t *testing.T, locale, html string) {
+	t.Helper()
+	wantTagline, hasTagline := landingMultilingualSlotTaglineByLocale[locale]
+	if hasTagline {
+		multilingualArticle := landingMultilingualFeatureArticle(html)
+		if multilingualArticle == "" {
+			t.Fatalf("expected /%s/ multilingual feature card markup", locale)
+		}
+		if locale != "en" && !strings.HasPrefix(strings.TrimSpace(multilingualArticle), `<article class="feature" data-feature="multilingual"`) {
+			t.Fatalf("expected /%s/ multilingual feature card first", locale)
+		}
+		if !strings.Contains(multilingualArticle, `<p class="multilingual-slot-tagline">`+wantTagline+`</p>`) {
+			t.Fatalf("expected /%s/ multilingual slot tagline %q", locale, wantTagline)
+		}
+		if !strings.Contains(multilingualArticle, `aria-label="`+wantTagline+`"`) {
+			t.Fatalf("expected /%s/ multilingual slot aria-label to use tagline", locale)
+		}
+		if !strings.Contains(multilingualArticle, `src="/earth.svg"`) {
+			t.Fatalf("expected /%s/ multilingual feature card to include earth.svg backdrop", locale)
+		}
+		return
+	}
+
+	for _, tagline := range landingMultilingualSlotTaglineByLocale {
+		if strings.Contains(html, tagline) {
+			t.Fatalf("expected /%s/ not to include slot tagline %q", locale, tagline)
+		}
+	}
+}
+
+func landingMultilingualFeatureArticle(html string) string {
+	gridIdx := strings.Index(html, `<div class="feature-grid">`)
+	if gridIdx == -1 {
+		return ""
+	}
+	articleIdx := strings.Index(html[gridIdx:], `<article class="feature" data-feature="multilingual"`)
+	if articleIdx == -1 {
+		return ""
+	}
+	start := gridIdx + articleIdx
+	end := strings.Index(html[start:], `</article>`)
+	if end == -1 {
+		return ""
+	}
+	return html[start : start+end]
+}
+
+func assertLandingDisplayCopy(t *testing.T, locale, html string) {
+	t.Helper()
+	for _, want := range []string{
+		"Kanban Boards",
+		"Deploy it locally.",
+		"Create a board now.",
+		"Can your",
+		"project management tool",
+		"markdown + mermaid",
+		"Use Markdown and Mermaid diagrams in task notes",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected /%s/ landing page to contain English copy %q", locale, want)
+		}
+	}
+
+	assertLandingMultilingualFeatureText(t, locale, html)
+}
+
+var landingMultilingualFeatureTextByLocale = map[string]string{
+	"ar": "Use Scrumboy in العربية and many other languages.",
+	"de": "Use Scrumboy in Deutsch and many other languages.",
+	"es": "Use Scrumboy in Español (Latinoamérica) and many other languages.",
+	"fr": "Use Scrumboy in Français and many other languages.",
+	"hi": "Use Scrumboy in हिन्दी and many other languages.",
+	"id": "Use Scrumboy in Bahasa Indonesia and many other languages.",
+	"it": "Use Scrumboy in Italiano and many other languages.",
+	"ja": "Use Scrumboy in 日本語 and many other languages.",
+	"ko": "Use Scrumboy in 한국어 and many other languages.",
+	"pt": "Use Scrumboy in Português (Brasil) and many other languages.",
+	"ru": "Use Scrumboy in Русский and many other languages.",
+	"th": "Use Scrumboy in ไทย and many other languages.",
+	"tr": "Use Scrumboy in Türkçe and many other languages.",
+	"ur": "Use Scrumboy in اردو and many other languages.",
+	"vi": "Use Scrumboy in Tiếng Việt and many other languages.",
+	"zh": "Use Scrumboy in 简体中文 and many other languages.",
+}
+
+func assertLandingMultilingualFeatureText(t *testing.T, locale, html string) {
+	t.Helper()
+	want, ok := landingMultilingualFeatureTextByLocale[locale]
+	if !ok {
+		t.Fatalf("missing expected multilingual feature text for locale %q", locale)
+	}
+	if !strings.Contains(html, want) {
+		t.Fatalf("expected /%s/ landing page to contain multilingual feature text %q", locale, want)
+	}
+	if strings.Contains(html, "Use Scrumboy in your language") {
+		t.Fatalf("expected /%s/ not to use generic multilingual feature text", locale)
+	}
+}
+
+var landingLocalizedHeroTitleByLocale = map[string]struct {
+	rest  string
+	line2 string
+}{
+	"hi": {rest: "बिना झंझट", line2: "के."},
+	"ur": {rest: "آسان اور", line2: "بےفکر۔"},
+}
+
+func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
+	t.Helper()
+	want, ok := landingLocalizedHeroTitleByLocale[locale]
+	if !ok {
+		return
+	}
+	if !strings.Contains(html, `<span class="title-accent">Kanban Boards</span>`) {
+		t.Fatalf("expected /%s/ landing hero accent to stay English %q", locale, "Kanban Boards")
+	}
+	if !strings.Contains(html, `<span class="title-w-the">`+want.rest+`</span>`) {
+		t.Fatalf("expected /%s/ landing hero rest %q", locale, want.rest)
+	}
+	if want.line2 != "" {
+		if !strings.Contains(html, `<span class="title-line2">`+want.line2+`</span>`) {
+			t.Fatalf("expected /%s/ landing hero line2 %q", locale, want.line2)
+		}
+	}
+}
+
+func htmlRootTag(t *testing.T, html string) string {
+	t.Helper()
+	start := strings.Index(html, "<html")
+	if start < 0 {
+		t.Fatalf("expected HTML root tag")
+	}
+	end := strings.Index(html[start:], ">")
+	if end < 0 {
+		t.Fatalf("expected closed HTML root tag")
+	}
+	return html[start : start+end+1]
 }
 
 func TestAnonAndTempRoutes_CreateAndRedirect(t *testing.T) {
