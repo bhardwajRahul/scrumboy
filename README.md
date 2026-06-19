@@ -5,6 +5,7 @@
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   </a>
+  <img src="https://img.shields.io/badge/i18n-17_languages-yellow" alt="i18n" />
 </p>
 
 #### Self-hosted project management & issue-tracking solution + instant shareable & customizable boards + realtime collaboration, automation, API access and MCP-compatible client support
@@ -188,7 +189,7 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 
 - PWA: Excellent UX for mobile users.
 
-- Multi-language UI: English, 简体中文, हिन्दी, Español (Latinoamérica), العربية, Français, Português (Brasil), Bahasa Indonesia, اردو, Русский, Deutsch, 日本語, Tiếng Việt, Türkçe, 한국어, Italiano, and ไทย. The app can infer language from the browser or you can switch it in `Settings -> Language`.
+- Multi-language Support: English, 简体中文, हिन्दी, Español (Latinoamérica), العربية, Français, Português (Brasil), Bahasa Indonesia, اردو, Русский, Deutsch, 日本語, Tiếng Việt, Türkçe, 한국어, Italiano, and ไทย.
 
 - Anonymous shareable boards can be created in both Full & Anonymous deployments.
 

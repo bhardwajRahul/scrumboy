@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [Unreleased]
+
+### Changed
+
+- **Localized landing SEO** - Non-root anonymous landing routes (e.g. `/de/`, `/hi/`) emit `noindex,follow` while visible copy remains mostly English; root `/` stays indexable. Noindexed locale routes do not participate in the hreflang cluster yet; `/` emits only `en` and `x-default` hreflang to the root URL.
+
 ## [3.18.13] - 2026-06-18
 
 ### Added

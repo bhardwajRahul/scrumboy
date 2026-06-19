@@ -116,14 +116,29 @@ function landingUrl(locale) {
   return locale === "en" ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}/${locale}/`;
 }
 
+// Non-root locale landings stay shareable (follow) but noindex while visible copy is mostly English; `/` stays indexable.
+function landingRobotsMeta(locale) {
+  return locale === "en"
+    ? ""
+    : '  <meta name="robots" content="noindex,follow">\n';
+}
+
+// While non-root locale landings are noindex, only the indexable English root participates in hreflang.
+function renderHreflangLinks(locale) {
+  if (locale !== "en") {
+    return [];
+  }
+  return [
+    `<link rel="alternate" hreflang="en" href="${SITE_ORIGIN}/" />`,
+    `<link rel="alternate" hreflang="x-default" href="${SITE_ORIGIN}/" />`,
+  ];
+}
+
 function renderHeadMeta(locale, catalog, publicLocales) {
   const title = escapeHtml(catalog["landing.meta.title"]);
   const description = escapeHtml(catalog["landing.meta.description"]);
   const canonicalUrl = landingUrl(locale);
-  const alternateLinks = publicLocales.map((alternateLocale) => (
-    `<link rel="alternate" hreflang="${INTL_LOCALES[alternateLocale]}" href="${landingUrl(alternateLocale)}" />`
-  ));
-  alternateLinks.push(`<link rel="alternate" hreflang="x-default" href="${SITE_ORIGIN}/" />`);
+  const alternateLinks = renderHreflangLinks(locale);
 
   const ogLocaleAlternates = publicLocales
     .filter((alternateLocale) => alternateLocale !== locale)
@@ -247,9 +262,10 @@ function renderLanding(template, locale, catalog, publicLocales) {
     .replaceAll("{{htmlDirAttr}}", LANDING_RTL_LOCALES.has(locale) ? ' dir="rtl"' : "")
     .replaceAll("{{landingHeroLocalClass}}", landingHeroLocalClass(locale))
     .replaceAll("{{landingHeadMeta}}", renderHeadMeta(locale, catalog, publicLocales))
+    .replaceAll("{{landingRobotsMeta}}", landingRobotsMeta(locale))
     .replace(/\{\{t:([^}]+)\}\}/g, (_match, key) => escapeHtml(catalog[key]));
 
-  html = html.replace("<!doctype html>\n", `<!doctype html>\n${GENERATED_COMMENT}\n`);
+  html = html.replace(/^<!doctype html>\r?\n/, `$&${GENERATED_COMMENT}\n`);
 
   const leftover = html.match(/\{\{(?!VERSION\b)[^}]+\}\}/);
   if (leftover) {
