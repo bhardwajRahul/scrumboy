@@ -1,7 +1,7 @@
 // Inline text-edit controller for Scrumbaby/Wall notes.
 //
 // This module owns the lifecycle of the editing textarea (entering edit mode,
-// commit/cancel wiring, flushing any deferred SSE refetch that arrived while
+// commit wiring, flushing any deferred SSE refetch that arrived while
 // the user was typing). The actual textarea DOM swap lives in
 // `wall-rendering.ts`; the scheduling of durable PATCHes lives in the caller
 // (`onCommitText`) so this controller never imports wall-api directly.
@@ -15,14 +15,14 @@ import {
 } from "./wall-state.js";
 
 export interface BeginEditOptions {
-  /** Commit a non-empty text change to the server. */
+  /** Commit a text change to the server when the edited value differs. */
   onCommitText: (id: string, text: string) => void;
   /** Re-fetch the wall doc once the edit ends (only when a refresh was deferred). */
   onFlushDeferredRefetch: () => void;
 }
 
 /**
- * Swap a note display for a textarea and wire up commit/cancel.
+ * Swap a note display for a textarea and wire up commit (blur, Enter, Escape).
  *
  * Focus is synchronous on purpose: a preceding `renderSurface()` has just
  * rebuilt `#wallSurface`, and we need the textarea focused before any
@@ -61,7 +61,7 @@ export function beginEdit(noteEl: HTMLElement, note: WallNote, opts: BeginEditOp
   const onKey = (ev: KeyboardEvent) => {
     if (ev.key === "Escape") {
       ev.preventDefault();
-      finish(false);
+      finish(true);
     } else if (ev.key === "Enter" && !ev.shiftKey) {
       ev.preventDefault();
       finish(true);

@@ -9,7 +9,7 @@ Sticky-note board for durable projects. Open it from the board topbar (desktop o
 - **Move a note** - Drag the note (not the resize corner).
 - **Resize** - Drag the **bottom-right** handle.
 - **Change color** - **Single-click** a note (waits briefly so a double-click can still open edit).
-- **Edit text** - **Double-click** a note. **Enter** commits (Shift+Enter = new line). **Escape** cancels. **Blur** commits.
+- **Edit text** - **Double-click** a note. **Enter** commits (Shift+Enter = new line). **Escape** commits. **Blur** commits.
 - **Note actions menu** - **Right-click** a note to open a small menu with:
   - **Create Todo from Note** - opens the **New Todo** dialog with the note's text prefilled as the Title. Save or cancel as usual; the wall stays open either way.
   - **Delete** - prompts the same confirmation as before, then deletes the note.
