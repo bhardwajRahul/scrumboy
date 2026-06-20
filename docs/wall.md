@@ -20,7 +20,7 @@ Sticky-note board for durable projects. Open it from the board topbar (desktop o
 - **Add or remove from selection** - **Ctrl**+click (Windows/Linux) or **⌘**+click (Mac) a note.
 - **Exit multi-select on canvas** - **Click** empty space (no drag).
 - **Move a group** - With multiple notes selected, drag one of them; all selected notes move together. Selection clears when you release the drag.
-- **Delete several at once** - Drag the group over the trash; one confirmation lists how many notes will be deleted.
+- **Delete several at once** - Drag the group over the trash, or press **Delete** when notes are selected; one confirmation lists how many notes will be deleted (or asks to delete a single selected note).
 - **Canvas mode toggle** - The button left of **Fit view** switches between **Select** mode (dashed-square icon) and **Pan** mode (hand icon), or press **S**. Your choice is remembered globally in the browser and applies to every project's wall (defaults to Select until you change it).
 - **Select mode** - Empty-canvas drag draws the marquee box to select notes.
 - **Pan mode** - Empty-canvas mouse drag or touch swipe pans the wall. Two-finger touch pinch zooms the wall.

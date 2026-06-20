@@ -212,6 +212,15 @@ export async function openWallDialog(opts) {
         if (ev.key === "s" || ev.key === "S") {
             ev.preventDefault();
             toggleWallCanvasModeFromUi();
+            return;
+        }
+        if (ev.key === "Delete") {
+            if (ev.repeat)
+                return;
+            if (m.selected.size === 0)
+                return;
+            ev.preventDefault();
+            confirmAndDeleteSelectedNotes(m);
         }
     }, { signal: state.abort.signal });
     dialog.addEventListener("close", teardown, { signal: state.abort.signal, once: true });
@@ -539,6 +548,27 @@ async function deleteNote(id) {
         showToast(t("wall.toast.deleteNoteFailed"));
     }
 }
+function confirmAndDeleteNotes(state, ids, isGroup) {
+    if (!state.canEdit || ids.length === 0)
+        return;
+    const prompt = isGroup
+        ? t("wall.confirm.deleteNotesCount", { count: ids.length })
+        : t("wall.confirm.deleteNote");
+    void confirmDelete(prompt).then((confirmed) => {
+        if (!confirmed)
+            return;
+        for (const id of ids)
+            void deleteNote(id);
+        if (isGroup)
+            clearSelection();
+    });
+}
+function confirmAndDeleteSelectedNotes(state) {
+    if (state.selected.size === 0)
+        return;
+    const isGroup = state.selected.size > 1;
+    confirmAndDeleteNotes(state, Array.from(state.selected), isGroup);
+}
 async function createEdge(fromId, toId) {
     const state = getMounted();
     if (!state || !state.canEdit)
@@ -733,9 +763,6 @@ function bindSurfaceHandlers(state) {
             // notes are selected) deletes only that note and leaves selection alone.
             const isGroup = state.selected.has(noteId) && state.selected.size > 1;
             const groupIds = isGroup ? Array.from(state.selected) : [noteId];
-            const confirmPrompt = isGroup
-                ? t("wall.confirm.deleteNotesCount", { count: groupIds.length })
-                : t("wall.confirm.deleteNote");
             void openWallNoteContextMenu(ev.clientX, ev.clientY, state.abort.signal, {
                 showCreateTodo: !isGroup,
                 deleteCount: isGroup ? groupIds.length : undefined,
@@ -759,13 +786,7 @@ function bindSurfaceHandlers(state) {
                     });
                 }
                 else if (choice === "delete") {
-                    const confirmed = await confirmDelete(confirmPrompt);
-                    if (!confirmed)
-                        return;
-                    for (const id of groupIds)
-                        void deleteNote(id);
-                    if (isGroup)
-                        clearSelection();
+                    confirmAndDeleteNotes(state, groupIds, isGroup);
                 }
             });
             return;

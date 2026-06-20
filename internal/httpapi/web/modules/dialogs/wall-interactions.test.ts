@@ -118,6 +118,12 @@ function dispatchPointer(target: EventTarget, type: string, extra: Record<string
   target.dispatchEvent(ev);
 }
 
+function dispatchKey(key: string, target: EventTarget = window): void {
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
+  );
+}
+
 async function flushPromises(count = 8): Promise<void> {
   for (let i = 0; i < count; i += 1) {
     await Promise.resolve();
@@ -419,5 +425,97 @@ describe("wall interactions", () => {
     const patchBody = patchCall?.[1]?.body ? JSON.parse(String(patchCall[1].body)) : {};
     expect(typeof patchBody.color).toBe("string");
     expect(patchBody.color).not.toBe("#FFFFFF");
+  });
+
+  it("Delete with one selected note prompts single-note confirm and deletes on confirm", async () => {
+    confirmDeleteMock.mockResolvedValue(true);
+
+    const mod = await import("./wall.js");
+    await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
+    await flushPromises();
+
+    const selection = await import("./wall-selection.js");
+    selection.setSelection(["n1"]);
+
+    dispatchKey("Delete");
+    await flushPromises();
+
+    expect(confirmDeleteMock).toHaveBeenCalledWith("Delete this note?");
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/board/alpha/wall/notes/n1", { method: "DELETE" });
+    expect(wallSurfaceEl.querySelector('.wall-note[data-note-id="n1"]')).toBeNull();
+  });
+
+  it("Delete with two selected notes prompts group confirm, deletes all, and clears selection", async () => {
+    apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/wall") && !init?.method) return createMultiNoteWallDoc();
+      if (init?.method === "DELETE") return {};
+      return {};
+    });
+    confirmDeleteMock.mockResolvedValue(true);
+
+    const mod = await import("./wall.js");
+    await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
+    await flushPromises();
+
+    const selection = await import("./wall-selection.js");
+    selection.setSelection(["n1", "n2"]);
+
+    dispatchKey("Delete");
+    await flushPromises();
+
+    expect(confirmDeleteMock).toHaveBeenCalledWith("Delete 2 notes?");
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/board/alpha/wall/notes/n1", { method: "DELETE" });
+    expect(apiFetchMock).toHaveBeenCalledWith("/api/board/alpha/wall/notes/n2", { method: "DELETE" });
+    expect(wallSurfaceEl.querySelectorAll(".wall-note--selected")).toHaveLength(0);
+  });
+
+  it("Delete with two selected notes and confirm=false keeps selection and skips DELETE", async () => {
+    apiFetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.includes("/wall") && !init?.method) return createMultiNoteWallDoc();
+      if (init?.method === "DELETE") return {};
+      return {};
+    });
+    confirmDeleteMock.mockResolvedValue(false);
+
+    const mod = await import("./wall.js");
+    await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
+    await flushPromises();
+
+    const selection = await import("./wall-selection.js");
+    selection.setSelection(["n1", "n2"]);
+
+    dispatchKey("Delete");
+    await flushPromises();
+
+    expect(confirmDeleteMock).toHaveBeenCalledWith("Delete 2 notes?");
+    const deleteCalls = apiFetchMock.mock.calls.filter(
+      ([, init]) => (init as RequestInit | undefined)?.method === "DELETE",
+    );
+    expect(deleteCalls).toHaveLength(0);
+    expect(wallSurfaceEl.querySelectorAll(".wall-note--selected")).toHaveLength(2);
+  });
+
+  it("does not delete when Delete is pressed while editing a note", async () => {
+    const mod = await import("./wall.js");
+    await mod.openWallDialog({ projectId: 1, slug: "alpha", role: "maintainer" });
+    await flushPromises();
+
+    const selection = await import("./wall-selection.js");
+    selection.setSelection(["n1"]);
+
+    const noteEl = wallSurfaceEl.querySelector(".wall-note");
+    if (!(noteEl instanceof HTMLElement)) throw new Error("missing wall note");
+    noteEl.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true, button: 0, clientX: 32, clientY: 32 }));
+    await flushPromises();
+
+    const editor = noteEl.querySelector<HTMLTextAreaElement>("textarea.wall-note__editor");
+    if (!editor) throw new Error("missing note editor");
+    editor.focus();
+
+    dispatchKey("Delete", editor);
+    await flushPromises();
+
+    expect(confirmDeleteMock).not.toHaveBeenCalled();
+    expect(apiFetchMock).not.toHaveBeenCalledWith("/api/board/alpha/wall/notes/n1", { method: "DELETE" });
   });
 });
