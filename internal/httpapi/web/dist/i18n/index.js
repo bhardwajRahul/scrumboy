@@ -1,11 +1,12 @@
-export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "fa", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "fa", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th"];
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "pl", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "pl"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
     en: "English",
     de: "Deutsch",
     it: "Italiano",
+    pl: "Polski",
     fr: "Français",
     bn: "বাংলা",
     pt: "Português (Brasil)",
@@ -29,6 +30,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS = {
     en: "/assets/flags/us.svg",
     de: "/assets/flags/de.svg",
     it: "/assets/flags/it.svg",
+    pl: "/assets/flags/pl.svg",
     fr: "/assets/flags/fr.svg",
     bn: "/assets/flags/bd.svg",
     pt: "/assets/flags/br.svg",
@@ -493,6 +495,8 @@ export function normalizeLocale(value) {
         return "de";
     if (normalized === "it" || normalized.startsWith("it-"))
         return "it";
+    if (normalized === "pl" || normalized.startsWith("pl-"))
+        return "pl";
     if (normalized === "fr" || normalized.startsWith("fr-"))
         return "fr";
     if (normalized === "bn" || normalized === "bn-bd" || normalized === "bn-in" || normalized.startsWith("bn-"))
@@ -782,6 +786,8 @@ function intlLocale(locale = activeLocale) {
         return "es-MX";
     if (locale === "it")
         return "it-IT";
+    if (locale === "pl")
+        return "pl-PL";
     if (locale === "zh")
         return "zh-CN";
     if (locale === "id")

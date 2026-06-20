@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "pl", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th"] as const;
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "pl"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -12,6 +12,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   en: "English",
   de: "Deutsch",
   it: "Italiano",
+  pl: "Polski",
   fr: "Français",
   bn: "বাংলা",
   pt: "Português (Brasil)",
@@ -36,6 +37,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   en: "/assets/flags/us.svg",
   de: "/assets/flags/de.svg",
   it: "/assets/flags/it.svg",
+  pl: "/assets/flags/pl.svg",
   fr: "/assets/flags/fr.svg",
   bn: "/assets/flags/bd.svg",
   pt: "/assets/flags/br.svg",
@@ -531,6 +533,7 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "pseudo") return "pseudo";
   if (normalized === "de" || normalized.startsWith("de-")) return "de";
   if (normalized === "it" || normalized.startsWith("it-")) return "it";
+  if (normalized === "pl" || normalized.startsWith("pl-")) return "pl";
   if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
   if (normalized === "bn" || normalized === "bn-bd" || normalized === "bn-in" || normalized.startsWith("bn-")) return "bn";
   if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
@@ -819,6 +822,7 @@ function intlLocale(locale = activeLocale): string {
   if (locale === "pt") return "pt-BR";
   if (locale === "es") return "es-MX";
   if (locale === "it") return "it-IT";
+  if (locale === "pl") return "pl-PL";
   if (locale === "zh") return "zh-CN";
   if (locale === "id") return "id-ID";
   if (locale === "vi") return "vi-VN";
