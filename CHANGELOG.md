@@ -2,6 +2,20 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.15] - 2026-06-19
+
+### Added
+
+- **Wall keyboard shortcuts** - **W** on the board opens Scrumbaby wall (desktop, durable boards). **S** toggles Select/Pan canvas mode while the wall is open. **Delete** deletes selected notes with the existing confirmation prompt (single note or batch count).
+
+### Changed
+
+- **Wall note edit** - **Escape** commits in-place note edits (same as Enter/blur) instead of discarding changes.
+
+### Documentation
+
+- **`docs/wall.md`** - Open wall (**W**), canvas mode toggle (**S**), **Delete** on selection, and Escape commit behavior.
+
 ## [3.18.14] - 2026-06-19
 
 ### Changed
