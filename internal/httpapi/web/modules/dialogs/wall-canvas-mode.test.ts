@@ -150,6 +150,12 @@ function getNoteEl(id: string): HTMLElement {
   return noteEl;
 }
 
+function dispatchKey(key: string, target: EventTarget = window): void {
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
+  );
+}
+
 describe("wall canvas mode toggle", () => {
   beforeEach(async () => {
     vi.resetModules();
@@ -200,6 +206,43 @@ describe("wall canvas mode toggle", () => {
     expect(btn.getAttribute("aria-pressed")).toBe("false");
     expect(btn.getAttribute("aria-label")).toBe("Canvas mode: Select");
     expect(btn.innerHTML).toContain("lucide-square-dashed");
+    expect(wallSurfaceEl.classList.contains("wall-surface--pan-mode")).toBe(false);
+  });
+
+  it("toggles Select/Pan mode with the S key", async () => {
+    await openWall();
+    const btn = getModeBtn();
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+
+    dispatchKey("S");
+    await flushPromises();
+
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(wallSurfaceEl.classList.contains("wall-surface--pan-mode")).toBe(true);
+    expect(localStorage.getItem("scrumboy.wall.canvasMode")).toBe("pan");
+
+    dispatchKey("s");
+    await flushPromises();
+
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(wallSurfaceEl.classList.contains("wall-surface--pan-mode")).toBe(false);
+    expect(localStorage.getItem("scrumboy.wall.canvasMode")).toBe("select");
+  });
+
+  it("does not toggle canvas mode when S is pressed while editing a note", async () => {
+    await openWall();
+    const noteEl = getNoteEl("n1");
+    dispatchMouse(noteEl, "dblclick", { button: 0, clientX: 32, clientY: 32 });
+    await flushPromises();
+
+    const editor = noteEl.querySelector<HTMLTextAreaElement>("textarea.wall-note__editor");
+    if (!editor) throw new Error("missing note editor");
+    editor.focus();
+
+    dispatchKey("S", editor);
+    await flushPromises();
+
+    expect(getModeBtn().getAttribute("aria-pressed")).toBe("false");
     expect(wallSurfaceEl.classList.contains("wall-surface--pan-mode")).toBe(false);
   });
 

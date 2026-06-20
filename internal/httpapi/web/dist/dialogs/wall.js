@@ -75,6 +75,14 @@ function syncWallCanvasModeUi() {
     btn.setAttribute("title", next.title);
     btn.innerHTML = next.svg;
 }
+function toggleWallCanvasModeFromUi() {
+    cancelWallNavigationGestures();
+    toggleWallCanvasMode();
+    syncWallCanvasModeUi();
+    const modeBtn = document.getElementById("wallModeToggleBtn");
+    if (modeBtn instanceof HTMLButtonElement)
+        modeBtn.blur();
+}
 // Locale-change handler for the open wall. Relocalizes static shell chrome via
 // hydrateI18n plus stateful text hydration cannot reach (mode button, trash
 // alt, empty-state copy, per-note ARIA, open context-menu count label). Must
@@ -183,23 +191,27 @@ export async function openWallDialog(opts) {
     if (modeBtn instanceof HTMLButtonElement) {
         modeBtn.addEventListener("click", (ev) => {
             ev.preventDefault();
-            cancelWallNavigationGestures();
-            toggleWallCanvasMode();
-            syncWallCanvasModeUi();
-            modeBtn.blur();
+            toggleWallCanvasModeFromUi();
         }, { signal: state.abort.signal });
     }
     window.addEventListener("keydown", (ev) => {
-        if (ev.key !== "f" && ev.key !== "F")
-            return;
         if (!dialog.open)
             return;
         if (ev.target instanceof HTMLElement && ev.target.matches("textarea, input, select, [contenteditable='true']"))
             return;
+        if (ev.ctrlKey || ev.metaKey || ev.altKey)
+            return;
         const m = getMounted();
-        if (m) {
+        if (!m)
+            return;
+        if (ev.key === "f" || ev.key === "F") {
             ev.preventDefault();
             fitToNotes(m.doc.notes);
+            return;
+        }
+        if (ev.key === "s" || ev.key === "S") {
+            ev.preventDefault();
+            toggleWallCanvasModeFromUi();
         }
     }, { signal: state.abort.signal });
     dialog.addEventListener("close", teardown, { signal: state.abort.signal, once: true });
