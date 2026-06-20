@@ -1,6 +1,6 @@
 # Wall (Scrumbaby)
 
-Sticky-note board for durable projects. Open it from the board topbar (desktop only).
+Sticky-note board for durable projects. Open it from the board topbar (desktop only) or press **W** on the board.
 
 ## Controls
 
@@ -9,7 +9,7 @@ Sticky-note board for durable projects. Open it from the board topbar (desktop o
 - **Move a note** - Drag the note (not the resize corner).
 - **Resize** - Drag the **bottom-right** handle.
 - **Change color** - **Single-click** a note (waits briefly so a double-click can still open edit).
-- **Edit text** - **Double-click** a note. **Enter** commits (Shift+Enter = new line). **Escape** cancels. **Blur** commits.
+- **Edit text** - **Double-click** a note. **Enter** commits (Shift+Enter = new line). **Escape** commits. **Blur** commits.
 - **Note actions menu** - **Right-click** a note to open a small menu with:
   - **Create Todo from Note** - opens the **New Todo** dialog with the note's text prefilled as the Title. Save or cancel as usual; the wall stays open either way.
   - **Delete** - prompts the same confirmation as before, then deletes the note.
@@ -20,8 +20,8 @@ Sticky-note board for durable projects. Open it from the board topbar (desktop o
 - **Add or remove from selection** - **Ctrl**+click (Windows/Linux) or **⌘**+click (Mac) a note.
 - **Exit multi-select on canvas** - **Click** empty space (no drag).
 - **Move a group** - With multiple notes selected, drag one of them; all selected notes move together. Selection clears when you release the drag.
-- **Delete several at once** - Drag the group over the trash; one confirmation lists how many notes will be deleted.
-- **Canvas mode toggle** - The button left of **Fit view** switches between **Select** mode (dashed-square icon) and **Pan** mode (hand icon). Your choice is remembered globally in the browser and applies to every project's wall (defaults to Select until you change it).
+- **Delete several at once** - Drag the group over the trash, or press **Delete** when notes are selected; one confirmation lists how many notes will be deleted (or asks to delete a single selected note).
+- **Canvas mode toggle** - The button left of **Fit view** switches between **Select** mode (dashed-square icon) and **Pan** mode (hand icon), or press **S**. Your choice is remembered globally in the browser and applies to every project's wall (defaults to Select until you change it).
 - **Select mode** - Empty-canvas drag draws the marquee box to select notes.
 - **Pan mode** - Empty-canvas mouse drag or touch swipe pans the wall. Two-finger touch pinch zooms the wall.
 - **Pan the canvas** - Scroll wheel, **middle-mouse drag**, hold **Space** and drag on empty canvas, or use the **arrow keys** (hold **Shift** for larger steps).
