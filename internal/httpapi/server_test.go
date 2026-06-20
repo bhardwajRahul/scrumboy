@@ -1346,6 +1346,7 @@ func assertLocalizedLandingHreflangPolicy(t *testing.T, locale, html string) {
 var landingMultilingualSlotTaglineByLocale = map[string]string{
 	"en": "i18n",
 	"ar": "نعم، نحن نتكلم العربية",
+	"bn": "জি, আমরা বাংলাও বলি!",
 	"de": "Ja, wir sprechen Deutsch!",
 	"es": "¡Sí, hablamos español!",
 	"fr": "Oui, on parle français !",
@@ -1353,6 +1354,7 @@ var landingMultilingualSlotTaglineByLocale = map[string]string{
 	"id": "Ya, kami bisa bahasa Indonesia!",
 	"it": "Sì, parliamo italiano!",
 	"ja": "日本語が使えます！",
+	"sw": "Ndiyo, tunazungumza Kiswahili!",
 	"ko": "네, 한국어도 지원해요!",
 	"pt": "Sim, falamos português!",
 	"ru": "Да, мы говорим по-русски!",
@@ -1447,6 +1449,7 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 
 var landingMultilingualFeatureTextByLocale = map[string]string{
 	"ar": "Use Scrumboy in العربية and many other languages.",
+	"bn": "Scrumboy বাংলায়ও ব্যবহার করুন।",
 	"de": "Use Scrumboy in Deutsch and many other languages.",
 	"es": "Use Scrumboy in Español (Latinoamérica) and many other languages.",
 	"fr": "Use Scrumboy in Français and many other languages.",
@@ -1454,6 +1457,7 @@ var landingMultilingualFeatureTextByLocale = map[string]string{
 	"id": "Use Scrumboy in Bahasa Indonesia and many other languages.",
 	"it": "Use Scrumboy in Italiano and many other languages.",
 	"ja": "Use Scrumboy in 日本語 and many other languages.",
+	"sw": "Use Scrumboy in Kiswahili and many other languages.",
 	"ko": "Use Scrumboy in 한국어 and many other languages.",
 	"pt": "Use Scrumboy in Português (Brasil) and many other languages.",
 	"ru": "Use Scrumboy in Русский and many other languages.",
@@ -1484,6 +1488,7 @@ var landingLocalizedHeroTitleByLocale = map[string]struct {
 	line2  string
 }{
 	"ar": {rest: "بدون تعقيد"},
+	"bn": {rest: "ঝামেলা ছাড়া", line2: "সোজাসাপটা।"},
 	"de": {rest: "ohne", line2: "Umwege"},
 	"es": {rest: "sin", line2: "complicaciones"},
 	"fr": {rest: "sans", line2: "complication"},
@@ -1491,6 +1496,7 @@ var landingLocalizedHeroTitleByLocale = map[string]struct {
 	"id": {rest: "tanpa", line2: "ribet"},
 	"it": {rest: "senza complicazioni"},
 	"ja": {accent: "カンバン", rest: "を", line2: "シンプルに"},
+	"sw": {rest: "bila", line2: "sherehe."},
 	"ko": {rest: "더 쉽게"},
 	"pt": {rest: "sem complicação"},
 	"ru": {rest: "без", line2: "лишней сложности"},

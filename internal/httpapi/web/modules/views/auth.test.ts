@@ -894,6 +894,7 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/ru.svg",
   "/assets/flags/de.svg",
   "/assets/flags/jp.svg",
+  "/assets/flags/tz.svg",
   "/assets/flags/vn.svg",
   "/assets/flags/tr.svg",
   "/assets/flags/kr.svg",
@@ -901,7 +902,7 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/th.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -978,6 +979,7 @@ describe("auth view i18n", () => {
       "Русский",
       "Deutsch",
       "日本語",
+      "Kiswahili",
       "Tiếng Việt",
       "Türkçe",
       "한국어",
