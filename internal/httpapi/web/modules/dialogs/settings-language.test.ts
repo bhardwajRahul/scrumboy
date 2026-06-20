@@ -276,6 +276,7 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   '/assets/flags/vn.svg',
   '/assets/flags/tr.svg',
   '/assets/flags/kr.svg',
+  '/assets/flags/ir.svg',
   '/assets/flags/it.svg',
   '/assets/flags/th.svg',
 ];
@@ -359,6 +360,7 @@ describe('settings language selector', () => {
         ['vi', 'Tiếng Việt'],
         ['tr', 'Türkçe'],
         ['ko', '한국어'],
+        ['fa', 'فارسی'],
         ['it', 'Italiano'],
         ['th', 'ไทย'],
       ]);
@@ -404,7 +406,7 @@ describe('settings language selector', () => {
       await settings.renderSettingsModal();
 
       expect(i18n.getLocale()).toBe('pseudo');
-      expect(settingsLocaleOptionDetails().map((option) => option.locale)).toEqual(['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt', 'id', 'ur', 'ru', 'de', 'ja', 'sw', 'vi', 'tr', 'ko', 'it', 'th']);
+      expect(settingsLocaleOptionDetails().map((option) => option.locale)).toEqual(['en', 'zh', 'hi', 'es', 'ar', 'fr', 'bn', 'pt', 'id', 'ur', 'ru', 'de', 'ja', 'sw', 'vi', 'tr', 'ko', 'fa', 'it', 'th']);
       expect(settingsLocaleOptionDetails().some((option) => option.locale === 'pseudo')).toBe(false);
     } finally {
       cleanup();

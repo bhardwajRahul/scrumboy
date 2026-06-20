@@ -488,6 +488,7 @@ describe('settings customization i18n', () => {
       ['vi', 'Tiếng Việt', '/assets/flags/vn.svg'],
       ['tr', 'Türkçe', '/assets/flags/tr.svg'],
       ['ko', '한국어', '/assets/flags/kr.svg'],
+      ['fa', 'فارسی', '/assets/flags/ir.svg'],
       ['it', 'Italiano', '/assets/flags/it.svg'],
       ['th', 'ไทย', '/assets/flags/th.svg'],
     ]);

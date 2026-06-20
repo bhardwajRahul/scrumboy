@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th"] as const;
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -27,6 +27,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   vi: "Tiếng Việt",
   th: "ไทย",
   ur: "اردو",
+  fa: "فارسی",
   hi: "हिन्दी",
   pseudo: "Pseudo",
 };
@@ -50,6 +51,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   vi: "/assets/flags/vn.svg",
   th: "/assets/flags/th.svg",
   ur: "/assets/flags/pk.svg",
+  fa: "/assets/flags/ir.svg",
   hi: "/assets/flags/in.svg",
 };
 
@@ -553,13 +555,14 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "vi" || normalized.startsWith("vi-")) return "vi";
   if (normalized === "th" || normalized.startsWith("th-")) return "th";
   if (normalized === "ur" || normalized.startsWith("ur-")) return "ur";
+  if (normalized === "fa" || normalized === "fa-ir" || normalized === "fa-af" || normalized.startsWith("fa-")) return "fa";
   if (normalized === "hi" || normalized.startsWith("hi-")) return "hi";
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
 }
 
 export function isRtlLocale(locale: LocaleId): boolean {
-  return locale === "ar" || locale === "ur";
+  return locale === "ar" || locale === "ur" || locale === "fa";
 }
 
 export function documentDirection(locale: LocaleId): "ltr" | "rtl" {
@@ -821,6 +824,7 @@ function intlLocale(locale = activeLocale): string {
   if (locale === "vi") return "vi-VN";
   if (locale === "th") return "th-TH";
   if (locale === "ur") return "ur-PK";
+  if (locale === "fa") return "fa-IR";
   if (locale === "hi") return "hi-IN";
   if (locale === "bn") return "bn-BD";
   if (locale === "sw") return "sw-TZ";

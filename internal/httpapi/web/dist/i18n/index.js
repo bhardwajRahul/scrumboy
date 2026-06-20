@@ -1,5 +1,5 @@
-export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th"];
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "fa", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "fa", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "th"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
@@ -21,6 +21,7 @@ export const LOCALE_LABELS = {
     vi: "Tiếng Việt",
     th: "ไทย",
     ur: "اردو",
+    fa: "فارسی",
     hi: "हिन्दी",
     pseudo: "Pseudo",
 };
@@ -43,6 +44,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS = {
     vi: "/assets/flags/vn.svg",
     th: "/assets/flags/th.svg",
     ur: "/assets/flags/pk.svg",
+    fa: "/assets/flags/ir.svg",
     hi: "/assets/flags/in.svg",
 };
 const BOOTSTRAP_EN_CATALOG = {
@@ -527,6 +529,8 @@ export function normalizeLocale(value) {
         return "th";
     if (normalized === "ur" || normalized.startsWith("ur-"))
         return "ur";
+    if (normalized === "fa" || normalized === "fa-ir" || normalized === "fa-af" || normalized.startsWith("fa-"))
+        return "fa";
     if (normalized === "hi" || normalized.startsWith("hi-"))
         return "hi";
     if (normalized === "en" || normalized.startsWith("en-"))
@@ -534,7 +538,7 @@ export function normalizeLocale(value) {
     return null;
 }
 export function isRtlLocale(locale) {
-    return locale === "ar" || locale === "ur";
+    return locale === "ar" || locale === "ur" || locale === "fa";
 }
 export function documentDirection(locale) {
     return isRtlLocale(locale) ? "rtl" : "ltr";
@@ -788,6 +792,8 @@ function intlLocale(locale = activeLocale) {
         return "th-TH";
     if (locale === "ur")
         return "ur-PK";
+    if (locale === "fa")
+        return "fa-IR";
     if (locale === "hi")
         return "hi-IN";
     if (locale === "bn")

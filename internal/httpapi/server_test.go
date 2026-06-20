@@ -1361,6 +1361,7 @@ var landingMultilingualSlotTaglineByLocale = map[string]string{
 	"th": "ใช่ เราพูดภาษาไทย!",
 	"tr": "Evet, Türkçe konuşuyoruz!",
 	"ur": "جی ہاں، ہم اردو بولتے ہیں",
+	"fa": "بله، ما فارسی هم صحبت می‌کنیم!",
 	"vi": "Có, chúng tôi nói tiếng Việt!",
 	"zh": "没错，我们说中文！",
 }
@@ -1457,13 +1458,14 @@ var landingMultilingualFeatureTextByLocale = map[string]string{
 	"id": "Use Scrumboy in Bahasa Indonesia and many other languages.",
 	"it": "Use Scrumboy in Italiano and many other languages.",
 	"ja": "Use Scrumboy in 日本語 and many other languages.",
-	"sw": "Use Scrumboy in Kiswahili and many other languages.",
+	"sw": "Tumia Scrumboy kwa Kiswahili na lugha nyingine nyingi.",
 	"ko": "Use Scrumboy in 한국어 and many other languages.",
 	"pt": "Use Scrumboy in Português (Brasil) and many other languages.",
 	"ru": "Use Scrumboy in Русский and many other languages.",
 	"th": "Use Scrumboy in ไทย and many other languages.",
 	"tr": "Use Scrumboy in Türkçe and many other languages.",
 	"ur": "Use Scrumboy in اردو and many other languages.",
+	"fa": "Use Scrumboy in فارسی and many other languages.",
 	"vi": "Use Scrumboy in Tiếng Việt and many other languages.",
 	"zh": "Use Scrumboy in 简体中文 and many other languages.",
 }
@@ -1496,13 +1498,14 @@ var landingLocalizedHeroTitleByLocale = map[string]struct {
 	"id": {rest: "tanpa", line2: "ribet"},
 	"it": {rest: "senza complicazioni"},
 	"ja": {accent: "カンバン", rest: "を", line2: "シンプルに"},
-	"sw": {rest: "bila", line2: "sherehe."},
+	"sw": {rest: "bila", line2: "mbwembwe."},
 	"ko": {rest: "더 쉽게"},
 	"pt": {rest: "sem complicação"},
 	"ru": {rest: "без", line2: "лишней сложности"},
 	"th": {rest: "แบบ", line2: "ไม่ยุ่งยาก"},
 	"tr": {rest: "zahmetsiz"},
 	"ur": {rest: "آسان اور", line2: "بےفکر۔"},
+	"fa": {rest: "ساده و", line2: "بی‌دردسر."},
 	"vi": {rest: "thật đơn", line2: "giản"},
 	"zh": {rest: "简单上手"},
 }
@@ -1531,7 +1534,7 @@ func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
 		}
 	}
 	switch locale {
-	case "ar", "ur":
+	case "ar", "ur", "fa":
 		if strings.Contains(html, `class="notranslate landing-hero-local"`) {
 			t.Fatalf("expected /%s/ to keep original mobile hero layout without landing-hero-local", locale)
 		}

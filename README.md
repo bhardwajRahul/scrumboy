@@ -1,9 +1,9 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.18.15-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.18.16-blue" alt="version" />
   <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
-  <img src="https://img.shields.io/badge/i18n-18%20languages-yellow" alt="i18n" />
+  <img src="https://img.shields.io/badge/i18n-20%20languages-yellow" alt="i18n" />
 </p>
 
 #### Self-hosted project management & issue-tracking solution + instant shareable & customizable boards + realtime collaboration, automation, API access and MCP-compatible client support
@@ -187,7 +187,7 @@ Simplicity of a light Kanban, with the power of structured systems: Roles, sprin
 
 - PWA: Excellent UX for mobile users.
 
-- Multi-language Support: English, 简体中文, हिन्दी, Español (Latinoamérica), العربية, Français, বাংলা, Português (Brasil), Bahasa Indonesia, اردو, Русский, Deutsch, 日本語, Kiswahili, Tiếng Việt, Türkçe, 한국어, Italiano, and ไทย.
+- Multi-language Support: English, 简体中文, हिन्दी, Español (Latinoamérica), العربية, Français, বাংলা, Português (Brasil), Bahasa Indonesia, اردو, Русский, Deutsch, 日本語, Kiswahili, Tiếng Việt, Türkçe, 한국어, فارسی, Italiano, and ไทย.
 
 - Anonymous shareable boards can be created in both Full & Anonymous deployments.
 
