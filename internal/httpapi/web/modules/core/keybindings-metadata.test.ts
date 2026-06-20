@@ -67,5 +67,12 @@ describe('keybinding metadata compatibility', () => {
       labelKey: 'settings.customization.keybindings.actions.projectsList',
       labelValues: { index: 1 },
     });
+    const openWall = keybindings.KEY_ACTION_LIST.find((meta) => meta.id === 'openWall');
+    expect(openWall).toMatchObject({
+      id: 'openWall',
+      label: 'Open wall',
+      labelKey: 'settings.customization.keybindings.actions.openWall',
+      contexts: ['board'],
+    });
   });
 });

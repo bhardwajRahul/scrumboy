@@ -39,6 +39,7 @@ const PROJECTS_LIST_IDS = [
 export const DEFAULT_KEY_CHORDS = {
     newTodo: "n",
     boardSearch: "s",
+    openWall: "w",
     openSettings: "shift+s",
     createProject: "n",
     boardEscapeBack: "escape",
@@ -66,6 +67,7 @@ export const DEFAULT_KEY_CHORDS = {
 export const KEY_ACTION_LIST = [
     { id: "newTodo", label: "New Todo", labelKey: "settings.customization.keybindings.actions.newTodo", contexts: ["board"] },
     { id: "boardSearch", label: "Search todos", labelKey: "settings.customization.keybindings.actions.boardSearch", contexts: ["board"] },
+    { id: "openWall", label: "Open wall", labelKey: "settings.customization.keybindings.actions.openWall", contexts: ["board"] },
     { id: "openSettings", label: "Open Settings", labelKey: "settings.customization.keybindings.actions.openSettings", contexts: ["board", "dashboard", "projects", "unknown"] },
     {
         id: "cycleMainNavTabs",
@@ -417,6 +419,14 @@ export function executeAction(actionId) {
             }
             return;
         }
+        case "openWall": {
+            if (view !== "board")
+                return;
+            const btn = document.getElementById("wallBtn");
+            if (btn && btn.offsetParent !== null)
+                btn.click();
+            return;
+        }
         case "openSettings": {
             if (deps)
                 void Promise.resolve(deps.openSettings());
@@ -590,6 +600,8 @@ function onGlobalKeydown(ev) {
         if (tryExec("newTodo"))
             return;
         if (tryExec("boardSearch"))
+            return;
+        if (tryExec("openWall"))
             return;
     }
     if (tryExec("openSettings"))

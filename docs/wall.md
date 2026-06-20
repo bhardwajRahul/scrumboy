@@ -1,6 +1,6 @@
 # Wall (Scrumbaby)
 
-Sticky-note board for durable projects. Open it from the board topbar (desktop only).
+Sticky-note board for durable projects. Open it from the board topbar (desktop only) or press **W** on the board.
 
 ## Controls
 
