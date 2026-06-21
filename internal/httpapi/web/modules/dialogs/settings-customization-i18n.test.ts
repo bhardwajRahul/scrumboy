@@ -491,6 +491,7 @@ describe('settings customization i18n', () => {
       ['fa', 'فارسی', '/assets/flags/ir.svg'],
       ['th', 'ไทย', '/assets/flags/th.svg'],
       ['it', 'Italiano', '/assets/flags/it.svg'],
+      ['ms', 'Bahasa Melayu', '/assets/flags/my.svg'],
       ['pl', 'Polski', '/assets/flags/pl.svg'],
       ['uk', 'Українська', '/assets/flags/ua.svg'],
     ]);
