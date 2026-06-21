@@ -1,5 +1,5 @@
-export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "pl", "pseudo"];
-export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "pl"];
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "uk", "pl", "pseudo"];
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "uk", "pl"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
 export const LOCALE_LABELS = {
@@ -7,6 +7,7 @@ export const LOCALE_LABELS = {
     de: "Deutsch",
     it: "Italiano",
     pl: "Polski",
+    uk: "Українська",
     fr: "Français",
     bn: "বাংলা",
     pt: "Português (Brasil)",
@@ -31,6 +32,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS = {
     de: "/assets/flags/de.svg",
     it: "/assets/flags/it.svg",
     pl: "/assets/flags/pl.svg",
+    uk: "/assets/flags/ua.svg",
     fr: "/assets/flags/fr.svg",
     bn: "/assets/flags/bd.svg",
     pt: "/assets/flags/br.svg",
@@ -497,6 +499,8 @@ export function normalizeLocale(value) {
         return "it";
     if (normalized === "pl" || normalized.startsWith("pl-"))
         return "pl";
+    if (normalized === "uk" || normalized === "uk-ua" || normalized.startsWith("uk-"))
+        return "uk";
     if (normalized === "fr" || normalized.startsWith("fr-"))
         return "fr";
     if (normalized === "bn" || normalized === "bn-bd" || normalized === "bn-in" || normalized.startsWith("bn-"))
@@ -788,6 +792,8 @@ function intlLocale(locale = activeLocale) {
         return "it-IT";
     if (locale === "pl")
         return "pl-PL";
+    if (locale === "uk")
+        return "uk-UA";
     if (locale === "zh")
         return "zh-CN";
     if (locale === "id")
