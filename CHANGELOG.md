@@ -2,6 +2,16 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.16] - 2026-06-21
+
+### Added
+
+- **Six new UI locales** - Full frontend catalogs for Bangla (`bn`), Swahili (`sw`), Farsi (`fa`, with RTL layout), Polish (`pl`), Ukrainian (`uk`), and Malay (`ms`), each with its flag in the public locale picker.
+
+### Changed
+
+- **Localized landing pages** - Generated marketing pages for **bn**, **fa**, **ms**, **pl**, **sw**, and **uk** with per-locale hero taglines and multilingual feature-card copy; landing generator registry updated for the new public locales.
+
 ## [3.18.15] - 2026-06-19
 
 ### Added

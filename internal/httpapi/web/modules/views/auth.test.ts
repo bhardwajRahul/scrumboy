@@ -887,20 +887,26 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/mx.svg",
   "/assets/flags/sa.svg",
   "/assets/flags/fr.svg",
+  "/assets/flags/bd.svg",
   "/assets/flags/br.svg",
   "/assets/flags/id.svg",
   "/assets/flags/pk.svg",
   "/assets/flags/ru.svg",
   "/assets/flags/de.svg",
   "/assets/flags/jp.svg",
+  "/assets/flags/tz.svg",
   "/assets/flags/vn.svg",
   "/assets/flags/tr.svg",
   "/assets/flags/kr.svg",
-  "/assets/flags/it.svg",
+  "/assets/flags/ir.svg",
   "/assets/flags/th.svg",
+  "/assets/flags/it.svg",
+  "/assets/flags/my.svg",
+  "/assets/flags/pl.svg",
+  "/assets/flags/ua.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "th", "it", "ms", "pl", "uk"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -970,17 +976,23 @@ describe("auth view i18n", () => {
       "Español (Latinoamérica)",
       "العربية",
       "Français",
+      "বাংলা",
       "Português (Brasil)",
       "Bahasa Indonesia",
       "اردو",
       "Русский",
       "Deutsch",
       "日本語",
+      "Kiswahili",
       "Tiếng Việt",
       "Türkçe",
       "한국어",
-      "Italiano",
+      "فارسی",
       "ไทย",
+      "Italiano",
+      "Bahasa Melayu",
+      "Polski",
+      "Українська",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");

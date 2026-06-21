@@ -1346,19 +1346,25 @@ func assertLocalizedLandingHreflangPolicy(t *testing.T, locale, html string) {
 var landingMultilingualSlotTaglineByLocale = map[string]string{
 	"en": "i18n",
 	"ar": "نعم، نحن نتكلم العربية",
+	"bn": "জি, আমরা বাংলাও বলি!",
 	"de": "Ja, wir sprechen Deutsch!",
 	"es": "¡Sí, hablamos español!",
 	"fr": "Oui, on parle français !",
 	"hi": "जी, हम हिंदी भी बोलते हैं!",
 	"id": "Ya, kami bisa bahasa Indonesia!",
+	"ms": "Ya, kami bertutur Bahasa Melayu!",
 	"it": "Sì, parliamo italiano!",
+	"pl": "Tak, mówimy po polsku!",
+	"uk": "Так, ми говоримо українською!",
 	"ja": "日本語が使えます！",
+	"sw": "Ndiyo, tunazungumza Kiswahili!",
 	"ko": "네, 한국어도 지원해요!",
 	"pt": "Sim, falamos português!",
 	"ru": "Да, мы говорим по-русски!",
 	"th": "ใช่ เราพูดภาษาไทย!",
 	"tr": "Evet, Türkçe konuşuyoruz!",
 	"ur": "جی ہاں، ہم اردو بولتے ہیں",
+	"fa": "بله، ما فارسی هم صحبت می‌کنیم!",
 	"vi": "Có, chúng tôi nói tiếng Việt!",
 	"zh": "没错，我们说中文！",
 }
@@ -1447,19 +1453,25 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 
 var landingMultilingualFeatureTextByLocale = map[string]string{
 	"ar": "Use Scrumboy in العربية and many other languages.",
+	"bn": "Scrumboy বাংলায়ও ব্যবহার করুন।",
 	"de": "Use Scrumboy in Deutsch and many other languages.",
 	"es": "Use Scrumboy in Español (Latinoamérica) and many other languages.",
 	"fr": "Use Scrumboy in Français and many other languages.",
 	"hi": "Use Scrumboy in हिन्दी and many other languages.",
 	"id": "Use Scrumboy in Bahasa Indonesia and many other languages.",
+	"ms": "Guna Scrumboy dalam Bahasa Melayu dan banyak bahasa lain.",
 	"it": "Use Scrumboy in Italiano and many other languages.",
+	"pl": "Używaj Scrumboy po polsku i w wielu innych językach.",
+	"uk": "Користуйся Scrumboy українською та багатьма іншими мовами.",
 	"ja": "Use Scrumboy in 日本語 and many other languages.",
+	"sw": "Tumia Scrumboy kwa Kiswahili na lugha nyingine nyingi.",
 	"ko": "Use Scrumboy in 한국어 and many other languages.",
 	"pt": "Use Scrumboy in Português (Brasil) and many other languages.",
 	"ru": "Use Scrumboy in Русский and many other languages.",
 	"th": "Use Scrumboy in ไทย and many other languages.",
 	"tr": "Use Scrumboy in Türkçe and many other languages.",
 	"ur": "Use Scrumboy in اردو and many other languages.",
+	"fa": "از Scrumboy به فارسی و زبان‌های دیگر استفاده کنید.",
 	"vi": "Use Scrumboy in Tiếng Việt and many other languages.",
 	"zh": "Use Scrumboy in 简体中文 and many other languages.",
 }
@@ -1484,19 +1496,25 @@ var landingLocalizedHeroTitleByLocale = map[string]struct {
 	line2  string
 }{
 	"ar": {rest: "بدون تعقيد"},
+	"bn": {rest: "ঝামেলা ছাড়া", line2: "সোজাসাপটা।"},
 	"de": {rest: "ohne", line2: "Umwege"},
 	"es": {rest: "sin", line2: "complicaciones"},
 	"fr": {rest: "sans", line2: "complication"},
 	"hi": {rest: "बिना झंझट", line2: "के."},
 	"id": {rest: "tanpa", line2: "ribet"},
+	"ms": {rest: "tanpa", line2: "rumit"},
 	"it": {rest: "senza complicazioni"},
+	"pl": {rest: "bez", line2: "ceremonii."},
+	"uk": {rest: "без", line2: "церемоній."},
 	"ja": {accent: "カンバン", rest: "を", line2: "シンプルに"},
+	"sw": {rest: "bila", line2: "mbwembwe."},
 	"ko": {rest: "더 쉽게"},
 	"pt": {rest: "sem complicação"},
 	"ru": {rest: "без", line2: "лишней сложности"},
 	"th": {rest: "แบบ", line2: "ไม่ยุ่งยาก"},
 	"tr": {rest: "zahmetsiz"},
 	"ur": {rest: "آسان اور", line2: "بےفکر۔"},
+	"fa": {rest: "بدون", line2: "تشریفات."},
 	"vi": {rest: "thật đơn", line2: "giản"},
 	"zh": {rest: "简单上手"},
 }
@@ -1525,7 +1543,7 @@ func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
 		}
 	}
 	switch locale {
-	case "ar", "ur":
+	case "ar", "ur", "fa":
 		if strings.Contains(html, `class="notranslate landing-hero-local"`) {
 			t.Fatalf("expected /%s/ to keep original mobile hero layout without landing-hero-local", locale)
 		}

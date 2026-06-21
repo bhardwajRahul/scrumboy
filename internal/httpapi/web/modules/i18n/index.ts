@@ -1,6 +1,6 @@
-export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th", "pseudo"] as const;
+export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "th", "it", "ms", "pl", "uk", "pseudo"] as const;
 export type LocaleId = typeof SUPPORTED_LOCALES[number];
-export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "pt", "id", "ur", "ru", "de", "ja", "vi", "tr", "ko", "it", "th"] as const;
+export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "th", "it", "ms", "pl", "uk"] as const;
 export type PublicLocaleId = typeof PUBLIC_LOCALES[number];
 export type PublicLocaleOption = { id: PublicLocaleId; label: string; flagSrc: string };
 export type MessageCatalog = Record<string, string>;
@@ -12,12 +12,17 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   en: "English",
   de: "Deutsch",
   it: "Italiano",
+  ms: "Bahasa Melayu",
+  pl: "Polski",
+  uk: "Українська",
   fr: "Français",
+  bn: "বাংলা",
   pt: "Português (Brasil)",
   es: "Español (Latinoamérica)",
   ar: "العربية",
   ru: "Русский",
   ja: "日本語",
+  sw: "Kiswahili",
   tr: "Türkçe",
   ko: "한국어",
   zh: "简体中文",
@@ -25,6 +30,7 @@ export const LOCALE_LABELS: Record<LocaleId, string> = {
   vi: "Tiếng Việt",
   th: "ไทย",
   ur: "اردو",
+  fa: "فارسی",
   hi: "हिन्दी",
   pseudo: "Pseudo",
 };
@@ -33,12 +39,17 @@ export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   en: "/assets/flags/us.svg",
   de: "/assets/flags/de.svg",
   it: "/assets/flags/it.svg",
+  ms: "/assets/flags/my.svg",
+  pl: "/assets/flags/pl.svg",
+  uk: "/assets/flags/ua.svg",
   fr: "/assets/flags/fr.svg",
+  bn: "/assets/flags/bd.svg",
   pt: "/assets/flags/br.svg",
   es: "/assets/flags/mx.svg",
   ar: "/assets/flags/sa.svg",
   ru: "/assets/flags/ru.svg",
   ja: "/assets/flags/jp.svg",
+  sw: "/assets/flags/tz.svg",
   tr: "/assets/flags/tr.svg",
   ko: "/assets/flags/kr.svg",
   zh: "/assets/flags/cn.svg",
@@ -46,6 +57,7 @@ export const PUBLIC_LOCALE_FLAG_PATHS: Record<PublicLocaleId, string> = {
   vi: "/assets/flags/vn.svg",
   th: "/assets/flags/th.svg",
   ur: "/assets/flags/pk.svg",
+  fa: "/assets/flags/ir.svg",
   hi: "/assets/flags/in.svg",
 };
 
@@ -525,12 +537,17 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "pseudo") return "pseudo";
   if (normalized === "de" || normalized.startsWith("de-")) return "de";
   if (normalized === "it" || normalized.startsWith("it-")) return "it";
+  if (normalized === "ms" || normalized === "ms-my" || normalized.startsWith("ms-")) return "ms";
+  if (normalized === "pl" || normalized.startsWith("pl-")) return "pl";
+  if (normalized === "uk" || normalized === "uk-ua" || normalized.startsWith("uk-")) return "uk";
   if (normalized === "fr" || normalized.startsWith("fr-")) return "fr";
+  if (normalized === "bn" || normalized === "bn-bd" || normalized === "bn-in" || normalized.startsWith("bn-")) return "bn";
   if (normalized === "pt" || normalized.startsWith("pt-")) return "pt";
   if (normalized === "es" || normalized.startsWith("es-")) return "es";
   if (normalized === "ar" || normalized.startsWith("ar-")) return "ar";
   if (normalized === "ru" || normalized.startsWith("ru-")) return "ru";
   if (normalized === "ja" || normalized.startsWith("ja-")) return "ja";
+  if (normalized === "sw" || normalized === "sw-tz" || normalized.startsWith("sw-")) return "sw";
   if (normalized === "tr" || normalized.startsWith("tr-")) return "tr";
   if (normalized === "ko" || normalized.startsWith("ko-")) return "ko";
   if (
@@ -547,13 +564,14 @@ export function normalizeLocale(value: string | null | undefined): LocaleId | nu
   if (normalized === "vi" || normalized.startsWith("vi-")) return "vi";
   if (normalized === "th" || normalized.startsWith("th-")) return "th";
   if (normalized === "ur" || normalized.startsWith("ur-")) return "ur";
+  if (normalized === "fa" || normalized === "fa-ir" || normalized === "fa-af" || normalized.startsWith("fa-")) return "fa";
   if (normalized === "hi" || normalized.startsWith("hi-")) return "hi";
   if (normalized === "en" || normalized.startsWith("en-")) return "en";
   return null;
 }
 
 export function isRtlLocale(locale: LocaleId): boolean {
-  return locale === "ar" || locale === "ur";
+  return locale === "ar" || locale === "ur" || locale === "fa";
 }
 
 export function documentDirection(locale: LocaleId): "ltr" | "rtl" {
@@ -810,12 +828,18 @@ function intlLocale(locale = activeLocale): string {
   if (locale === "pt") return "pt-BR";
   if (locale === "es") return "es-MX";
   if (locale === "it") return "it-IT";
+  if (locale === "ms") return "ms-MY";
+  if (locale === "pl") return "pl-PL";
+  if (locale === "uk") return "uk-UA";
   if (locale === "zh") return "zh-CN";
   if (locale === "id") return "id-ID";
   if (locale === "vi") return "vi-VN";
   if (locale === "th") return "th-TH";
   if (locale === "ur") return "ur-PK";
+  if (locale === "fa") return "fa-IR";
   if (locale === "hi") return "hi-IN";
+  if (locale === "bn") return "bn-BD";
+  if (locale === "sw") return "sw-TZ";
   return locale;
 }
 

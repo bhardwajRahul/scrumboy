@@ -5,7 +5,11 @@ Source: https://github.com/catamphetamine/country-flag-icons
 License: MIT
 
 Scrumboy vendors only selected 3x2 SVG flag assets from this project for its
-language selector UI (us.svg, de.svg, fr.svg, br.svg).
+language selector UI. Vendored files (lowercase filenames under this directory):
+
+  bd.svg, br.svg, cn.svg, de.svg, fr.svg, id.svg, in.svg, ir.svg, it.svg,
+  jp.svg, kr.svg, mx.svg, my.svg, pk.svg, pl.svg, ru.svg, sa.svg, th.svg,
+  tr.svg, tz.svg, ua.svg, us.svg, vn.svg
 
 ---
 
