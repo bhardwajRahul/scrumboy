@@ -6,15 +6,11 @@
 
 ### Added
 
-- **Bangla UI** - Full frontend catalog (`bn`) with Bangladesh flag in the public locale picker.
-- **Swahili UI** - Full frontend catalog (`sw`) with Tanzania flag in the public locale picker.
-- **Farsi UI** - Full frontend catalog (`fa`) with RTL document direction and Iran flag in the public locale picker.
-- **Polish UI** - Full frontend catalog (`pl`) with Poland flag in the public locale picker.
-- **Ukrainian UI** - Full frontend catalog (`uk`) with Ukraine flag in the public locale picker.
+- **Six new UI locales** - Full frontend catalogs for Bangla (`bn`), Swahili (`sw`), Farsi (`fa`, with RTL layout), Polish (`pl`), Ukrainian (`uk`), and Malay (`ms`), each with its flag in the public locale picker.
 
 ### Changed
 
-- **Localized landing pages** - Generated marketing pages for **bn**, **fa**, **pl**, **sw**, and **uk** with per-locale hero taglines and multilingual feature-card copy; landing generator registry updated for the new public locales.
+- **Localized landing pages** - Generated marketing pages for **bn**, **fa**, **ms**, **pl**, **sw**, and **uk** with per-locale hero taglines and multilingual feature-card copy; landing generator registry updated for the new public locales.
 
 ## [3.18.15] - 2026-06-19
 
