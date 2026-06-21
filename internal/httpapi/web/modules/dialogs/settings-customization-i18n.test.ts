@@ -489,10 +489,10 @@ describe('settings customization i18n', () => {
       ['tr', 'Türkçe', '/assets/flags/tr.svg'],
       ['ko', '한국어', '/assets/flags/kr.svg'],
       ['fa', 'فارسی', '/assets/flags/ir.svg'],
-      ['it', 'Italiano', '/assets/flags/it.svg'],
       ['th', 'ไทย', '/assets/flags/th.svg'],
-      ['uk', 'Українська', '/assets/flags/ua.svg'],
+      ['it', 'Italiano', '/assets/flags/it.svg'],
       ['pl', 'Polski', '/assets/flags/pl.svg'],
+      ['uk', 'Українська', '/assets/flags/ua.svg'],
     ]);
     expect(wallpaperRemoveBtn.textContent).toBe('DE Remove wallpaper');
   });

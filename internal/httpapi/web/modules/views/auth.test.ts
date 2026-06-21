@@ -899,13 +899,13 @@ const EXPECTED_LOCALE_FLAG_PATHS = [
   "/assets/flags/tr.svg",
   "/assets/flags/kr.svg",
   "/assets/flags/ir.svg",
-  "/assets/flags/it.svg",
   "/assets/flags/th.svg",
-  "/assets/flags/ua.svg",
+  "/assets/flags/it.svg",
   "/assets/flags/pl.svg",
+  "/assets/flags/ua.svg",
 ];
 
-const EXPECTED_PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "it", "th", "uk", "pl"];
+const EXPECTED_PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "th", "it", "pl", "uk"];
 
 async function selectAuthLocale(locale: string): Promise<void> {
   const button = getAuthLocaleSelect();
@@ -987,10 +987,10 @@ describe("auth view i18n", () => {
       "Türkçe",
       "한국어",
       "فارسی",
-      "Italiano",
       "ไทย",
-      "Українська",
+      "Italiano",
       "Polski",
+      "Українська",
     ]);
     expect(authLocaleOptionValues()).not.toContain("pseudo");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Language");
