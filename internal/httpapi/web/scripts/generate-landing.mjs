@@ -19,12 +19,12 @@ const SLOT_TAGLINE_KEY = "landing.features.multilingual.slotTagline";
 const MULTILINGUAL_TEXT_KEY = "landing.features.multilingual.text";
 const MULTILINGUAL_ARIA_KEY = "landing.features.multilingual.imageAriaLabel";
 const LOCALIZED_LANDING_HERO_LOCALES = new Set([
-  "ar", "hi", "ur", "fa", "zh", "es", "fr", "bn", "pt", "id", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "pl", "th",
+  "ar", "hi", "ur", "fa", "zh", "es", "fr", "bn", "pt", "id", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "pl", "th", "uk",
 ]);
 // Arabic and Urdu keep the original mobile hero layout (line1Rest + line2 on two lines);
 // other localized taglines stack accent/rest on small screens.
 const LOCALIZED_LANDING_HERO_MOBILE_STACK_LOCALES = new Set([
-  "hi", "zh", "es", "fr", "bn", "pt", "id", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "pl", "th",
+  "hi", "zh", "es", "fr", "bn", "pt", "id", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "pl", "th", "uk",
 ]);
 const LOCALIZED_LANDING_HERO_KEYS = [
   "landing.hero.title.line1Rest",
@@ -63,6 +63,7 @@ const INTL_LOCALES = {
   ko: "ko",
   it: "it-IT",
   pl: "pl-PL",
+  uk: "uk-UA",
   th: "th-TH",
 };
 
@@ -87,6 +88,7 @@ const OG_LOCALES = {
   ko: "ko_KR",
   it: "it_IT",
   pl: "pl_PL",
+  uk: "uk_UA",
   th: "th_TH",
 };
 
