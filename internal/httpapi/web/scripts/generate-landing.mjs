@@ -32,7 +32,7 @@ const LOCALIZED_LANDING_HERO_KEYS = [
 ];
 // Japanese hero uses native カンバン in the accent slot (not English "Kanban Boards").
 const LOCALIZED_LANDING_HERO_ACCENT_LOCALES = new Set(["ja"]);
-const LOCALIZED_LANDING_SECTION_TITLE_LOCALES = new Set(["ja"]);
+const LOCALIZED_LANDING_SECTION_TITLE_LOCALES = new Set(["ja", "uk"]);
 const LOCALIZED_LANDING_SECTION_TITLE_KEYS = [
   "landing.section.title.part1",
   "landing.section.title.part2",

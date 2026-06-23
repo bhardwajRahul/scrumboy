@@ -1431,6 +1431,16 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 		if !strings.Contains(html, "今すぐ作る") {
 			t.Fatalf("expected /%s/ landing page to contain localized anon card title", locale)
 		}
+	} else if locale == "uk" {
+		if !strings.Contains(html, "Чи вміє ваш") || !strings.Contains(html, "інструмент керування проєктами") || !strings.Contains(html, "таке?") {
+			t.Fatalf("expected /%s/ landing page to contain localized section title copy", locale)
+		}
+		if !strings.Contains(html, "Розгорніть локально.") {
+			t.Fatalf("expected /%s/ landing page to contain localized deploy card title", locale)
+		}
+		if !strings.Contains(html, "Створіть дошку зараз.") {
+			t.Fatalf("expected /%s/ landing page to contain localized anon card title", locale)
+		}
 	} else if !strings.Contains(html, "Kanban Boards") {
 		t.Fatalf("expected /%s/ landing page to contain English copy %q", locale, "Kanban Boards")
 	}
@@ -1438,7 +1448,7 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 		"markdown + mermaid",
 		"Use Markdown and Mermaid diagrams in task notes",
 	}
-	if locale != "ja" {
+	if locale != "ja" && locale != "uk" {
 		englishCopy = append([]string{"Deploy it locally.", "Create a board now."}, englishCopy...)
 		englishCopy = append(englishCopy, "Can your", "project management tool")
 	}
@@ -1502,10 +1512,10 @@ var landingLocalizedHeroTitleByLocale = map[string]struct {
 	"fr": {rest: "sans", line2: "complication"},
 	"hi": {rest: "बिना झंझट", line2: "के."},
 	"id": {rest: "tanpa", line2: "ribet"},
-	"ms": {rest: "tanpa", line2: "rumit"},
+	"ms": {rest: "tanpa", line2: "kerumitan."},
 	"it": {rest: "senza complicazioni"},
 	"pl": {rest: "bez", line2: "ceremonii."},
-	"uk": {rest: "без", line2: "церемоній."},
+	"uk": {rest: "без", line2: "мороки."},
 	"ja": {accent: "カンバン", rest: "を", line2: "シンプルに"},
 	"sw": {rest: "bila", line2: "mbwembwe."},
 	"ko": {rest: "더 쉽게"},
