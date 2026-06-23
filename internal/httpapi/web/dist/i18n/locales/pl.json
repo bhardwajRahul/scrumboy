@@ -19,7 +19,7 @@
   "landing.choiceGrid.ariaLabel": "Wybierz, jak chcesz korzystać ze Scrumboy",
   "landing.deploy.kicker": "",
   "landing.deploy.status": "GitHub / wdrożenie",
-  "landing.deploy.title": "Wdróż lokalnie.",
+  "landing.deploy.title": "Uruchom lokalnie.",
   "landing.deploy.text": "Hostuj sam. Dostosuj po swojemu. Dla solo devów i małych zespołów.",
   "landing.deploy.buttonGitHubAlt": "GitHub",
   "landing.anon.kicker": "",

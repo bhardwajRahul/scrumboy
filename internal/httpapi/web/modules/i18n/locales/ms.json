@@ -19,7 +19,7 @@
   "landing.choiceGrid.ariaLabel": "Pilih cara menggunakan Scrumboy",
   "landing.deploy.kicker": "",
   "landing.deploy.status": "GitHub / deploy",
-  "landing.deploy.title": "Deploy secara setempat.",
+  "landing.deploy.title": "Jalankan pada pelayan anda sendiri.",
   "landing.deploy.text": "Self-host. Sesuaikan ikut cara anda. Untuk solo dev atau pasukan kecil.",
   "landing.deploy.buttonGitHubAlt": "GitHub",
   "landing.anon.kicker": "",

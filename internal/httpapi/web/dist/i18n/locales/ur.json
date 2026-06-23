@@ -19,7 +19,7 @@
   "landing.choiceGrid.ariaLabel": "Scrumboy استعمال کرنے کا طریقہ منتخب کریں",
   "landing.deploy.kicker": "",
   "landing.deploy.status": "GitHub / deploy",
-  "landing.deploy.title": "اسے مقامی طور پر deploy کریں۔",
+  "landing.deploy.title": "اپنے سرور پر چلائیں۔",
   "landing.deploy.text": "self-host کریں۔ customize کریں۔ solo dev یا چھوٹی ٹیموں کے لیے۔",
   "landing.deploy.buttonGitHubAlt": "GitHub",
   "landing.anon.kicker": "",

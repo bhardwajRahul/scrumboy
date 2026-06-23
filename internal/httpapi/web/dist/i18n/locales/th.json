@@ -19,7 +19,7 @@
   "landing.choiceGrid.ariaLabel": "เลือกวิธีใช้ Scrumboy",
   "landing.deploy.kicker": "",
   "landing.deploy.status": "GitHub / deploy",
-  "landing.deploy.title": "Deploy ในเครื่องได้เลย",
+  "landing.deploy.title": "รันบนเซิร์ฟเวอร์ของคุณ",
   "landing.deploy.text": "self-host ได้ ปรับแต่งได้ สำหรับ solo dev หรือทีมเล็ก",
   "landing.deploy.buttonGitHubAlt": "GitHub",
   "landing.anon.kicker": "",

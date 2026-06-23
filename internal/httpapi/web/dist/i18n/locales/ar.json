@@ -19,7 +19,7 @@
   "landing.choiceGrid.ariaLabel": "اختر طريقة استخدام Scrumboy",
   "landing.deploy.kicker": "",
   "landing.deploy.status": "GitHub / تنصيب",
-  "landing.deploy.title": "شغّله محليًا.",
+  "landing.deploy.title": "شغّله على خادمك.",
   "landing.deploy.text": "استضفه بنفسك، خصّصه كما تريد، لفرد أو فريق صغير.",
   "landing.deploy.buttonGitHubAlt": "GitHub",
   "landing.anon.kicker": "",
