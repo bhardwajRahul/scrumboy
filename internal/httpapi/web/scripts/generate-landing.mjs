@@ -32,11 +32,18 @@ const LOCALIZED_LANDING_HERO_KEYS = [
 ];
 // Japanese hero uses native カンバン in the accent slot (not English "Kanban Boards").
 const LOCALIZED_LANDING_HERO_ACCENT_LOCALES = new Set(["ja"]);
-const LOCALIZED_LANDING_SECTION_TITLE_LOCALES = new Set(["ja"]);
+const LOCALIZED_LANDING_SECTION_TITLE_LOCALES = new Set(["ja", "uk"]);
 const LOCALIZED_LANDING_SECTION_TITLE_KEYS = [
   "landing.section.title.part1",
   "landing.section.title.part2",
   "landing.section.title.part3",
+  "landing.deploy.title",
+  "landing.anon.title",
+];
+const LOCALIZED_LANDING_CTA_CARD_TITLE_LOCALES = new Set([
+  "ar", "hi", "ur", "fa", "zh", "es", "fr", "bn", "pt", "id", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "ms", "pl", "th", "uk",
+]);
+const LOCALIZED_LANDING_CTA_CARD_TITLE_KEYS = [
   "landing.deploy.title",
   "landing.anon.title",
 ];
@@ -226,6 +233,13 @@ function landingDisplayCatalog(locale, localeCatalog, englishCatalog, keys) {
 
   if (LOCALIZED_LANDING_SECTION_TITLE_LOCALES.has(locale)) {
     for (const key of LOCALIZED_LANDING_SECTION_TITLE_KEYS) {
+      const value = localeCatalog[key];
+      if (typeof value === "string") {
+        catalog[key] = value;
+      }
+    }
+  } else if (LOCALIZED_LANDING_CTA_CARD_TITLE_LOCALES.has(locale)) {
+    for (const key of LOCALIZED_LANDING_CTA_CARD_TITLE_KEYS) {
       const value = localeCatalog[key];
       if (typeof value === "string") {
         catalog[key] = value;

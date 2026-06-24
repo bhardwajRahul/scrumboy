@@ -19,7 +19,7 @@
   "landing.choiceGrid.ariaLabel": "Scrumboy কীভাবে ব্যবহার করবেন বেছে নিন",
   "landing.deploy.kicker": "",
   "landing.deploy.status": "GitHub / deploy",
-  "landing.deploy.title": "লোকালেই ডিপ্লয় করুন।",
+  "landing.deploy.title": "নিজের সার্ভারে চালান।",
   "landing.deploy.text": "নিজে হোস্ট করুন। নিজের মতো সাজান। একা dev হোন বা ছোট টিম—দুই ক্ষেত্রেই।",
   "landing.deploy.buttonGitHubAlt": "GitHub",
   "landing.anon.kicker": "",
