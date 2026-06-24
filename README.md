@@ -274,6 +274,11 @@ curl -X POST http://localhost:8080/mcp/rpc \
 - Compatible with MCP clients that support **HTTP JSON-RPC** to this URL.
 - Some MCP clients expect **stdio**-based servers - those are **not** supported here.
 - Authentication works via **session cookie** or **Bearer** token (same rules as `/mcp`).
+- Agent workspaces that support installable plugins can use the packaged
+  Scrumboy Board Operator Skill in
+  [`plugins/scrumboy-board-operator`](plugins/scrumboy-board-operator). The
+  plugin is the installable package; the Skill is the focused workflow guide
+  inside it.
 
 This enables:
 
@@ -404,6 +409,7 @@ Invariants (e.g. canonical URL `/{slug}`, no UI links to `/p/{id}`) are enforced
 # Documentation
 
 - **MCP (HTTP tools + JSON-RPC):** [`docs/mcp.md`](docs/mcp.md) - tool catalog, auth, legacy vs `/mcp/rpc`, examples (agents & automation). See also [`API.md`](API.md) for exhaustive MCP HTTP detail.
+- **Agent plugin:** [`plugins/scrumboy-board-operator`](plugins/scrumboy-board-operator) - installable plugin metadata, board-operator Skill, and eval cases for MCP/Agoragentic agent workflows.
 - **PWA / Web Push (VAPID):** [`docs/pwa.md`](docs/pwa.md) - keys, subscriber contact, post-login auto-subscribe when VAPID is configured, Settings opt-out, tradeoffs.
 - **Roles and permissions:** [`docs/roles_and_permissions.md`](docs/roles_and_permissions.md) - project roles, backend authorization, anonymous boards.
 - **Audit trail:** [`docs/audit_trail.md`](docs/audit_trail.md) - action vocabulary, event model, integration points.
