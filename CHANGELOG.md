@@ -2,6 +2,18 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.17] - 2026-06-24
+
+### Changed
+
+- **Localized landing CTA cards** - Deploy and anonymous-board choice-card headings on non-English landing pages now use each locale's `landing.deploy.title` and `landing.anon.title` catalog strings; landing generator and server tests updated for all public locales.
+- **Ukrainian landing page** - Localized section title and choice-card headings on the generated **uk** marketing page.
+- **Deploy CTA catalog copy** - Replaced literal "deploy" loanwords with natural phrasing in several locale catalogs (`ar`, `bn`, `es`, `fa`, `fr`, `hi`, `id`, `it`, `ms`, `pl`, `pt`, `sw`, `th`, `tr`, `ur`).
+
+### Fixed
+
+- **Language dropdown** - Restored vertical scrolling when the locale picker list exceeds the viewport.
+
 ## [3.18.16] - 2026-06-21
 
 ### Added

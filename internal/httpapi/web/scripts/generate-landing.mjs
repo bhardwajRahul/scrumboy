@@ -40,6 +40,13 @@ const LOCALIZED_LANDING_SECTION_TITLE_KEYS = [
   "landing.deploy.title",
   "landing.anon.title",
 ];
+const LOCALIZED_LANDING_CTA_CARD_TITLE_LOCALES = new Set([
+  "ar", "hi", "ur", "fa", "zh", "es", "fr", "bn", "pt", "id", "ru", "de", "ja", "sw", "vi", "tr", "ko", "it", "ms", "pl", "th", "uk",
+]);
+const LOCALIZED_LANDING_CTA_CARD_TITLE_KEYS = [
+  "landing.deploy.title",
+  "landing.anon.title",
+];
 const FEATURE_ARTICLE_RE = /<article class="feature" data-feature="[^"]+">[\s\S]*?<\/article>/g;
 
 const INTL_LOCALES = {
@@ -226,6 +233,13 @@ function landingDisplayCatalog(locale, localeCatalog, englishCatalog, keys) {
 
   if (LOCALIZED_LANDING_SECTION_TITLE_LOCALES.has(locale)) {
     for (const key of LOCALIZED_LANDING_SECTION_TITLE_KEYS) {
+      const value = localeCatalog[key];
+      if (typeof value === "string") {
+        catalog[key] = value;
+      }
+    }
+  } else if (LOCALIZED_LANDING_CTA_CARD_TITLE_LOCALES.has(locale)) {
+    for (const key of LOCALIZED_LANDING_CTA_CARD_TITLE_KEYS) {
       const value = localeCatalog[key];
       if (typeof value === "string") {
         catalog[key] = value;

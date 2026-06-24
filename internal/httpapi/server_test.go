@@ -1425,31 +1425,34 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 		if !strings.Contains(html, "あなたのプロジェクト管理ツール、") || !strings.Contains(html, "これできますか？") {
 			t.Fatalf("expected /%s/ landing page to contain localized section title copy", locale)
 		}
-		if !strings.Contains(html, "ローカルで動かす") {
-			t.Fatalf("expected /%s/ landing page to contain localized deploy card title", locale)
-		}
-		if !strings.Contains(html, "今すぐ作る") {
-			t.Fatalf("expected /%s/ landing page to contain localized anon card title", locale)
-		}
 	} else if locale == "uk" {
 		if !strings.Contains(html, "Чи вміє ваш") || !strings.Contains(html, "інструмент керування проєктами") || !strings.Contains(html, "таке?") {
 			t.Fatalf("expected /%s/ landing page to contain localized section title copy", locale)
 		}
-		if !strings.Contains(html, "Розгорніть локально.") {
-			t.Fatalf("expected /%s/ landing page to contain localized deploy card title", locale)
-		}
-		if !strings.Contains(html, "Створіть дошку зараз.") {
-			t.Fatalf("expected /%s/ landing page to contain localized anon card title", locale)
-		}
 	} else if !strings.Contains(html, "Kanban Boards") {
 		t.Fatalf("expected /%s/ landing page to contain English copy %q", locale, "Kanban Boards")
 	}
+
+	if cta, ok := landingCtaCardTitleByLocale[locale]; ok {
+		if !strings.Contains(html, cta.deploy) {
+			t.Fatalf("expected /%s/ landing page to contain localized deploy card title %q", locale, cta.deploy)
+		}
+		if !strings.Contains(html, cta.anon) {
+			t.Fatalf("expected /%s/ landing page to contain localized anon card title %q", locale, cta.anon)
+		}
+		if strings.Contains(html, "Deploy it locally.") {
+			t.Fatalf("expected /%s/ landing page not to contain English deploy card title", locale)
+		}
+		if strings.Contains(html, "Create a board now.") {
+			t.Fatalf("expected /%s/ landing page not to contain English anon card title", locale)
+		}
+	}
+
 	englishCopy := []string{
 		"markdown + mermaid",
 		"Use Markdown and Mermaid diagrams in task notes",
 	}
 	if locale != "ja" && locale != "uk" {
-		englishCopy = append([]string{"Deploy it locally.", "Create a board now."}, englishCopy...)
 		englishCopy = append(englishCopy, "Can your", "project management tool")
 	}
 	for _, want := range englishCopy {
@@ -1459,6 +1462,34 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 	}
 
 	assertLandingMultilingualFeatureText(t, locale, html)
+}
+
+var landingCtaCardTitleByLocale = map[string]struct {
+	deploy string
+	anon   string
+}{
+	"ar": {deploy: "شغّله على خادمك.", anon: "أنشئ لوحة الآن."},
+	"bn": {deploy: "নিজের সার্ভারে চালান।", anon: "এখনই বোর্ড বানান।"},
+	"de": {deploy: "Lokal bereitstellen.", anon: "Jetzt ein Board erstellen."},
+	"es": {deploy: "Despliega localmente.", anon: "Crea un tablero ahora."},
+	"fa": {deploy: "روی سرور خودتان اجرا کنید.", anon: "همین حالا یک برد بسازید."},
+	"fr": {deploy: "Déployez-le en local.", anon: "Créez un tableau maintenant."},
+	"hi": {deploy: "अपने सर्वर पर चलाएँ।", anon: "अभी बोर्ड बनाएं।"},
+	"id": {deploy: "Deploy secara lokal.", anon: "Buat board sekarang."},
+	"it": {deploy: "Distribuiscilo in locale.", anon: "Crea una bacheca ora."},
+	"ja": {deploy: "ローカルで動かす", anon: "今すぐ作る"},
+	"ko": {deploy: "로컬에 배포하세요.", anon: "지금 보드를 만드세요."},
+	"ms": {deploy: "Jalankan pada pelayan anda sendiri.", anon: "Cipta papan sekarang."},
+	"pl": {deploy: "Uruchom lokalnie.", anon: "Utwórz tablicę teraz."},
+	"pt": {deploy: "Faça o deploy localmente.", anon: "Crie um quadro agora."},
+	"ru": {deploy: "Разверните локально.", anon: "Создайте доску сейчас."},
+	"sw": {deploy: "Endesha kwenye seva yako mwenyewe.", anon: "Tengeneza bodi sasa."},
+	"th": {deploy: "รันบนเซิร์ฟเวอร์ของคุณ", anon: "สร้างบอร์ดตอนนี้"},
+	"tr": {deploy: "Yerel olarak dağıtın.", anon: "Hemen bir pano oluşturun."},
+	"uk": {deploy: "Розгорніть локально.", anon: "Створіть дошку зараз."},
+	"ur": {deploy: "اپنے سرور پر چلائیں۔", anon: "ابھی بورڈ بنائیں۔"},
+	"vi": {deploy: "Triển khai cục bộ.", anon: "Tạo bảng ngay."},
+	"zh": {deploy: "本地部署。", anon: "立即创建看板。"},
 }
 
 var landingMultilingualFeatureTextByLocale = map[string]string{
