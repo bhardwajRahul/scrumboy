@@ -1,8 +1,9 @@
 # Scrumboy Board Operator Evals
 
-These eval cases verify that the Scrumboy Board Operator Skill uses the correct
-MCP or Agoragentic surface, reads board state before proposing mutations, and
-keeps sensitive board data out of plugin telemetry.
+These are seed eval cases for future Scrumboy Board Operator Skill evaluation.
+They illustrate checks for interface selection, read-before-mutate workflow, and
+privacy-safe telemetry boundaries, but they do not prove safety, privacy, or
+complete behavior coverage by themselves.
 
-Run them with the eval runner of your choice by mapping each JSONL record to an
-agent task and checking the `expected` criteria.
+A future or external eval runner can map each JSONL record to an agent task and
+check the `expected` criteria.

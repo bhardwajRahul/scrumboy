@@ -2,7 +2,20 @@
   "name": "scrumboy-board-operator",
   "description": "Agent plugin with Skills for operating Scrumboy boards through its MCP and Agoragentic APIs.",
   "version": "0.1.0",
+  "author": {
+    "name": "Scrumboy contributors"
+  },
   "skills": "./skills",
-  "tags": ["scrumboy", "kanban", "mcp", "agoragentic", "agent-skills"],
-  "defaultPrompt": "Use the Scrumboy Board Operator Skill to inspect projects, todos, sprints, tags, and board state before proposing safe changes through Scrumboy MCP."
+  "keywords": ["scrumboy", "kanban", "mcp", "agoragentic", "agent-skills"],
+  "interface": {
+    "displayName": "Scrumboy Board Operator",
+    "shortDescription": "Read-first Scrumboy board workflows",
+    "longDescription": "Skill guidance for inspecting Scrumboy boards through MCP or Agoragentic APIs before proposing approval-gated changes.",
+    "developerName": "Scrumboy contributors",
+    "category": "Productivity",
+    "capabilities": ["Interactive"],
+    "defaultPrompt": [
+      "Use Scrumboy Board Operator for read-first board review."
+    ]
+  }
 }

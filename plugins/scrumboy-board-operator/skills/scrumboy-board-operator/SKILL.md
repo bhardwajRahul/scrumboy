@@ -13,11 +13,12 @@ tool calls.
 
 - Discover Scrumboy MCP capabilities and available tools.
 - Inspect projects, board state, todos, sprints, tags, and members.
-- Summarize sprint health, blocked work, stale items, and assignment gaps.
+- Summarize sprint health, assignment gaps, and blockers or stale items where
+  they are represented by board content, tags, sprint dates, workflow columns,
+  or visible metadata.
 - Draft todo creation, updates, moves, tag changes, and sprint actions.
 - Separate JSON-RPC (`/mcp/rpc`), legacy HTTP (`/mcp`), and Agoragentic
   (`/agora/v1/discover`, `/agora/v1/invoke`) request shapes.
-- Produce eval metadata without exposing board contents or credentials.
 
 ## Required Output
 
@@ -26,12 +27,15 @@ Return a concise note with these sections:
 - `Scope`: the Scrumboy instance, project slug, sprint, todo, tag, or member under review.
 - `Interface`: MCP JSON-RPC, legacy MCP HTTP, or Agoragentic adapter.
 - `Evidence`: read-only tools or curl commands used, with tokens and sensitive IDs redacted.
-- `Findings`: board state, sprint state, blockers, stale work, or configuration risk.
+- `Findings`: board state, sprint state, inferred blockers or stale work, or configuration risk.
 - `Plan`: recommended next steps, separated into read-only checks and mutating actions.
 - `Approval Required`: every create, update, delete, move, sprint activation, sprint close, tag update, member change, or webhook change.
 - `Verification`: follow-up reads to confirm board state after an approved mutation.
-- `Plugin Eval Metadata`: eval case id, expected pass criteria, and safe metadata events.
 - `Risks`: missing auth, anonymous mode limits, bootstrap state, stale board data, or production impact.
+
+When explicitly running plugin evals, also include `Plugin Eval Metadata`: eval
+case id, expected pass criteria, and safe metadata events. Do not include this
+section for normal board operations.
 
 ## Workflow
 
@@ -53,7 +57,7 @@ Return a concise note with these sections:
 - Redacts credentials, board contents, todo descriptions, and user data from telemetry.
 - Includes a verification step after approved changes.
 
-## Privacy And Telemetry Boundary
+## Privacy and Telemetry Boundary
 
 Only emit metadata about plugin behavior, such as component name, outcome,
 duration bucket, harness name, and sanitized error class. Do not emit prompts,

@@ -1,24 +1,29 @@
 # Scrumboy Board Operator Agent Plugin
 
-This plugin packages Scrumboy board-operating guidance for agent workspaces
-such as Codex, Claude, Copilot, and other MCP-compatible harnesses.
+This plugin packages Scrumboy board-operating guidance for Codex, Claude, and
+other compatible plugin-capable agent workspaces.
 
-The plugin is the installable package. A Skill is one capability inside the
-plugin, usually a focused `SKILL.md` workflow guide. This first package includes
-a Skill for safely inspecting projects, todos, sprints, tags, and board state
-through Scrumboy's MCP and Agoragentic HTTP APIs.
+The plugin is a package intended for local or manual loading. A Skill is one
+capability inside the plugin, usually a focused `SKILL.md` workflow guide. This
+package includes a Skill for safely inspecting projects, todos, sprints, tags,
+and board state through Scrumboy's MCP and Agoragentic HTTP APIs.
+The package only provides plugin metadata and Skill guidance; your agent
+harness still needs Scrumboy endpoint access and appropriate credentials.
 
 ## What It Helps Agents Do
 
 - Review board state before creating or moving todos.
-- Triage sprint progress, blocked work, and assignment gaps.
+- Triage sprint progress, assignment gaps, and blockers or stale work where
+  they are represented by board content, tags, sprint dates, workflow columns,
+  or visible metadata.
 - Draft safe mutations for project maintainers to approve.
 - Use `/mcp/rpc`, `/mcp`, or `/agora/v1/*` without mixing response formats.
 - Keep board contents, credentials, and user data out of telemetry.
 
-## Install Anywhere
+## Local Loading
 
-Configure your agent harness to call the Scrumboy MCP JSON-RPC endpoint:
+Load this package through your agent harness's local or manual plugin workflow,
+then configure that harness to call the Scrumboy MCP JSON-RPC endpoint:
 
 ```bash
 curl -X POST http://localhost:8080/mcp/rpc \
@@ -31,17 +36,7 @@ Then use the Skill in
 `skills/scrumboy-board-operator/SKILL.md` to guide read-first board operations
 and approval-gated changes.
 
-## Telvine Packaging
-
-If this plugin is published through Telvine:
-
-```bash
-npm i -g telvine
-telvine login
-telvine publish ./plugins/scrumboy-board-operator
-```
-
-## Privacy Boundary
+## Privacy and Telemetry Boundary
 
 Do not emit prompts, source files, todo descriptions, board contents, API
 tokens, session cookies, user identifiers, tool arguments, or model outputs as
