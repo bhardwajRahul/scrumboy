@@ -2,6 +2,16 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.19] - 2026-06-24
+
+### Added
+
+- **Scrumboy board operator agent plugin** - Installable plugin package under `plugins/scrumboy-board-operator` for Codex, Claude, and other compatible agent workspaces: `.claude-plugin` / `.codex-plugin` metadata, a board-operator Skill (read-first MCP and Agoragentic workflows with approval-gated mutations), and eval cases for agent harness testing.
+
+### Documentation
+
+- **README** - Links to the board operator plugin from the MCP and documentation sections.
+
 ## [3.18.18] - 2026-06-24
 
 ### Changed

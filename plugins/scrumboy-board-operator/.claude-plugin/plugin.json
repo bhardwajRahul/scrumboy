@@ -1,0 +1,9 @@
+{
+  "name": "scrumboy-board-operator",
+  "description": "Agent plugin with Skills for operating Scrumboy boards through its MCP and Agoragentic APIs.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Scrumboy contributors"
+  },
+  "skills": "./skills"
+}

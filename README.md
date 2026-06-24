@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.18.18-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.18.19-blue" alt="version" />
   <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   <img src="https://img.shields.io/badge/i18n-23%20languages-yellow" alt="i18n" />
 </p>
@@ -274,6 +274,11 @@ curl -X POST http://localhost:8080/mcp/rpc \
 - Compatible with MCP clients that support **HTTP JSON-RPC** to this URL.
 - Some MCP clients expect **stdio**-based servers - those are **not** supported here.
 - Authentication works via **session cookie** or **Bearer** token (same rules as `/mcp`).
+- Compatible Codex/Claude-style agent workspaces that support local or manual
+  plugin loading can use the Scrumboy Board Operator plugin package in
+  [`plugins/scrumboy-board-operator`](plugins/scrumboy-board-operator). The
+  package contains a focused Skill workflow guide; each harness still needs to
+  be configured to load it.
 
 This enables:
 
@@ -404,6 +409,7 @@ Invariants (e.g. canonical URL `/{slug}`, no UI links to `/p/{id}`) are enforced
 # Documentation
 
 - **MCP (HTTP tools + JSON-RPC):** [`docs/mcp.md`](docs/mcp.md) - tool catalog, auth, legacy vs `/mcp/rpc`, examples (agents & automation). See also [`API.md`](API.md) for exhaustive MCP HTTP detail.
+- **Agent plugin package:** [`plugins/scrumboy-board-operator`](plugins/scrumboy-board-operator) - local/manual plugin metadata, board-operator Skill, and seed eval cases for MCP/Agoragentic agent workflows.
 - **PWA / Web Push (VAPID):** [`docs/pwa.md`](docs/pwa.md) - keys, subscriber contact, post-login auto-subscribe when VAPID is configured, Settings opt-out, tradeoffs.
 - **Roles and permissions:** [`docs/roles_and_permissions.md`](docs/roles_and_permissions.md) - project roles, backend authorization, anonymous boards.
 - **Audit trail:** [`docs/audit_trail.md`](docs/audit_trail.md) - action vocabulary, event model, integration points.
