@@ -2,6 +2,13 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.18] - 2026-06-24
+
+### Changed
+
+- **Localized landing meta descriptions** - Non-English anonymous landing pages now emit each locale's `landing.meta.description` in `<meta name="description">`, `og:description`, and `twitter:description`; landing generator and server tests updated.
+- **Landing meta description copy** - Refined share-preview descriptions for **bn**, **de**, **es**, **fa**, **hi**, **id**, **it**, **ms**, **pl**, **ru**, **sw**, **tr**, **uk**, and **ur** (more natural phrasing; fewer English loanwords where localized terms fit better).
+
 ## [3.18.17] - 2026-06-24
 
 ### Changed

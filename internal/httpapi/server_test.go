@@ -1448,6 +1448,15 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 		}
 	}
 
+	if description, ok := landingMetaDescriptionByLocale[locale]; ok {
+		if !strings.Contains(html, description) {
+			t.Fatalf("expected /%s/ landing page to contain localized meta description %q", locale, description)
+		}
+		if strings.Contains(html, landingMetaDescriptionEnglish) {
+			t.Fatalf("expected /%s/ landing page not to contain English meta description", locale)
+		}
+	}
+
 	englishCopy := []string{
 		"markdown + mermaid",
 		"Use Markdown and Mermaid diagrams in task notes",
@@ -1462,6 +1471,33 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 	}
 
 	assertLandingMultilingualFeatureText(t, locale, html)
+}
+
+const landingMetaDescriptionEnglish = "Scrumboy gives you self-hosted project boards or instant anonymous boards for quick collaboration."
+
+var landingMetaDescriptionByLocale = map[string]string{
+	"ar": "Scrumboy يوفّر لوحات مشاريع ذاتية الاستضافة، أو لوحات فورية بدون حساب للتعاون السريع.",
+	"bn": "Scrumboy দ্রুত সহযোগিতার জন্য নিজের সার্ভারে চালানো যায় এমন প্রোজেক্ট বোর্ড বা তাৎক্ষণিক অজ্ঞাতনামা বোর্ড প্রদান করে।",
+	"de": "Scrumboy bietet selbst gehostete Projektboards oder sofort verfügbare anonyme Boards für schnelle Zusammenarbeit.",
+	"es": "Scrumboy te ofrece tableros de proyecto autohospedados o tableros anónimos instantáneos para colaborar rápidamente.",
+	"fa": "Scrumboy برای همکاری سریع، بردهای پروژه با میزبانی شخصی یا بردهای ناشناس فوری در اختیارتان می‌گذارد.",
+	"fr": "Scrumboy propose des tableaux de projet auto-hébergés ou des tableaux anonymes instantanés pour collaborer rapidement.",
+	"hi": "Scrumboy तेज़ सहयोग के लिए अपने सर्वर पर चलने वाले प्रोजेक्ट बोर्ड या तुरंत बनाए जाने वाले गुमनाम बोर्ड उपलब्ध कराता है।",
+	"id": "Scrumboy menyediakan papan proyek yang di-host sendiri atau papan anonim instan untuk kolaborasi cepat.",
+	"it": "Scrumboy offre bacheche di progetto self-hosted o bacheche anonime istantanee per collaborare rapidamente.",
+	"ja": "Scrumboy は、セルフホスト型のプロジェクトボードと、すばやい共同作業向けの即席匿名ボードを提供します。",
+	"ko": "Scrumboy는 빠른 협업을 위한 셀프 호스팅 프로젝트 보드와 즉시 만들 수 있는 익명 보드를 제공합니다.",
+	"ms": "Scrumboy menyediakan papan projek yang dihos sendiri atau papan tanpa nama serta-merta untuk kerjasama pantas.",
+	"pl": "Scrumboy oferuje samodzielnie hostowane tablice projektów lub natychmiastowe anonimowe tablice do szybkiej współpracy.",
+	"pt": "O Scrumboy oferece quadros de projeto auto-hospedados ou quadros anônimos instantâneos para colaboração rápida.",
+	"ru": "Scrumboy предлагает самостоятельно размещаемые проектные доски или мгновенные анонимные доски для быстрой совместной работы.",
+	"sw": "Scrumboy hukupa bodi za miradi zinazojihifadhi mwenyewe au bodi za siri zinazoundwa papo hapo kwa ushirikiano wa haraka.",
+	"th": "Scrumboy ให้บอร์ดโปรเจกต์แบบ self-hosted หรือบอร์ดไม่ระบุตัวตนที่สร้างได้ทันทีสำหรับการทำงานร่วมกันอย่างรวดเร็ว",
+	"tr": "Scrumboy, hızlı iş birliği için kendi sunucunuzda barındırabileceğiniz proje panoları veya anında oluşturulan anonim panolar sunar.",
+	"uk": "Scrumboy надає проєктні дошки для власного хостингу або миттєві анонімні дошки для швидкої співпраці.",
+	"ur": "Scrumboy تیز تعاون کے لیے اپنے سرور پر چلنے والے پروجیکٹ بورڈز یا فوری گمنام بورڈز فراہم کرتا ہے۔",
+	"vi": "Scrumboy cung cấp bảng dự án tự lưu trữ hoặc bảng ẩn danh tức thì để cộng tác nhanh.",
+	"zh": "Scrumboy 提供自托管项目看板，或可即时创建的匿名看板，用于快速协作。",
 }
 
 var landingCtaCardTitleByLocale = map[string]struct {
