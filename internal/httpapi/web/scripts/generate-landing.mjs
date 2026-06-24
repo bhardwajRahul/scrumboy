@@ -248,6 +248,10 @@ function landingDisplayCatalog(locale, localeCatalog, englishCatalog, keys) {
   }
 
   if (locale !== "en") {
+    const metaDescription = localeCatalog["landing.meta.description"];
+    if (typeof metaDescription === "string") {
+      catalog["landing.meta.description"] = metaDescription;
+    }
     const multilingualText = localeCatalog[MULTILINGUAL_TEXT_KEY]?.trim();
     if (multilingualText) {
       catalog[MULTILINGUAL_TEXT_KEY] = multilingualText;
