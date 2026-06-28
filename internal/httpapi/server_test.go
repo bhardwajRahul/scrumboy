@@ -1126,6 +1126,7 @@ func TestAnonymousMode_RootServesLandingAndIsIdempotent(t *testing.T) {
 	}
 	assertLandingGeneratedComment(t, html)
 	assertRootLandingHreflangPolicy(t, html)
+	assertLandingLocaleBootstrapAbsent(t, html)
 
 	var after int
 	if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM projects`).Scan(&after); err != nil {
@@ -1191,6 +1192,7 @@ func TestAnonymousMode_LocalizedLandingRoutes(t *testing.T) {
 		assertLandingJapaneseHeroStyles(t, locale, html)
 		assertLandingHeroLine2BreakStyles(t, locale, html)
 		assertLandingGeneratedComment(t, html)
+		assertLandingLocaleBootstrap(t, locale, html)
 		rootTag := htmlRootTag(t, html)
 		if strings.Contains(rootTag, `dir="rtl"`) {
 			t.Fatalf("expected /%s/ not to be RTL", locale)
@@ -1317,6 +1319,35 @@ func assertLandingGeneratedComment(t *testing.T, html string) {
 	t.Helper()
 	if !strings.Contains(html, landingGeneratedComment) {
 		t.Fatalf("expected landing HTML to include generated-file comment")
+	}
+}
+
+func assertLandingLocaleBootstrapAbsent(t *testing.T, html string) {
+	t.Helper()
+	if strings.Contains(html, `localStorage.setItem(key,locale)`) {
+		t.Fatalf("expected English root landing page not to include locale bootstrap script")
+	}
+}
+
+func assertLandingLocaleBootstrap(t *testing.T, locale, html string) {
+	t.Helper()
+	if !strings.Contains(html, `var locale="`+locale+`"`) {
+		t.Fatalf("expected /%s/ landing page to bootstrap locale %q", locale, locale)
+	}
+	if !strings.Contains(html, `var key="scrumboy.locale"`) {
+		t.Fatalf("expected /%s/ landing page to use scrumboy.locale storage key", locale)
+	}
+	if !strings.Contains(html, `navigator.languages&&navigator.languages.length`) {
+		t.Fatalf("expected /%s/ landing page to guard on non-empty navigator.languages", locale)
+	}
+	if !strings.Contains(html, `.replace(/_/g,"-")`) {
+		t.Fatalf("expected /%s/ landing page to normalize all underscores in browser tags", locale)
+	}
+	if !strings.Contains(html, `lang.indexOf(locale+"-")===0`) {
+		t.Fatalf("expected /%s/ landing page to match regional browser language prefixes", locale)
+	}
+	if !strings.Contains(html, `if(localStorage.getItem(key))return`) {
+		t.Fatalf("expected /%s/ landing page to skip bootstrap when locale is already saved", locale)
 	}
 }
 

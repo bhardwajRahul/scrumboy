@@ -181,6 +181,30 @@ describe("i18n locale detection", () => {
   });
 });
 
+describe("browserLanguageMatchesPublicLocale", () => {
+  it("matches exact and regional browser tags for landing locales", async () => {
+    const i18n = await loadModule();
+
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", ["de-DE", "fr-FR"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", ["fr"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", ["fr_CA"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("pt", ["pt-BR"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("pt", ["pt-PT"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("zh", ["zh-TW"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("zh", ["zh-Hans"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("de", ["de-AT"])).toBe(true);
+  });
+
+  it("does not match unrelated browser tags", async () => {
+    const i18n = await loadModule();
+
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", ["de-DE", "en-US"])).toBe(false);
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", [])).toBe(false);
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", [""])).toBe(false);
+    expect(i18n.browserLanguageMatchesPublicLocale("id", ["in-ID"])).toBe(false);
+  });
+});
+
 describe("i18n catalog loading", () => {
   beforeEach(() => {
     localStorage.clear();

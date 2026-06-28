@@ -590,6 +590,25 @@ export function publicLocaleOptions(): PublicLocaleOption[] {
   }));
 }
 
+function normalizeBrowserLanguageTag(value: string): string {
+  return value.trim().toLowerCase().replace(/_/g, "-");
+}
+
+export function browserLanguageMatchesPublicLocale(
+  landingLocale: PublicLocaleId,
+  languages: readonly string[],
+): boolean {
+  const locale = landingLocale.toLowerCase();
+  for (const language of languages) {
+    const tag = normalizeBrowserLanguageTag(String(language));
+    if (!tag) continue;
+    if (tag === locale || tag.startsWith(`${locale}-`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function detectLocale(options: DetectLocaleOptions = {}): LocaleId {
   const storage = options.storage === undefined ? getDefaultStorage() : options.storage;
   try {

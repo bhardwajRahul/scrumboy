@@ -565,6 +565,21 @@ export function publicLocaleOptions() {
         flagSrc: PUBLIC_LOCALE_FLAG_PATHS[id],
     }));
 }
+function normalizeBrowserLanguageTag(value) {
+    return value.trim().toLowerCase().replace(/_/g, "-");
+}
+export function browserLanguageMatchesPublicLocale(landingLocale, languages) {
+    const locale = landingLocale.toLowerCase();
+    for (const language of languages) {
+        const tag = normalizeBrowserLanguageTag(String(language));
+        if (!tag)
+            continue;
+        if (tag === locale || tag.startsWith(`${locale}-`)) {
+            return true;
+        }
+    }
+    return false;
+}
 export function detectLocale(options = {}) {
     const storage = options.storage === undefined ? getDefaultStorage() : options.storage;
     try {
