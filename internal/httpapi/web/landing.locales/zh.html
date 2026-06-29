@@ -1181,6 +1181,39 @@
     }
 
     @media (max-width: 920px) {
+      .title-figure {
+        --hero-mobile-mascot-size: clamp(72px, 12vw, 112px);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) var(--hero-mobile-mascot-size);
+        align-items: start;
+        column-gap: clamp(10px, 2.4vw, 18px);
+      }
+
+      .title-wrap {
+        min-width: 0;
+      }
+
+      .hero-mascot-frame {
+        display: block;
+        width: var(--hero-mobile-mascot-size);
+        max-width: none;
+        align-self: start;
+        justify-self: end;
+        transform: none;
+      }
+
+      .hero-mascot-frame .hero-mascot {
+        filter: grayscale(1) sepia(0.2) hue-rotate(162deg) saturate(0.3) brightness(0.92) contrast(1);
+      }
+
+      .hero-mascot {
+        width: 100%;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        object-position: center;
+      }
+
       .intro,
       .section-head {
         grid-template-columns: 1fr;
@@ -1268,12 +1301,33 @@
         overflow-wrap: anywhere;
       }
 
-      .title-figure {
+      .title-accent {
         display: block;
+        max-width: calc(100% - var(--hero-mobile-mascot-size) - var(--hero-mobile-mascot-gap));
+      }
+
+      html.landing-hero-local .title-accent {
+        max-width: calc(100% - var(--hero-mobile-mascot-size) - var(--hero-mobile-mascot-gap));
+      }
+
+      .title-figure {
+        --hero-mobile-mascot-size: clamp(58px, 16vw, 82px);
+        --hero-mobile-mascot-gap: clamp(8px, 2.6vw, 14px);
+        display: block;
+        position: relative;
+      }
+
+      .title-wrap {
+        position: relative;
+        z-index: 1;
       }
 
       .hero-mascot-frame {
-        display: none;
+        position: absolute;
+        inset-block-start: .06em;
+        inset-inline-end: 0;
+        z-index: 2;
+        pointer-events: none;
       }
 
       .title-backdrop {
@@ -1377,6 +1431,24 @@
       }
 
     }
+
+    /* zh landing hero: desktop two-line stack (看板 / 简单上手) without splitting CJK accent. */
+    html[lang="zh-CN"] h1 {
+      letter-spacing: 0;
+      line-height: 1.04;
+    }
+
+    @media (min-width: 681px) {
+      html[lang="zh-CN"] .title-accent,
+      html[lang="zh-CN"] .title-w-the {
+        display: block;
+        white-space: nowrap;
+        writing-mode: horizontal-tb;
+        width: max-content;
+        max-width: 100%;
+      }
+    }
+
   </style>
 </head>
 <body translate="no">
@@ -1395,7 +1467,7 @@
           <div class="intro-lead">
             <div class="title-figure">
               <div class="title-wrap">
-                <h1 id="page-title"><span class="title-backdrop"><span class="title-line1"><span class="title-accent">Kanban Boards</span> <span class="title-w-the">简单上手</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2"></span></h1>
+                <h1 id="page-title"><span class="title-backdrop"><span class="title-line1"><span class="title-accent">看板</span> <span class="title-w-the">简单上手</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2"></span></h1>
               </div>
               <div class="hero-mascot-frame">
                 <img class="hero-mascot" src="/scrumboylanding.png" alt="" width="400" height="400" decoding="async" fetchpriority="high" aria-hidden="true">
@@ -1451,7 +1523,7 @@
     <section class="showcase" id="capabilities" aria-labelledby="capabilities-title">
       <div class="shell">
         <div class="section-head">
-          <h2 id="capabilities-title"><span class="capabilities-accent">Can your</span> <span class="capabilities-mid">project management tool</span> <span class="capabilities-accent">do this?</span></h2>
+          <h2 id="capabilities-title"><span class="capabilities-accent">你的</span> <span class="capabilities-mid">项目管理工具</span> <span class="capabilities-accent">，能做到吗？</span></h2>
           <p class="section-note"></p>
         </div>
 

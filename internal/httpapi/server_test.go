@@ -1190,6 +1190,8 @@ func TestAnonymousMode_LocalizedLandingRoutes(t *testing.T) {
 		assertLandingDisplayCopy(t, locale, html)
 		assertLandingLocalizedHeroTitle(t, locale, html)
 		assertLandingJapaneseHeroStyles(t, locale, html)
+		assertLandingChineseHeroStyles(t, locale, html)
+		assertLandingRussianHeroStyles(t, locale, html)
 		assertLandingHeroLine2BreakStyles(t, locale, html)
 		assertLandingGeneratedComment(t, html)
 		assertLandingLocaleBootstrap(t, locale, html)
@@ -1460,6 +1462,10 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 		if !strings.Contains(html, "Чи вміє ваш") || !strings.Contains(html, "інструмент керування проєктами") || !strings.Contains(html, "таке?") {
 			t.Fatalf("expected /%s/ landing page to contain localized section title copy", locale)
 		}
+	} else if locale == "zh" {
+		if !strings.Contains(html, "你的") || !strings.Contains(html, "项目管理工具") || !strings.Contains(html, "，能做到吗？") {
+			t.Fatalf("expected /%s/ landing page to contain localized section title copy", locale)
+		}
 	} else if !strings.Contains(html, "Kanban Boards") {
 		t.Fatalf("expected /%s/ landing page to contain English copy %q", locale, "Kanban Boards")
 	}
@@ -1492,7 +1498,7 @@ func assertLandingDisplayCopy(t *testing.T, locale, html string) {
 		"markdown + mermaid",
 		"Use Markdown and Mermaid diagrams in task notes",
 	}
-	if locale != "ja" && locale != "uk" {
+	if locale != "ja" && locale != "uk" && locale != "zh" {
 		englishCopy = append(englishCopy, "Can your", "project management tool")
 	}
 	for _, want := range englishCopy {
@@ -1624,7 +1630,7 @@ var landingLocalizedHeroTitleByLocale = map[string]struct {
 	"ur": {rest: "آسان اور", line2: "بےفکر۔"},
 	"fa": {rest: "بدون", line2: "تشریفات."},
 	"vi": {rest: "thật đơn", line2: "giản"},
-	"zh": {rest: "简单上手"},
+	"zh": {accent: "看板", rest: "简单上手"},
 }
 
 func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
@@ -1646,8 +1652,18 @@ func assertLandingLocalizedHeroTitle(t *testing.T, locale, html string) {
 		}
 	}
 	if want.line2 != "" {
-		if !strings.Contains(html, `<span class="title-line2">`+want.line2+`</span>`) {
-			t.Fatalf("expected /%s/ landing hero line2 %q", locale, want.line2)
+		switch locale {
+		case "ru":
+			if !strings.Contains(html, `<span class="title-line2">лишней</span>`) {
+				t.Fatalf("expected /%s/ landing hero line2 %q", locale, "лишней")
+			}
+			if !strings.Contains(html, `<span class="title-line3">сложности</span>`) {
+				t.Fatalf("expected /%s/ landing hero line3 %q", locale, "сложности")
+			}
+		default:
+			if !strings.Contains(html, `<span class="title-line2">`+want.line2+`</span>`) {
+				t.Fatalf("expected /%s/ landing hero line2 %q", locale, want.line2)
+			}
 		}
 	}
 	switch locale {
@@ -1684,6 +1700,51 @@ func assertLandingJapaneseHeroStyles(t *testing.T, locale, html string) {
 	}
 }
 
+func assertLandingChineseHeroStyles(t *testing.T, locale, html string) {
+	t.Helper()
+	marker := "zh landing hero: desktop two-line stack"
+	if locale != "zh" {
+		if strings.Contains(html, marker) {
+			t.Fatalf("expected /%s/ not to contain Chinese-only landing hero styles", locale)
+		}
+		return
+	}
+	for _, want := range []string{
+		marker,
+		`html[lang="zh-CN"] .title-accent`,
+		`html[lang="zh-CN"] .title-w-the`,
+		"white-space: nowrap",
+		"writing-mode: horizontal-tb",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected /zh/ landing page to include Chinese hero layout CSS %q", want)
+		}
+	}
+}
+
+func assertLandingRussianHeroStyles(t *testing.T, locale, html string) {
+	t.Helper()
+	marker := "ru landing hero: desktop line stack"
+	if locale != "ru" {
+		if strings.Contains(html, marker) {
+			t.Fatalf("expected /%s/ not to contain Russian-only landing hero styles", locale)
+		}
+		return
+	}
+	for _, want := range []string{
+		marker,
+		`<span class="title-line2">лишней</span>`,
+		`<span class="title-line3">сложности</span>`,
+		`html[lang="ru"] .title-line3`,
+		"white-space: nowrap",
+		"writing-mode: horizontal-tb",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected /ru/ landing page to include Russian hero layout %q", want)
+		}
+	}
+}
+
 func assertLandingHeroLine2BreakStyles(t *testing.T, locale, html string) {
 	t.Helper()
 	markersByLocale := map[string]string{
@@ -1692,7 +1753,6 @@ func assertLandingHeroLine2BreakStyles(t *testing.T, locale, html string) {
 		"fr": "fr landing hero: desktop-only line break before complication",
 		"es": "es landing hero: desktop-only line break before complicaciones",
 		"id": "id landing hero: desktop-only line break before ribet",
-		"ru": "ru landing hero: desktop-only line break before лишней сложности",
 		"th": "th landing hero: desktop-only line break before ไม่ยุ่งยาก",
 	}
 	htmlLangByLocale := map[string]string{
@@ -1701,7 +1761,6 @@ func assertLandingHeroLine2BreakStyles(t *testing.T, locale, html string) {
 		"fr": "fr",
 		"es": "es-MX",
 		"id": "id-ID",
-		"ru": "ru",
 		"th": "th-TH",
 	}
 	for loc, marker := range markersByLocale {
