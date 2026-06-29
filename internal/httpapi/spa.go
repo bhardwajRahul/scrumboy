@@ -100,6 +100,13 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 
 	// FIFTH: Root routing is idempotent in all modes
 	if path == "" && s.mode == "anonymous" {
+		setApexLandingNegotiationHeaders(w)
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && s.landingHTMLByLocale != nil {
+			if locale := negotiateLandingLocale(r, s.landingHTMLByLocale); locale != "" {
+				http.Redirect(w, r, appendRawQuery("/"+locale+"/", r.URL.RawQuery), http.StatusFound)
+				return
+			}
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(s.landingHTML)

@@ -9,6 +9,10 @@ import {
 } from './index.js';
 
 const DEFAULT_LABEL_KEY = "settings.language.selectLabel";
+const PICKER_LIST_GAP_PX = 4;
+const PICKER_LIST_Z_INDEX = "1000";
+
+const pickerPositionListeners = new WeakMap<HTMLButtonElement, () => void>();
 
 function escapeHTML(value: string): string {
   return String(value)
@@ -64,16 +68,88 @@ function isPickerOpen(button: HTMLElement | null): boolean {
   return !!list && !list.hidden;
 }
 
-function setPickerOpen(button: HTMLElement | null, open: boolean): void {
+function isRtlDocument(): boolean {
+  return document.documentElement.dir === "rtl";
+}
+
+function shouldUseFixedPickerList(button: HTMLButtonElement): boolean {
+  if (button.classList.contains("auth-locale-select")) {
+    return true;
+  }
+  return !!button.closest(".page--auth");
+}
+
+function positionPickerList(button: HTMLButtonElement): void {
+  const list = getPickerList(button);
+  if (!list) return;
+
+  const rect = button.getBoundingClientRect();
+  list.style.position = "fixed";
+  list.style.top = `${rect.bottom + PICKER_LIST_GAP_PX}px`;
+  list.style.minWidth = `${rect.width}px`;
+  list.style.zIndex = PICKER_LIST_Z_INDEX;
+
+  if (isRtlDocument()) {
+    list.style.left = "";
+    list.style.right = `${window.innerWidth - rect.right}px`;
+    return;
+  }
+
+  list.style.right = "";
+  list.style.left = `${rect.left}px`;
+}
+
+function clearPickerListPosition(button: HTMLButtonElement): void {
+  const list = getPickerList(button);
+  if (!list) return;
+
+  list.style.position = "";
+  list.style.top = "";
+  list.style.left = "";
+  list.style.right = "";
+  list.style.minWidth = "";
+  list.style.zIndex = "";
+}
+
+function detachPickerPositionListeners(button: HTMLButtonElement): void {
+  const detach = pickerPositionListeners.get(button);
+  if (!detach) return;
+  detach();
+  pickerPositionListeners.delete(button);
+}
+
+function attachPickerPositionListeners(button: HTMLButtonElement): void {
+  detachPickerPositionListeners(button);
+
+  const onReposition = () => {
+    if (!isPickerOpen(button) || !shouldUseFixedPickerList(button)) return;
+    positionPickerList(button);
+  };
+
+  window.addEventListener("resize", onReposition);
+  window.addEventListener("scroll", onReposition, true);
+  pickerPositionListeners.set(button, () => {
+    window.removeEventListener("resize", onReposition);
+    window.removeEventListener("scroll", onReposition, true);
+  });
+}
+
+function setPickerOpen(button: HTMLButtonElement | null, open: boolean): void {
   const list = getPickerList(button);
   if (!button || !list) return;
   list.hidden = !open;
   button.setAttribute("aria-expanded", open ? "true" : "false");
   if (!open) {
     setHighlightedOption(button, null);
+    detachPickerPositionListeners(button);
+    clearPickerListPosition(button);
     return;
   }
   setHighlightedOption(button, getSelectedOption(button));
+  if (shouldUseFixedPickerList(button)) {
+    positionPickerList(button);
+    attachPickerPositionListeners(button);
+  }
 }
 
 function syncButtonFromOption(button: HTMLButtonElement, option: PublicLocaleOption): void {
@@ -150,6 +226,11 @@ export function syncPublicLocaleSelect(button: HTMLButtonElement | null): void {
   syncButtonFromOption(button, selectedOption);
   if (!isPickerOpen(button)) {
     button.setAttribute("aria-expanded", "false");
+    return;
+  }
+
+  if (shouldUseFixedPickerList(button)) {
+    positionPickerList(button);
   }
 }
 

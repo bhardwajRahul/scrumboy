@@ -2,6 +2,7 @@ export const SUPPORTED_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt"
 export const PUBLIC_LOCALES = ["en", "zh", "hi", "es", "ar", "fr", "bn", "pt", "id", "ur", "ru", "de", "ja", "sw", "vi", "tr", "ko", "fa", "th", "it", "ms", "pl", "uk"];
 export const LOCALE_STORAGE_KEY = "scrumboy.locale";
 export const I18N_LOCALE_CHANGED = "scrumboy:i18n-locale-changed";
+const LOCALE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
 export const LOCALE_LABELS = {
     en: "English",
     de: "Deutsch",
@@ -489,6 +490,14 @@ function getDefaultLanguages() {
 function getDefaultDocumentElement() {
     return globalThis.document?.documentElement || null;
 }
+function getStoredLocale(storage) {
+    try {
+        return normalizeLocale(storage?.getItem(LOCALE_STORAGE_KEY));
+    }
+    catch {
+        return null;
+    }
+}
 export function normalizeLocale(value) {
     if (!value)
         return null;
@@ -565,16 +574,26 @@ export function publicLocaleOptions() {
         flagSrc: PUBLIC_LOCALE_FLAG_PATHS[id],
     }));
 }
+function normalizeBrowserLanguageTag(value) {
+    return value.trim().toLowerCase().replace(/_/g, "-");
+}
+export function browserLanguageMatchesPublicLocale(landingLocale, languages) {
+    const locale = landingLocale.toLowerCase();
+    for (const language of languages) {
+        const tag = normalizeBrowserLanguageTag(String(language));
+        if (!tag)
+            continue;
+        if (tag === locale || tag.startsWith(`${locale}-`)) {
+            return true;
+        }
+    }
+    return false;
+}
 export function detectLocale(options = {}) {
     const storage = options.storage === undefined ? getDefaultStorage() : options.storage;
-    try {
-        const stored = normalizeLocale(storage?.getItem(LOCALE_STORAGE_KEY));
-        if (stored)
-            return stored;
-    }
-    catch {
-        // localStorage may be blocked; fall through to browser language.
-    }
+    const stored = getStoredLocale(storage);
+    if (stored)
+        return stored;
     const languages = options.languages ?? getDefaultLanguages();
     for (const language of languages) {
         const locale = normalizeLocale(language);
@@ -644,6 +663,38 @@ function persistLocale(locale, storage = getDefaultStorage()) {
     catch {
         // Storage is best effort; the active in-memory locale still changes.
     }
+    persistLocaleCookie(locale);
+}
+function persistLocaleCookie(locale) {
+    if (isPublicLocale(locale)) {
+        writeLocaleCookie(locale);
+        return;
+    }
+    clearLocaleCookie();
+}
+function writeLocaleCookie(locale) {
+    try {
+        const doc = globalThis.document;
+        if (!doc)
+            return;
+        const secure = globalThis.location?.protocol === "https:" ? "; Secure" : "";
+        doc.cookie = `${LOCALE_STORAGE_KEY}=${encodeURIComponent(locale)}; Path=/; Max-Age=${LOCALE_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax${secure}`;
+    }
+    catch {
+        // Cookie persistence is best effort and only supports server-side landing negotiation.
+    }
+}
+function clearLocaleCookie() {
+    try {
+        const doc = globalThis.document;
+        if (!doc)
+            return;
+        const secure = globalThis.location?.protocol === "https:" ? "; Secure" : "";
+        doc.cookie = `${LOCALE_STORAGE_KEY}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${secure}`;
+    }
+    catch {
+        // Cookie persistence is best effort and only supports server-side landing negotiation.
+    }
 }
 function dispatchLocaleChanged(locale) {
     const eventTarget = globalThis.document;
@@ -660,8 +711,10 @@ export async function initI18n(options = {}) {
         activeCatalog = BOOTSTRAP_EN_CATALOG;
     }
     const storage = options.storage === undefined ? getDefaultStorage() : options.storage;
+    const storedLocale = getStoredLocale(storage);
     const desiredLocale = normalizeLocale(options.locale) ||
-        detectLocale({ storage, languages: options.languages });
+        storedLocale ||
+        detectLocale({ storage: null, languages: options.languages });
     const en = await ensureLocaleLoaded("en");
     let nextLocale = desiredLocale;
     let nextCatalog = en;
@@ -680,6 +733,9 @@ export async function initI18n(options = {}) {
     updateDocumentLang(activeLocale, options.documentElement ?? getDefaultDocumentElement());
     if (options.persist === true && storage) {
         persistLocale(activeLocale, storage);
+    }
+    else if (storedLocale && activeLocale === storedLocale) {
+        persistLocaleCookie(storedLocale);
     }
     return activeLocale;
 }
@@ -918,4 +974,5 @@ export function resetI18nForTests() {
     loader = defaultLoadLocale;
     catalogCache.clear();
     warnedMissingKeys.clear();
+    clearLocaleCookie();
 }

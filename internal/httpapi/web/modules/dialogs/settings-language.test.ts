@@ -378,6 +378,27 @@ describe('settings language selector', () => {
     }
   });
 
+  it('does not pin the open settings locale list with fixed positioning', async () => {
+    const { settings, cleanup } = await setupCustomizationSettings();
+    try {
+      await settings.renderSettingsModal();
+
+      const button = getSettingsLocalePicker();
+      button.click();
+
+      const list = button.closest('.locale-picker')?.querySelector('.locale-picker__list') as HTMLUListElement;
+      expect(list.hidden).toBe(false);
+      expect(list.style.position).toBe('');
+      expect(list.style.top).toBe('');
+      expect(list.style.left).toBe('');
+      expect(list.style.right).toBe('');
+      expect(list.style.minWidth).toBe('');
+      expect(list.style.zIndex).toBe('');
+    } finally {
+      cleanup();
+    }
+  });
+
   it('selecting German persists locale, updates lang, and hydrates migrated shell text', async () => {
     const { i18n, settings, cleanup } = await setupCustomizationSettings();
     try {
@@ -389,6 +410,7 @@ describe('settings language selector', () => {
 
       expect(i18n.getLocale()).toBe('de');
       expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe('de');
+      expect(document.cookie).toContain(`${i18n.LOCALE_STORAGE_KEY}=de`);
       expect(document.documentElement.lang).toBe('de');
       expect(document.documentElement.getAttribute('data-locale')).toBe('de');
       expect(document.getElementById('shellProbe')?.textContent).toBe('Shell-Text');

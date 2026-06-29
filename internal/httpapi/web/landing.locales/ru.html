@@ -49,6 +49,9 @@
   <meta name="twitter:title" content="Scrumboy" />
   <meta name="twitter:description" content="Scrumboy предлагает самостоятельно размещаемые проектные доски или мгновенные анонимные доски для быстрой совместной работы." />
   <meta name="twitter:image" content="https://scrumboy.com/og-image.png" />
+  <script>
+(function(){try{var locale="ru";var key="scrumboy.locale";if(localStorage.getItem(key))return;var languages=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||""];var matches=languages.some(function(lang){lang=String(lang).toLowerCase().replace(/_/g,"-");return lang===locale||lang.indexOf(locale+"-")===0;});if(matches){localStorage.setItem(key,locale)}}catch(e){}})();
+</script>
   <style>
     :root {
       --ink: #e8e6e1;
@@ -1178,6 +1181,39 @@
     }
 
     @media (max-width: 920px) {
+      .title-figure {
+        --hero-mobile-mascot-size: clamp(72px, 12vw, 112px);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) var(--hero-mobile-mascot-size);
+        align-items: start;
+        column-gap: clamp(10px, 2.4vw, 18px);
+      }
+
+      .title-wrap {
+        min-width: 0;
+      }
+
+      .hero-mascot-frame {
+        display: block;
+        width: var(--hero-mobile-mascot-size);
+        max-width: none;
+        align-self: start;
+        justify-self: end;
+        transform: none;
+      }
+
+      .hero-mascot-frame .hero-mascot {
+        filter: grayscale(1) sepia(0.2) hue-rotate(162deg) saturate(0.3) brightness(0.92) contrast(1);
+      }
+
+      .hero-mascot {
+        width: 100%;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        object-position: center;
+      }
+
       .intro,
       .section-head {
         grid-template-columns: 1fr;
@@ -1265,12 +1301,33 @@
         overflow-wrap: anywhere;
       }
 
-      .title-figure {
+      .title-accent {
         display: block;
+        max-width: calc(100% - var(--hero-mobile-mascot-size) - var(--hero-mobile-mascot-gap));
+      }
+
+      html.landing-hero-local .title-accent {
+        max-width: calc(100% - var(--hero-mobile-mascot-size) - var(--hero-mobile-mascot-gap));
+      }
+
+      .title-figure {
+        --hero-mobile-mascot-size: clamp(58px, 16vw, 82px);
+        --hero-mobile-mascot-gap: clamp(8px, 2.6vw, 14px);
+        display: block;
+        position: relative;
+      }
+
+      .title-wrap {
+        position: relative;
+        z-index: 1;
       }
 
       .hero-mascot-frame {
-        display: none;
+        position: absolute;
+        inset-block-start: .06em;
+        inset-inline-end: 0;
+        z-index: 2;
+        pointer-events: none;
       }
 
       .title-backdrop {
@@ -1375,9 +1432,12 @@
 
     }
 
-    /* ru landing hero: desktop-only line break before лишней сложности (без / лишней сложности). */
+    /* ru landing hero: desktop line stack (Kanban Boards / без / лишней / сложности). */
     @media (min-width: 681px) {
-      html[lang="ru"] .title-line2 {
+      html[lang="ru"] .title-accent,
+      html[lang="ru"] .title-w-the,
+      html[lang="ru"] .title-line2,
+      html[lang="ru"] .title-line3 {
         display: block;
         white-space: nowrap;
         writing-mode: horizontal-tb;
@@ -1388,7 +1448,8 @@
 
     @media (max-width: 680px) {
       html[lang="ru"] .title-w-the,
-      html[lang="ru"] .title-line2 {
+      html[lang="ru"] .title-line2,
+      html[lang="ru"] .title-line3 {
         display: inline;
         white-space: nowrap;
       }
@@ -1412,7 +1473,7 @@
           <div class="intro-lead">
             <div class="title-figure">
               <div class="title-wrap">
-                <h1 id="page-title"><span class="title-backdrop"><span class="title-line1"><span class="title-accent">Kanban Boards</span> <span class="title-w-the">без</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2">лишней сложности</span></h1>
+                <h1 id="page-title"><span class="title-backdrop"><span class="title-line1"><span class="title-accent">Kanban Boards</span> <span class="title-w-the">без</span></span> <br class="title-br-m" aria-hidden="true"><span class="title-line2">лишней</span><span class="title-line3">сложности</span></h1>
               </div>
               <div class="hero-mascot-frame">
                 <img class="hero-mascot" src="/scrumboylanding.png" alt="" width="400" height="400" decoding="async" fetchpriority="high" aria-hidden="true">

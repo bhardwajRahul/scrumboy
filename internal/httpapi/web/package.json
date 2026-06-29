@@ -9,12 +9,14 @@
     "verify:i18n": "node scripts/verify-i18n-locales.mjs",
     "generate:landing": "node scripts/generate-landing.mjs",
     "verify:landing": "node scripts/generate-landing.mjs --check",
+    "test:landing-layout": "playwright test --config=playwright.config.ts",
     "copy:i18n": "node scripts/copy-i18n-locales.mjs",
     "build": "node scripts/verify-vendor.mjs && npm run verify:i18n && npm run generate:landing && tsc && npm run copy:i18n",
     "test": "node scripts/verify-vendor.mjs && npm run verify:i18n && npm run verify:landing && vitest run",
     "lint:delete-confirms": "node scripts/check-delete-confirms.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "happy-dom": "^20.9.0",
     "typescript": "^5.0.0",
     "vitest": "^2.1.9"

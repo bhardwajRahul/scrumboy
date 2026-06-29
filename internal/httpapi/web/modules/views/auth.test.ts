@@ -1019,6 +1019,25 @@ describe("auth view i18n", () => {
     expect(authLocaleOptionValues()).not.toContain("pseudo");
   });
 
+  it("pins the open auth locale list with fixed positioning", async () => {
+    await setupI18n("en");
+    const auth = await import("./auth.js");
+
+    auth.renderAuth({ next: "/dashboard", oidcEnabled: true, localAuthEnabled: true });
+
+    const button = getAuthLocaleSelect();
+    button.click();
+
+    const list = button.closest(".locale-picker")?.querySelector(".locale-picker__list") as HTMLUListElement;
+    expect(list.hidden).toBe(false);
+    expect(list.style.position).toBe("fixed");
+    expect(list.style.top).toMatch(/px$/);
+    expect(list.style.left || list.style.right).toMatch(/px$/);
+    expect(list.style.minWidth).toMatch(/px$/);
+    expect(list.style.zIndex).toBe("1000");
+    expect(list.querySelectorAll('[role="option"]').length).toBe(EXPECTED_PUBLIC_LOCALES.length);
+  });
+
   it("selecting Arabic in the auth selector sets RTL document direction", async () => {
     const i18n = await setupI18n("en");
     const auth = await import("./auth.js");
@@ -1048,6 +1067,7 @@ describe("auth view i18n", () => {
 
     expect(i18n.getLocale()).toBe("de");
     expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+    expect(document.cookie).toContain(`${i18n.LOCALE_STORAGE_KEY}=de`);
     expect(getAuthLocalePickerSelectedLocale()).toBe("de");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Sprache");
     expect(document.querySelector(".panel__title")?.textContent).toBe("Anmelden");

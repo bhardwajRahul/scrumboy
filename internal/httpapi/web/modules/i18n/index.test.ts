@@ -118,6 +118,19 @@ function loader(catalogs: Record<string, Record<string, string>>) {
   return vi.fn(async (locale: string) => catalogs[locale]);
 }
 
+function cookieValue(name: string): string | null {
+  const prefix = `${name}=`;
+  return document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix))
+    ?.slice(prefix.length) ?? null;
+}
+
+function clearLocaleCookieForTests(): void {
+  document.cookie = "scrumboy.locale=; Path=/; Max-Age=0";
+}
+
 describe("i18n locale detection", () => {
   afterEach(() => {
     localStorage.clear();
@@ -181,9 +194,34 @@ describe("i18n locale detection", () => {
   });
 });
 
+describe("browserLanguageMatchesPublicLocale", () => {
+  it("matches exact and regional browser tags for landing locales", async () => {
+    const i18n = await loadModule();
+
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", ["de-DE", "fr-FR"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", ["fr"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", ["fr_CA"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("pt", ["pt-BR"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("pt", ["pt-PT"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("zh", ["zh-TW"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("zh", ["zh-Hans"])).toBe(true);
+    expect(i18n.browserLanguageMatchesPublicLocale("de", ["de-AT"])).toBe(true);
+  });
+
+  it("does not match unrelated browser tags", async () => {
+    const i18n = await loadModule();
+
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", ["de-DE", "en-US"])).toBe(false);
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", [])).toBe(false);
+    expect(i18n.browserLanguageMatchesPublicLocale("fr", [""])).toBe(false);
+    expect(i18n.browserLanguageMatchesPublicLocale("id", ["in-ID"])).toBe(false);
+  });
+});
+
 describe("i18n catalog loading", () => {
   beforeEach(() => {
     localStorage.clear();
+    clearLocaleCookieForTests();
     document.documentElement.lang = "en";
     document.documentElement.removeAttribute("data-locale");
     document.documentElement.removeAttribute("dir");
@@ -193,6 +231,7 @@ describe("i18n catalog loading", () => {
     const i18n = await import("./index.js");
     i18n.resetI18nForTests();
     localStorage.clear();
+    clearLocaleCookieForTests();
     vi.restoreAllMocks();
   });
 
@@ -253,14 +292,52 @@ describe("i18n catalog loading", () => {
     expect(i18n.t("common.cancel")).toBe("Cancel");
   });
 
-  it("persists locale changes to localStorage", async () => {
+  it("persists public locale changes to localStorage and the landing locale cookie", async () => {
     const i18n = await loadModule();
-    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, pseudo: pseudoCatalog }) });
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
 
+    await i18n.setLocale("de");
+
+    expect(i18n.getLocale()).toBe("de");
+    expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+    expect(cookieValue(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+
+    await i18n.setLocale("en");
+
+    expect(i18n.getLocale()).toBe("en");
+    expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("en");
+    expect(cookieValue(i18n.LOCALE_STORAGE_KEY)).toBe("en");
+  });
+
+  it("clears the landing locale cookie for pseudo while preserving localStorage", async () => {
+    const i18n = await loadModule();
+    await i18n.initI18n({ locale: "en", loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    await i18n.setLocale("de");
     await i18n.setLocale("pseudo");
 
     expect(i18n.getLocale()).toBe("pseudo");
     expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("pseudo");
+    expect(cookieValue(i18n.LOCALE_STORAGE_KEY)).toBeNull();
+  });
+
+  it("mirrors an existing public localStorage locale to the landing locale cookie during init", async () => {
+    const i18n = await loadModule();
+    localStorage.setItem(i18n.LOCALE_STORAGE_KEY, "de");
+
+    await i18n.initI18n({ loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.getLocale()).toBe("de");
+    expect(cookieValue(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+  });
+
+  it("does not write the landing locale cookie for navigator-only locale detection", async () => {
+    const i18n = await loadModule();
+
+    await i18n.initI18n({ storage: null, languages: ["de-DE"], loadLocale: loader({ en: enCatalog, de: deCatalog, pseudo: pseudoCatalog }) });
+
+    expect(i18n.getLocale()).toBe("de");
+    expect(cookieValue(i18n.LOCALE_STORAGE_KEY)).toBeNull();
   });
 
   it("dispatches locale-change events only after the active locale changes", async () => {

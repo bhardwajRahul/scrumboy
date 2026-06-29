@@ -2,6 +2,23 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.20] - 2026-06-29
+
+### Added
+
+- **Apex landing locale negotiation** - In anonymous mode, `GET /` redirects (302) to a supported regional landing (e.g. `/fr/`) when `Accept-Language` matches a public locale; English and unsupported languages stay on the indexable root. Deliberate visits to `/<locale>/` are never re-redirected. Responses use `Cache-Control: private` and `Vary: Cookie, Accept-Language`.
+- **Locale preference cookie** - Public locale picks in the Auth topbar and Settings → Customization now mirror `scrumboy.locale` to a cookie so server-side apex negotiation can honor an explicit choice; regional landing bootstrap still seeds `localStorage` when browser language matches and no saved preference exists.
+- **Mobile landing hero mascot** - Scrumboy mascot image shown on mobile viewports for all public locale marketing pages; Playwright layout checks added for representative locales.
+
+### Changed
+
+- **Chinese (`zh`) landing page** - Hero accent, localized capabilities section title and desktop CSS so CJK hero lines do not split mid-word.
+- **Japanese (`ja`) landing hero** - Mobile hero keeps top Hero accent on one line. 
+
+### Fixed
+
+- **Language dropdown** - Auth topbar and Settings locale picker lists no longer clip when they exceed the viewport; shared `locale-select` positioning and overflow handling updated with regression tests.
+
 ## [3.18.19] - 2026-06-24
 
 ### Added

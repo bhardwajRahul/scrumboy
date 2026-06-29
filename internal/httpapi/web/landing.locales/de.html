@@ -49,6 +49,9 @@
   <meta name="twitter:title" content="Scrumboy" />
   <meta name="twitter:description" content="Scrumboy bietet selbst gehostete Projektboards oder sofort verfügbare anonyme Boards für schnelle Zusammenarbeit." />
   <meta name="twitter:image" content="https://scrumboy.com/og-image.png" />
+  <script>
+(function(){try{var locale="de";var key="scrumboy.locale";if(localStorage.getItem(key))return;var languages=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language||""];var matches=languages.some(function(lang){lang=String(lang).toLowerCase().replace(/_/g,"-");return lang===locale||lang.indexOf(locale+"-")===0;});if(matches){localStorage.setItem(key,locale)}}catch(e){}})();
+</script>
   <style>
     :root {
       --ink: #e8e6e1;
@@ -1178,6 +1181,39 @@
     }
 
     @media (max-width: 920px) {
+      .title-figure {
+        --hero-mobile-mascot-size: clamp(72px, 12vw, 112px);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) var(--hero-mobile-mascot-size);
+        align-items: start;
+        column-gap: clamp(10px, 2.4vw, 18px);
+      }
+
+      .title-wrap {
+        min-width: 0;
+      }
+
+      .hero-mascot-frame {
+        display: block;
+        width: var(--hero-mobile-mascot-size);
+        max-width: none;
+        align-self: start;
+        justify-self: end;
+        transform: none;
+      }
+
+      .hero-mascot-frame .hero-mascot {
+        filter: grayscale(1) sepia(0.2) hue-rotate(162deg) saturate(0.3) brightness(0.92) contrast(1);
+      }
+
+      .hero-mascot {
+        width: 100%;
+        height: auto;
+        max-width: none;
+        max-height: none;
+        object-position: center;
+      }
+
       .intro,
       .section-head {
         grid-template-columns: 1fr;
@@ -1265,12 +1301,33 @@
         overflow-wrap: anywhere;
       }
 
-      .title-figure {
+      .title-accent {
         display: block;
+        max-width: calc(100% - var(--hero-mobile-mascot-size) - var(--hero-mobile-mascot-gap));
+      }
+
+      html.landing-hero-local .title-accent {
+        max-width: calc(100% - var(--hero-mobile-mascot-size) - var(--hero-mobile-mascot-gap));
+      }
+
+      .title-figure {
+        --hero-mobile-mascot-size: clamp(58px, 16vw, 82px);
+        --hero-mobile-mascot-gap: clamp(8px, 2.6vw, 14px);
+        display: block;
+        position: relative;
+      }
+
+      .title-wrap {
+        position: relative;
+        z-index: 1;
       }
 
       .hero-mascot-frame {
-        display: none;
+        position: absolute;
+        inset-block-start: .06em;
+        inset-inline-end: 0;
+        z-index: 2;
+        pointer-events: none;
       }
 
       .title-backdrop {
