@@ -130,4 +130,81 @@ describe("locale-select custom picker", () => {
       button.closest(".locale-picker")?.querySelector('[role="option"][aria-selected="true"]')?.getAttribute("data-locale"),
     ).toBe("de");
   });
+
+  it("keeps absolute positioning for non-auth pickers", async () => {
+    await setupI18n("en");
+    const localeSelect = await import("./locale-select.js");
+    document.body.innerHTML = localeSelect.renderPublicLocaleSelectHTML({ id: "testLocaleSelect" });
+    const button = document.getElementById("testLocaleSelect") as HTMLButtonElement;
+    localeSelect.bindPublicLocaleSelect(button);
+
+    const list = button.closest(".locale-picker")?.querySelector(".locale-picker__list") as HTMLUListElement;
+    button.click();
+
+    expect(list.hidden).toBe(false);
+    expect(list.style.position).toBe("");
+    expect(list.style.top).toBe("");
+    expect(list.style.left).toBe("");
+    expect(list.style.right).toBe("");
+    expect(list.style.minWidth).toBe("");
+    expect(list.style.zIndex).toBe("");
+  });
+
+  it("pins the open auth-scoped list with fixed positioning and clears inline styles on close", async () => {
+    const i18n = await import("./index.js");
+    await setupI18n("en");
+    const localeSelect = await import("./locale-select.js");
+    document.body.innerHTML = `
+      <div class="page page--auth">
+        ${localeSelect.renderPublicLocaleSelectHTML({ id: "testLocaleSelect", className: "auth-locale-select" })}
+      </div>
+    `;
+    const button = document.getElementById("testLocaleSelect") as HTMLButtonElement;
+    localeSelect.bindPublicLocaleSelect(button);
+
+    const list = button.closest(".locale-picker")?.querySelector(".locale-picker__list") as HTMLUListElement;
+    button.click();
+
+    expect(list.hidden).toBe(false);
+    expect(list.style.position).toBe("fixed");
+    expect(list.style.top).toMatch(/px$/);
+    expect(list.style.left || list.style.right).toMatch(/px$/);
+    expect(list.style.minWidth).toMatch(/px$/);
+    expect(list.style.zIndex).toBe("1000");
+    expect(list.querySelectorAll('[role="option"]').length).toBe(i18n.PUBLIC_LOCALES.length);
+
+    document.body.click();
+
+    expect(list.hidden).toBe(true);
+    expect(list.style.position).toBe("");
+    expect(list.style.top).toBe("");
+    expect(list.style.left).toBe("");
+    expect(list.style.right).toBe("");
+    expect(list.style.minWidth).toBe("");
+    expect(list.style.zIndex).toBe("");
+  });
+
+  it("renders all public locales when an auth-scoped picker opens inside an overflow:hidden wrapper", async () => {
+    const i18n = await import("./index.js");
+    await setupI18n("en");
+    const localeSelect = await import("./locale-select.js");
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "page page--auth";
+    wrapper.style.overflow = "hidden";
+    document.body.appendChild(wrapper);
+    wrapper.innerHTML = localeSelect.renderPublicLocaleSelectHTML({
+      id: "testLocaleSelect",
+      className: "auth-locale-select",
+    });
+
+    const button = document.getElementById("testLocaleSelect") as HTMLButtonElement;
+    localeSelect.bindPublicLocaleSelect(button);
+
+    const list = button.closest(".locale-picker")?.querySelector(".locale-picker__list") as HTMLUListElement;
+    button.click();
+
+    expect(list.style.position).toBe("fixed");
+    expect(list.querySelectorAll('[role="option"]').length).toBe(i18n.PUBLIC_LOCALES.length);
+  });
 });

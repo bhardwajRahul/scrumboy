@@ -1,5 +1,8 @@
 import { getLocale, isPublicLocale, publicLocaleOptions, setLocale, t, } from './index.js';
 const DEFAULT_LABEL_KEY = "settings.language.selectLabel";
+const PICKER_LIST_GAP_PX = 4;
+const PICKER_LIST_Z_INDEX = "1000";
+const pickerPositionListeners = new WeakMap();
 function escapeHTML(value) {
     return String(value)
         .replaceAll("&", "&amp;")
@@ -46,6 +49,64 @@ function isPickerOpen(button) {
     const list = getPickerList(button);
     return !!list && !list.hidden;
 }
+function isRtlDocument() {
+    return document.documentElement.dir === "rtl";
+}
+function shouldUseFixedPickerList(button) {
+    if (button.classList.contains("auth-locale-select")) {
+        return true;
+    }
+    return !!button.closest(".page--auth");
+}
+function positionPickerList(button) {
+    const list = getPickerList(button);
+    if (!list)
+        return;
+    const rect = button.getBoundingClientRect();
+    list.style.position = "fixed";
+    list.style.top = `${rect.bottom + PICKER_LIST_GAP_PX}px`;
+    list.style.minWidth = `${rect.width}px`;
+    list.style.zIndex = PICKER_LIST_Z_INDEX;
+    if (isRtlDocument()) {
+        list.style.left = "";
+        list.style.right = `${window.innerWidth - rect.right}px`;
+        return;
+    }
+    list.style.right = "";
+    list.style.left = `${rect.left}px`;
+}
+function clearPickerListPosition(button) {
+    const list = getPickerList(button);
+    if (!list)
+        return;
+    list.style.position = "";
+    list.style.top = "";
+    list.style.left = "";
+    list.style.right = "";
+    list.style.minWidth = "";
+    list.style.zIndex = "";
+}
+function detachPickerPositionListeners(button) {
+    const detach = pickerPositionListeners.get(button);
+    if (!detach)
+        return;
+    detach();
+    pickerPositionListeners.delete(button);
+}
+function attachPickerPositionListeners(button) {
+    detachPickerPositionListeners(button);
+    const onReposition = () => {
+        if (!isPickerOpen(button) || !shouldUseFixedPickerList(button))
+            return;
+        positionPickerList(button);
+    };
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    pickerPositionListeners.set(button, () => {
+        window.removeEventListener("resize", onReposition);
+        window.removeEventListener("scroll", onReposition, true);
+    });
+}
 function setPickerOpen(button, open) {
     const list = getPickerList(button);
     if (!button || !list)
@@ -54,9 +115,15 @@ function setPickerOpen(button, open) {
     button.setAttribute("aria-expanded", open ? "true" : "false");
     if (!open) {
         setHighlightedOption(button, null);
+        detachPickerPositionListeners(button);
+        clearPickerListPosition(button);
         return;
     }
     setHighlightedOption(button, getSelectedOption(button));
+    if (shouldUseFixedPickerList(button)) {
+        positionPickerList(button);
+        attachPickerPositionListeners(button);
+    }
 }
 function syncButtonFromOption(button, option) {
     const flag = button.querySelector(".locale-picker__flag");
@@ -122,6 +189,10 @@ export function syncPublicLocaleSelect(button) {
     syncButtonFromOption(button, selectedOption);
     if (!isPickerOpen(button)) {
         button.setAttribute("aria-expanded", "false");
+        return;
+    }
+    if (shouldUseFixedPickerList(button)) {
+        positionPickerList(button);
     }
 }
 async function selectLocaleOption(button, locale) {
