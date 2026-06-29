@@ -357,10 +357,12 @@ const JAPANESE_LANDING_STYLE_BLOCK = `
     }
 
     @media (max-width: 680px) {
+      html[lang="ja"] .title-accent,
       html[lang="ja"] .title-w-the,
       html[lang="ja"] .title-line2 {
-        display: inline;
+        display: block;
         white-space: nowrap;
+        overflow-wrap: normal;
       }
     }
 

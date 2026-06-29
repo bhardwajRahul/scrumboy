@@ -1867,6 +1867,7 @@ func assertLandingJapaneseHeroStyles(t *testing.T, locale, html string) {
 		`html[lang="ja"] .title-accent`,
 		`html[lang="ja"] .title-line2`,
 		"white-space: nowrap",
+		"overflow-wrap: normal",
 		"writing-mode: horizontal-tb",
 	} {
 		if !strings.Contains(html, want) {
