@@ -1067,6 +1067,7 @@ describe("auth view i18n", () => {
 
     expect(i18n.getLocale()).toBe("de");
     expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+    expect(document.cookie).toContain(`${i18n.LOCALE_STORAGE_KEY}=de`);
     expect(getAuthLocalePickerSelectedLocale()).toBe("de");
     expect(getAuthLocaleSelect().getAttribute("aria-label")).toBe("Sprache");
     expect(document.querySelector(".panel__title")?.textContent).toBe("Anmelden");

@@ -410,6 +410,7 @@ describe('settings language selector', () => {
 
       expect(i18n.getLocale()).toBe('de');
       expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe('de');
+      expect(document.cookie).toContain(`${i18n.LOCALE_STORAGE_KEY}=de`);
       expect(document.documentElement.lang).toBe('de');
       expect(document.documentElement.getAttribute('data-locale')).toBe('de');
       expect(document.getElementById('shellProbe')?.textContent).toBe('Shell-Text');

@@ -32,11 +32,24 @@ async function setupI18n(locale: "en" | "de" = "en") {
   return i18n;
 }
 
+function localeCookieValue(): string | null {
+  return document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith("scrumboy.locale="))
+    ?.slice("scrumboy.locale=".length) ?? null;
+}
+
+function clearLocaleCookieForTests(): void {
+  document.cookie = "scrumboy.locale=; Path=/; Max-Age=0";
+}
+
 describe("locale-select custom picker", () => {
   beforeEach(() => {
     vi.resetModules();
     document.body.innerHTML = "";
     localStorage.clear();
+    clearLocaleCookieForTests();
   });
 
   afterEach(async () => {
@@ -44,6 +57,7 @@ describe("locale-select custom picker", () => {
     i18n.resetI18nForTests();
     document.body.innerHTML = "";
     localStorage.clear();
+    clearLocaleCookieForTests();
     vi.restoreAllMocks();
   });
 
@@ -80,6 +94,7 @@ describe("locale-select custom picker", () => {
 
     expect(i18n.getLocale()).toBe("de");
     expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("de");
+    expect(localeCookieValue()).toBe("de");
     expect(button.querySelector(".locale-picker__label")?.textContent).toBe("Deutsch");
     expect((button.querySelector(".locale-picker__flag") as HTMLImageElement).getAttribute("src")).toBe("/assets/flags/de.svg");
   });
@@ -109,6 +124,7 @@ describe("locale-select custom picker", () => {
 
     expect(i18n.getLocale()).toBe("zh");
     expect(localStorage.getItem(i18n.LOCALE_STORAGE_KEY)).toBe("zh");
+    expect(localeCookieValue()).toBe("zh");
     expect(button.querySelector(".locale-picker__label")?.textContent).toBe("简体中文");
     expect((button.querySelector(".locale-picker__flag") as HTMLImageElement).getAttribute("src")).toBe("/assets/flags/cn.svg");
     expect(list.hidden).toBe(true);
