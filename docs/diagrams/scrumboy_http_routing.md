@@ -16,23 +16,33 @@ flowchart TD
   API -->|no| SpaH[handleSPA static and slug routes]
 
   ApiH --> RProj[routing_projects]
-  ApiH --> RBoard[routing_board]
+  ApiH --> RBoard[routing_board incl wall]
   ApiH --> RTodos[routing_todos]
   ApiH --> RAuth[routing_auth]
   ApiH --> RAdmin[routing_admin]
-  ApiH --> RWall[routing_board_wall]
   ApiH --> RImport[routing_import backup]
 ```
 
+Wall REST lives under **`/api/board/{slug}/wall`** via `routing_board_wall.go` (nested under board, not a top-level API namespace).
+
+## API namespaces (`routing.go`)
+
+Top-level `/api/*` segments: `projects`, `board`, `todos`, `auth`, `me`, `backup`, `import`, `user`, `admin`, `version`, `tags`, `dashboard`, `webhooks`, `push`.
+
+API lives under `/api/*` only; everything else falls through to embedded `web/dist` assets or slug canonicalization.
+
 ## SPA paths (`spa.go`)
 
-- `/` landing or projects list
+- `/` marketing landing (anonymous mode) or SPA `index.html` → client projects list (full mode)
 - `/dashboard` personal dashboard
 - `/{slug}` canonical project board URL
 - `/{slug}/t/{localId}` deep link to todo segment
-- `/anon` anonymous temporary board creation (anonymous mode)
-
-API lives under `/api/*` only; everything else falls through to embedded `web/dist` assets or slug canonicalization.
+- `/anon` creates anonymous temporary board and redirects to `/{slug}` (**all modes**)
+- `/temp` redirects to `/anon`
+- `/{locale}/` localized marketing landings (**anonymous mode only**)
+- `/p/{id}` legacy redirect to `/{slug}`
+- `mermaid-semantic-edges.json` served dynamically (not a static embed)
+- `sw.js` version-injected service worker
 
 ## Localized validation errors (SPA)
 

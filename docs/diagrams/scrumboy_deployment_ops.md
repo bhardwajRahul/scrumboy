@@ -21,7 +21,8 @@ flowchart TB
   App --> IdP
 ```
 
-- **Docker:** `docker compose up --build` maps `./data:/data` and sets `DATA_DIR=/data`, `SQLITE_PATH=/data/app.db` (see `docker-compose.yml`, `Dockerfile`).
+- **Docker (recommended):** pull `ghcr.io/markrai/scrumboy:latest`, publish `:8080`, mount a volume on `/data` (`DATA_DIR=/data`, `SQLITE_PATH=/data/app.db` are image defaults).
+- **Docker (local clone):** `docker compose up --build` from the repo maps `./data:/data` (see `docker-compose.yml`, `Dockerfile`).
 - **TLS:** terminate at the reverse proxy, or enable app TLS when both `SCRUMBOY_TLS_CERT` and `SCRUMBOY_TLS_KEY` exist.
 - **Bind:** `BIND_ADDR` defaults to `:8080`.
 
@@ -87,4 +88,4 @@ flowchart TB
 
 - One instance per database file (no horizontal scale-out on shared SQLite).
 - Suitable for small to medium teams on a single host; heavy concurrent write load is the main bottleneck.
-- Optional features (OIDC, VAPID push, webhooks, MCP) add env vars but are not required for core Kanban use.
+- Optional features (OIDC, VAPID push, webhooks, MCP, wall canvas, markdown/mermaid notes) add env vars but are not required for core Kanban use.

@@ -2,6 +2,13 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.21] - 2026-06-30
+
+### Documentation
+
+- **Architecture diagrams** - Refreshed Mermaid sources and self-contained viewer (`docs/diagrams/`) for June 30, 2026: GHCR image as recommended Docker path, 23-locale i18n and RTL (`fa`), anonymous apex landing and `/{locale}/` routes, auth overlays vs URL routes, wall REST under `/api/board/{slug}/wall`, dual SSE endpoints (`/api/me/realtime` and board events), todo-assigned publisher wiring, feature flags, and 2FA encryption-key scope.
+- **README** - Link to the architecture diagram viewer from the documentation section.
+
 ## [3.18.20] - 2026-06-29
 
 ### Added

@@ -54,8 +54,8 @@ sequenceDiagram
   I18n->>DOM: I18N_LOCALE_CHANGED on setLocale
 ```
 
-- `modules/i18n/index.ts` owns locale detection, catalog loading, `t(...)`, `hydrateI18n(...)`, `I18N_LOCALE_CHANGED`, RTL `dir` for `ar` and `ur`, and shared date/number formatting helpers.
-- **Public locales** (picker order by speaker count): `en`, `zh`, `hi`, `es`, `ar`, `fr`, `pt`, `id`, `ur`, `ru`, `de`, `ja`, `vi`, `tr`, `ko`, `it`, `th`. **`pseudo`** is supported for localhost/test QA only (not in the public picker).
+- `modules/i18n/index.ts` owns locale detection, catalog loading, `t(...)`, `hydrateI18n(...)`, `I18N_LOCALE_CHANGED`, RTL `dir` for `ar`, `ur`, and `fa`, and shared date/number formatting helpers.
+- **Public locales** (picker order by speaker count): `en`, `zh`, `hi`, `es`, `ar`, `fr`, `bn`, `pt`, `id`, `ur`, `ru`, `de`, `ja`, `sw`, `vi`, `tr`, `ko`, `fa`, `th`, `it`, `ms`, `pl`, `uk`. **`pseudo`** is supported for localhost/test QA only (not in the public picker).
 - Catalogs live in `modules/i18n/locales/*.json`, ship as `dist/i18n/locales/*.json`, and are verified for key parity by `scripts/verify-i18n-locales.mjs` during the web build.
 - `BOOTSTRAP_EN_CATALOG` embeds all `auth.*` and `errors.*` keys so sign-in, bootstrap, 2FA, and password-reset copy is available before the full catalog fetch completes.
 - **Language picker:** `locale-select.ts` renders a shared accessible listbox (keyboard navigation, click-outside close) with vendored 3x2 SVG flags from `assets/flags/`. Used on the auth topbar and in Settings → Customization.
@@ -72,10 +72,12 @@ sequenceDiagram
 
 | Path | View |
 |------|------|
-| `/` | projects list |
+| `/` | projects list (full mode); anonymous server mode serves marketing landing at `/` before SPA boot |
 | `/dashboard` | dashboard |
-| `/{slug}` | board |
+| `/{slug}` | board (`?openTodoId=` opens a todo) |
 | `/{slug}/t/{id}` | board with todo open |
-| `/auth/*` | login bootstrap reset |
+| `/auth/reset-password` | password reset form |
+
+Login, bootstrap, and 2FA render as **auth overlays** when unauthenticated (not separate URL routes). Anonymous-mode server routes `/{locale}/` marketing landings in `spa.go` (see `scrumboy_http_routing.md`).
 
 `theme.ts` applies dark default (`:root`) or `[data-theme="light"]`; density via `--ui-scale`. PWA: `sw.js` with version injected at server startup, `manifest.json`.
