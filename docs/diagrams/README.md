@@ -36,7 +36,7 @@ The viewer ports Scrumboy's semantic edge coloring (`mermaid-semantic-edges.js` 
 | File | Topic |
 |------|--------|
 | [scrumboy_overview.md](scrumboy_overview.md) | System context and major packages |
-| [scrumboy_deployment_ops.md](scrumboy_deployment_ops.md) | Docker, SQLite, backup, upgrade |
+| [scrumboy_deployment_ops.md](scrumboy_deployment_ops.md) | GHCR image, Docker, SQLite, backup, upgrade |
 | [scrumboy_http_routing.md](scrumboy_http_routing.md) | `ServeHTTP` request dispatch |
 | [scrumboy_bootstrap.md](scrumboy_bootstrap.md) | `main.go` startup and background jobs |
 | [scrumboy_data_model.md](scrumboy_data_model.md) | SQLite, migrations, `store` domains |
@@ -47,4 +47,4 @@ The viewer ports Scrumboy's semantic edge coloring (`mermaid-semantic-edges.js` 
 | [scrumboy_voiceflow.md](scrumboy_voiceflow.md) | Speech commands; UI localized, grammar English-centric |
 | [scrumboy_wall_canvas.md](scrumboy_wall_canvas.md) | Scrumbaby wall canvas |
 | [scrumboy_backup_import.md](scrumboy_backup_import.md) | Backup JSON and Trello import |
-| [scrumboy_frontend_spa.md](scrumboy_frontend_spa.md) | SPA router, state, i18n catalogs, locale picker, API error localization |
+| [scrumboy_frontend_spa.md](scrumboy_frontend_spa.md) | SPA router, state, 23-locale i18n, locale picker, API error localization |

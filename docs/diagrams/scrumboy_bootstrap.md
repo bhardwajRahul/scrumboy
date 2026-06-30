@@ -39,4 +39,6 @@ flowchart TB
   WH --> Worker[webhook worker goroutine]
 ```
 
-`NewServer` wires the SSE bridge, webhook queue plus worker, and push notifier into `eventbus.NewFanout` before serving traffic.
+`NewServer` wires the SSE bridge, webhook queue plus worker, and push notifier into `eventbus.NewFanout` before serving traffic. After `NewServer`, `main.go` calls `st.SetTodoAssignedPublisher(srv.PublishTodoAssigned)` to close the todo-assigned → eventbus loop.
+
+`httpapi.NewServer` also receives feature flags from config: `WallEnabled`, `MarkdownNotesEnabled`, and `MermaidNotesEnabled`.
