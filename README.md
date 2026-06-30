@@ -14,7 +14,8 @@
 ## Table of contents
 
 - [Quick Start](#quick-start)
-  - [Run with Docker](#run-with-docker)
+  - [Run the official Docker image](#run-the-official-docker-image)
+  - [Build locally from source](#build-locally-from-source)
   - [Run from source](#run-from-source)
 - [Optional Configuration](#optional-configuration)
   - [Environment variables](#environment-variables)
@@ -46,11 +47,53 @@ Runs in seconds. No setup required.
 
 No `.env` file, TLS certificates, or encryption key are required to start the app.
 
-### Run with Docker
+### Run the official Docker image
+
+Scrumboy is distributed as a container image on GitHub Container Registry:
+
+`ghcr.io/markrai/scrumboy:latest`
+
+**Docker run** (named volume for persistent SQLite data under `/data`):
+
+```bash
+docker run -d \
+  --name scrumboy \
+  -p 127.0.0.1:8080:8080 \
+  -v scrumboy-data:/data \
+  ghcr.io/markrai/scrumboy:latest
+```
+
+The image defaults to `DATA_DIR=/data` and `SQLITE_PATH=/data/app.db`. Mount a volume or host directory on `/data` so the database survives container recreation.
+
+**Docker Compose** (minimal example; save as `docker-compose.yml`):
+
+```yaml
+services:
+  scrumboy:
+    image: ghcr.io/markrai/scrumboy:latest
+    container_name: scrumboy
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+```
+
+```bash
+docker compose up -d
+```
+
+Open [http://localhost:8080](http://localhost:8080).
+
+### Build locally from source
+
+To build from a local clone instead of pulling the published image:
 
 ```bash
 docker compose up --build
 ```
+
+The repository's `docker-compose.yml` uses `build: .` and maps `./data` to `/data`.
 
 Open [http://localhost:8080](http://localhost:8080).
 
@@ -145,7 +188,7 @@ npm install
 npm run build
 ```
 
-Then run `docker compose up --build` or `go run ./cmd/scrumboy` again from the repository root.
+Then run `docker compose up --build` (local image build) or `go run ./cmd/scrumboy` again from the repository root.
 
 
 # Why Scrumboy?
