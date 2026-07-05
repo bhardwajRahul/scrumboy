@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -26,15 +27,17 @@ import (
 
 // fakeIdP simulates an OIDC provider for integration tests.
 type fakeIdP struct {
-	server     *httptest.Server
-	key        *rsa.PrivateKey
-	keyID      string
-	issuer     string
-	clientID   string
-	subject    string
-	email      string
-	emailVer   bool
-	name       string
+	server          *httptest.Server
+	key             *rsa.PrivateKey
+	keyID           string
+	issuer          string
+	discoveryIssuer string
+	idTokenIssuer   string
+	clientID        string
+	subject         string
+	email           string
+	emailVer        bool
+	name            string
 
 	mu     sync.Mutex
 	nonces map[string]string // auth code → nonce
@@ -67,14 +70,29 @@ func newFakeIdP(t *testing.T) *fakeIdP {
 
 func (f *fakeIdP) close() { f.server.Close() }
 
+func (f *fakeIdP) discoveryIssuerValue() string {
+	if f.discoveryIssuer != "" {
+		return f.discoveryIssuer
+	}
+	return f.issuer
+}
+
+func (f *fakeIdP) idTokenIssuerValue() string {
+	if f.idTokenIssuer != "" {
+		return f.idTokenIssuer
+	}
+	return f.issuer
+}
+
 func (f *fakeIdP) handleDiscovery(w http.ResponseWriter, r *http.Request) {
+	discoveryIssuer := f.discoveryIssuerValue()
 	disc := map[string]any{
-		"issuer":                 f.issuer,
-		"authorization_endpoint": f.issuer + "/authorize",
-		"token_endpoint":         f.issuer + "/token",
-		"jwks_uri":               f.issuer + "/jwks",
-		"response_types_supported": []string{"code"},
-		"subject_types_supported":  []string{"public"},
+		"issuer":                                discoveryIssuer,
+		"authorization_endpoint":                f.issuer + "/authorize",
+		"token_endpoint":                        f.issuer + "/token",
+		"jwks_uri":                              f.issuer + "/jwks",
+		"response_types_supported":              []string{"code"},
+		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -133,7 +151,7 @@ func (f *fakeIdP) handleToken(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now()
 	claims := map[string]any{
-		"iss":            f.issuer,
+		"iss":            f.idTokenIssuerValue(),
 		"sub":            f.subject,
 		"aud":            f.clientID,
 		"exp":            now.Add(10 * time.Minute).Unix(),
@@ -275,6 +293,67 @@ func TestOIDCLoginRedirect(t *testing.T) {
 	}
 	if !strings.Contains(loc, "code_challenge_method=S256") {
 		t.Errorf("expected PKCE S256 in authorize URL, got %q", loc)
+	}
+}
+
+func TestOIDCTrailingSlashIssuerLoginStoresCanonicalIdentity(t *testing.T) {
+	idp := newFakeIdP(t)
+	defer idp.close()
+	idp.discoveryIssuer = idp.issuer + "/"
+	idp.idTokenIssuer = idp.issuer + "/"
+
+	ts, st, cleanup := newTestOIDCServerWithStore(t, idp)
+	defer cleanup()
+
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar}
+
+	resp, err := client.Get(ts.URL + "/api/auth/oidc/login?return_to=/dashboard")
+	if err != nil {
+		t.Fatalf("oidc login: %v", err)
+	}
+	resp.Body.Close()
+
+	if finalURL := resp.Request.URL.String(); strings.Contains(finalURL, "oidc_error") {
+		t.Fatalf("expected successful login, got redirect to %s", finalURL)
+	}
+
+	ctx := context.Background()
+	u, err := st.GetUserByOIDCIdentity(ctx, idp.issuer, idp.subject)
+	if err != nil {
+		t.Fatalf("expected canonical OIDC identity lookup to succeed: %v", err)
+	}
+	if u.Email != idp.email {
+		t.Fatalf("canonical identity email = %q, want %q", u.Email, idp.email)
+	}
+
+	_, err = st.GetUserByOIDCIdentity(ctx, idp.issuer+"/", idp.subject)
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("expected no slash-form identity row, got err=%v", err)
+	}
+}
+
+func TestOIDCTrailingSlashDiscoveryRejectsNonSlashIDTokenIssuer(t *testing.T) {
+	idp := newFakeIdP(t)
+	defer idp.close()
+	idp.discoveryIssuer = idp.issuer + "/"
+	idp.idTokenIssuer = idp.issuer
+
+	ts, cleanup := newTestOIDCServer(t, idp)
+	defer cleanup()
+
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar}
+
+	resp, err := client.Get(ts.URL + "/api/auth/oidc/login?return_to=/")
+	if err != nil {
+		t.Fatalf("oidc login: %v", err)
+	}
+	resp.Body.Close()
+
+	finalURL := resp.Request.URL.String()
+	if !strings.Contains(finalURL, "oidc_error=token") {
+		t.Fatalf("expected token error for mismatched ID token issuer, got %s", finalURL)
 	}
 }
 
@@ -454,4 +533,3 @@ func TestOIDCAutoLinkExistingUser(t *testing.T) {
 		t.Fatalf("second login failed: %s", resp2.Request.URL.String())
 	}
 }
-

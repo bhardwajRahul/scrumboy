@@ -17,10 +17,10 @@ import (
 
 // Config holds the validated, canonical OIDC settings.
 type Config struct {
-	IssuerCanonical  string // normalized once at config load
-	ClientID         string
-	ClientSecret     string
-	RedirectURL      string // absolute callback URL
+	IssuerCanonical   string // normalized once at config load
+	ClientID          string
+	ClientSecret      string
+	RedirectURL       string // absolute callback URL
 	LocalAuthDisabled bool
 }
 
@@ -29,7 +29,7 @@ type Service struct {
 	cfg Config
 
 	mu       sync.Mutex
-	provider *gooidc.Provider  // lazy; nil until first successful discovery
+	provider *gooidc.Provider // lazy; nil until first successful discovery
 	verifier *gooidc.IDTokenVerifier
 
 	states *stateStore
@@ -54,17 +54,9 @@ func (s *Service) ensureProvider(ctx context.Context) (*gooidc.Provider, *gooidc
 		return s.provider, s.verifier, nil
 	}
 
-	p, err := gooidc.NewProvider(ctx, s.cfg.IssuerCanonical)
+	p, err := discoverProvider(ctx, s.cfg.IssuerCanonical)
 	if err != nil {
-		// Some IdPs (e.g. Authentik) advertise an issuer that differs from our
-		// normalized (slash-stripped) issuer only by a trailing slash, which
-		// go-oidc's strict issuer check rejects. Retry once, trusting the exact
-		// issuer the provider uses (its ID token iss carries the slash too).
-		slashCtx := gooidc.InsecureIssuerURLContext(ctx, s.cfg.IssuerCanonical+"/")
-		p, err = gooidc.NewProvider(slashCtx, s.cfg.IssuerCanonical)
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("oidc discovery failed for %q: %w", s.cfg.IssuerCanonical, err)
+		return nil, nil, err
 	}
 
 	s.provider = p
@@ -72,6 +64,23 @@ func (s *Service) ensureProvider(ctx context.Context) (*gooidc.Provider, *gooidc
 		ClientID: s.cfg.ClientID,
 	})
 	return s.provider, s.verifier, nil
+}
+
+// discoverProvider tries the canonical issuer first, then exactly the
+// trailing-slash variant. Both attempts use normal go-oidc issuer validation.
+func discoverProvider(ctx context.Context, issuer string) (*gooidc.Provider, error) {
+	p, err := gooidc.NewProvider(ctx, issuer)
+	if err == nil {
+		return p, nil
+	}
+
+	slashIssuer := issuer + "/"
+	p, slashErr := gooidc.NewProvider(ctx, slashIssuer)
+	if slashErr == nil {
+		return p, nil
+	}
+
+	return nil, fmt.Errorf("oidc discovery failed for %q (also tried %q: %v): %w", issuer, slashIssuer, slashErr, err)
 }
 
 func (s *Service) oauth2Config(provider *gooidc.Provider) *oauth2.Config {
