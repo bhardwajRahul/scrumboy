@@ -56,6 +56,14 @@ func (s *Service) ensureProvider(ctx context.Context) (*gooidc.Provider, *gooidc
 
 	p, err := gooidc.NewProvider(ctx, s.cfg.IssuerCanonical)
 	if err != nil {
+		// Some IdPs (e.g. Authentik) advertise an issuer that differs from our
+		// normalized (slash-stripped) issuer only by a trailing slash, which
+		// go-oidc's strict issuer check rejects. Retry once, trusting the exact
+		// issuer the provider uses (its ID token iss carries the slash too).
+		slashCtx := gooidc.InsecureIssuerURLContext(ctx, s.cfg.IssuerCanonical+"/")
+		p, err = gooidc.NewProvider(slashCtx, s.cfg.IssuerCanonical)
+	}
+	if err != nil {
 		return nil, nil, fmt.Errorf("oidc discovery failed for %q: %w", s.cfg.IssuerCanonical, err)
 	}
 
