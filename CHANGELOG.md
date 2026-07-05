@@ -2,6 +2,20 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** unless noted below.
 
+## [3.18.25] - 2026-07-05
+
+### Fixed
+
+- **OIDC trailing-slash issuer** - Discovery accepts the normalized configured issuer or exactly the same issuer with one trailing slash (e.g. Authentik) without disabling issuer validation; stored OIDC identities still use the canonical configured issuer.
+
+### Documentation
+
+- **OIDC** - Updated issuer matching, discovery, and troubleshooting notes for trailing-slash providers.
+
+### Tests
+
+- **OIDC** - Discovery fallback, trailing-slash login identity storage, and rejection of mismatched ID-token issuers.
+
 ## [3.18.24] - 2026-07-01
 
 ### Added

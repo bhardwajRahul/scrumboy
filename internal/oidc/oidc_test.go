@@ -1,9 +1,126 @@
 package oidc
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestDiscoverProvider(t *testing.T) {
+	tests := []struct {
+		name             string
+		advertisedIssuer func(base string) string
+		wantErr          bool
+		wantRequests     int
+	}{
+		{
+			name: "canonical issuer succeeds first attempt",
+			advertisedIssuer: func(base string) string {
+				return base
+			},
+			wantRequests: 1,
+		},
+		{
+			name: "trailing slash issuer succeeds second attempt",
+			advertisedIssuer: func(base string) string {
+				return base + "/"
+			},
+			wantRequests: 2,
+		},
+		{
+			name: "mismatched host fails",
+			advertisedIssuer: func(base string) string {
+				return "http://evil.example.com"
+			},
+			wantErr:      true,
+			wantRequests: 2,
+		},
+		{
+			name: "mismatched scheme fails",
+			advertisedIssuer: func(base string) string {
+				return "https://" + strings.TrimPrefix(base, "http://")
+			},
+			wantErr:      true,
+			wantRequests: 2,
+		},
+		{
+			name: "mismatched path fails",
+			advertisedIssuer: func(base string) string {
+				return base + "/other"
+			},
+			wantErr:      true,
+			wantRequests: 2,
+		},
+		{
+			name: "unrelated issuer fails",
+			advertisedIssuer: func(base string) string {
+				return "https://attacker.example/realms/x"
+			},
+			wantErr:      true,
+			wantRequests: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var requests atomic.Int32
+			var baseURL string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if r.URL.Path != "/.well-known/openid-configuration" {
+					http.NotFound(w, r)
+					return
+				}
+
+				issuer := tt.advertisedIssuer(baseURL)
+				endpointBase := strings.TrimRight(issuer, "/")
+				discovery := map[string]any{
+					"issuer":                                issuer,
+					"authorization_endpoint":                endpointBase + "/authorize",
+					"token_endpoint":                        endpointBase + "/token",
+					"jwks_uri":                              endpointBase + "/jwks",
+					"response_types_supported":              []string{"code"},
+					"subject_types_supported":               []string{"public"},
+					"id_token_signing_alg_values_supported": []string{"RS256"},
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(discovery)
+			}))
+			defer srv.Close()
+			baseURL = srv.URL
+
+			provider, err := discoverProvider(context.Background(), srv.URL)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected discovery error, got nil")
+				}
+				msg := err.Error()
+				if !strings.Contains(msg, `oidc discovery failed for "`) {
+					t.Fatalf("expected discovery prefix in error, got %q", msg)
+				}
+				if !strings.Contains(msg, srv.URL+"/") {
+					t.Fatalf("expected trailing-slash variant in error, got %q", msg)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("discoverProvider: %v", err)
+				}
+				if provider == nil {
+					t.Fatal("expected provider, got nil")
+				}
+			}
+
+			if got := int(requests.Load()); got != tt.wantRequests {
+				t.Fatalf("discovery requests = %d, want %d", got, tt.wantRequests)
+			}
+		})
+	}
+}
 
 func TestSanitizeReturnTo(t *testing.T) {
 	tests := []struct {

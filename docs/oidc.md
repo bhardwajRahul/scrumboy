@@ -66,13 +66,13 @@ All token handling happens on the server. The browser never sees access tokens o
 
 **Identity**
 
-- Identity is tracked by `(issuer, subject)` — the provider's `iss` + `sub` claims.
+- Identity is tracked by `(issuer, subject)` — Scrumboy's normalized configured issuer + the token's `sub` claim.
 - Email is not used as a join key. Changing your email at the provider does not break the link; the row in Scrumboy keeps the email from first login until you change it in-app or via admin.
 - There is no account linking between local password accounts and OIDC accounts.
 
 **First user / ownership**
 
-- If no users exist when an OIDC login succeeds, that user becomes the instance owner — but only if the token's issuer matches `SCRUMBOY_OIDC_ISSUER` exactly.
+- If no users exist when an OIDC login succeeds, that user becomes the instance owner. Discovery accepts only the configured issuer after normalization, or that same issuer with one trailing slash.
 - If a local password account was created first via bootstrap, subsequent OIDC users are created as normal users.
 
 **Display name**
@@ -101,7 +101,7 @@ SCRUMBOY_OIDC_ISSUER=https://auth.example.com/realms/myrealm
 SCRUMBOY_OIDC_ISSUER=https://auth.example.com/realms/myrealm/
 ```
 
-The issuer in the ID token's `iss` claim must match the normalized value character-for-character.
+Discovery first tries the normalized configured issuer, then exactly the same issuer with one trailing slash. Once discovery succeeds, ID-token validation uses the discovered issuer normally. Some providers, such as Authentik, advertise and sign tokens with the slash form. No other issuer variations are accepted, and stored OIDC identities use the normalized configured issuer.
 
 **Redirect URL**
 
@@ -119,7 +119,7 @@ OIDC works behind nginx, Caddy, Traefik, etc. as long as:
 
 **Discovery**
 
-Scrumboy fetches the provider's discovery document (`{issuer}/.well-known/openid-configuration`) on the first login attempt, not at startup. The app starts normally even if the provider is unreachable; OIDC is unavailable until discovery succeeds.
+Scrumboy fetches the provider's discovery document (`{issuer}/.well-known/openid-configuration`) on the first login attempt, not at startup. Discovery first validates the normalized configured issuer, then exactly the same issuer with one trailing slash. The app starts normally even if the provider is unreachable; OIDC is unavailable until discovery succeeds.
 
 ---
 
@@ -144,7 +144,7 @@ Discovery failed. Possible causes:
 
 - Provider is unreachable from the Scrumboy server.
 - `SCRUMBOY_OIDC_ISSUER` points to the wrong URL (wrong realm, wrong host).
-- The issuer field in the discovery document does not match `SCRUMBOY_OIDC_ISSUER` after normalization.
+- The issuer field in the discovery document is not `SCRUMBOY_OIDC_ISSUER` after normalization, or exactly that same issuer with one trailing slash.
 
 Check the server logs for a line like:
 
@@ -162,7 +162,7 @@ oidc: discovery/login error: oidc discovery failed for "...": ...
 The ID token was rejected. Common causes:
 
 - Token audience (`aud`) does not match `SCRUMBOY_OIDC_CLIENT_ID`.
-- Issuer in the token does not match `SCRUMBOY_OIDC_ISSUER` (after normalization).
+- Issuer in the token does not match the issuer accepted during discovery.
 - Token has expired in transit (clock skew between server and provider).
 - Wrong `client_secret`.
 
