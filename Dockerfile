@@ -1,11 +1,18 @@
-FROM golang:1.22-alpine AS build
+# Pin the build stage to the native BUILDPLATFORM so the Go toolchain always
+# runs on the host arch. With CGO disabled the build cross-compiles to the
+# requested TARGETARCH natively -- no QEMU emulation of the compiler, so multi
+# -arch builds stay fast.
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS build
 
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/scrumboy ./cmd/scrumboy
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /out/scrumboy ./cmd/scrumboy
 
 FROM alpine:3.20
 
