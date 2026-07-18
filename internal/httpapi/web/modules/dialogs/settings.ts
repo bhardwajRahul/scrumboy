@@ -2625,7 +2625,7 @@ function showSetScrumboyPasswordDialog(localAuthEnabled: boolean): void {
     <form method="dialog" class="dialog__form" id="setScrumboyPasswordForm">
       <div class="dialog__header">
         <div class="dialog__title" data-i18n-text="settings.profile.authentication.setPassword">Set Scrumboy password</div>
-        <button class="btn btn--ghost" type="button" id="setScrumboyPasswordClose" data-i18n-aria-label="common.close">âœ•</button>
+        <button class="btn btn--ghost" type="button" id="setScrumboyPasswordClose" data-i18n-aria-label="common.close">✕</button>
       </div>
       <div class="muted" data-i18n-text="settings.profile.authentication.setPasswordDescription">Your recent SSO reauthentication authorizes one first-password change for five minutes.</div>
       ${!localAuthEnabled ? `<div role="alert" data-i18n-text="settings.profile.authentication.localDisabledSet">The password will be stored, but it cannot be used until the operator re-enables local authentication.</div>` : ""}
@@ -2676,7 +2676,7 @@ function showConnectSSODialog(): void {
   dialog.className = "dialog";
   dialog.innerHTML = `
     <form method="dialog" class="dialog__form" id="connectSSOForm">
-      <div class="dialog__header"><div class="dialog__title" data-i18n-text="settings.profile.authentication.connectSSO">Connect SSO</div><button class="btn btn--ghost" type="button" id="connectSSOClose" data-i18n-aria-label="common.close">âœ•</button></div>
+      <div class="dialog__header"><div class="dialog__title" data-i18n-text="settings.profile.authentication.connectSSO">Connect SSO</div><button class="btn btn--ghost" type="button" id="connectSSOClose" data-i18n-aria-label="common.close">✕</button></div>
       <div class="muted" data-i18n-text="settings.profile.authentication.connectDescription">Confirm your current Scrumboy password, then reauthenticate with SSO. The verified SSO email must match your Scrumboy email.</div>
       <label class="field"><div class="field__label" data-i18n-text="settings.profile.authentication.currentPassword">Current Scrumboy password</div><input class="input" id="connectSSOPassword" type="password" autocomplete="current-password" required /></label>
       ${u.twoFactorEnabled ? `<label class="field"><div class="field__label" data-i18n-text="settings.profile.authentication.twoFactorCode">Authenticator or recovery code</div><input class="input" id="connectSSO2FA" type="text" autocomplete="one-time-code" required /></label>` : ""}

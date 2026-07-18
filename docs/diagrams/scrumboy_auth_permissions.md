@@ -30,12 +30,19 @@ flowchart LR
   Existing[Existing linked user]
   Provision[Provision only when verified email is unowned]
   Connect[Explicit Connect SSO from authenticated settings]
+  SetPassword[Set first Scrumboy password from settings]
+  StepUp[Sensitive OIDC step-up]
+  Grant[Session-bound first-password grant]
+  LocalPW[Write first local password]
 
   Local --> TOTP
   OIDCFlow --> Identity
   Identity --> Existing
   Identity --> Provision
   Connect --> OIDCFlow
+  SetPassword --> StepUp
+  StepUp --> Grant
+  Grant --> LocalPW
   Bootstrap --> Session[CreateSession cookie]
   TOTP --> Session
   Existing --> Session
