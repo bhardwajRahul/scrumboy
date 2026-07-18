@@ -1,6 +1,35 @@
 # Changelog
 
-> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** unless noted below.
+> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below.
+
+## [3.22.0] - 2026-07-18
+
+### Added
+
+- **Resource-bound remote MCP OAuth** - `/mcp/rpc` is the sole OAuth protected resource. Authorization codes, access tokens, and refresh tokens are bound to the trusted canonical `<origin>/mcp/rpc` URI throughout authorization, exchange, refresh, storage, and validation. Invalid client, redirect, PKCE, or resource attempts no longer consume otherwise valid grants.
+- **Path-derived protected-resource discovery** - `/.well-known/oauth-protected-resource/mcp/rpc` publishes the canonical resource and authorization server. The root RFC 9728 endpoint remains a compatibility alias with the same identity, and authorization-server metadata advertises `protected_resources`.
+- **Streamable HTTP transport normalization** - `/mcp/rpc` now enforces Origin, method, JSON media, Accept, JSON-RPC message classification, and stable MCP protocol-version rules. Accepted notifications return empty 202 responses; authenticated GET returns 405 because Scrumboy remains stateless and JSON-only.
+
+### Changed
+
+- **Endpoint-specific MCP authentication** - Legacy `/mcp` continues to accept cookies and static `sb_…` tokens but no longer accepts OAuth access tokens or emits OAuth challenges. `/mcp/rpc` accepts cookies, static tokens, and Scrumboy OAuth tokens bound exactly to its canonical resource. Agora remains cookie/static only and cannot act as a deputy for `/mcp/rpc` OAuth tokens.
+- **OAuth artifact migration** - Migration `057_bind_oauth_tokens_to_mcp_resource.sql` invalidates existing unbound authorization codes and tokens without deleting DCR client registrations. OAuth clients must authorize once again; cookies and static API tokens are unaffected.
+- **MCP protocol versions** - Streamable HTTP supports `2025-03-26`, `2025-06-18`, and `2025-11-25`; the old `2024-11-05` version is no longer advertised on this transport.
+
+### Fixed
+
+- **Native client OAuth discovery** - Full-mode unauthenticated `/mcp/rpc` requests now return an empty HTTP 401 with a path-derived RFC 9728 `WWW-Authenticate` challenge. Invalid Bearers add `error="invalid_token"`; transport authentication failures never masquerade as successful JSON-RPC tool results.
+- **MCP JSON-RPC lifecycle and parsing** - `/mcp/rpc` handles `ping`, requires nonempty `clientInfo.version` on `initialize`, rejects non-object/array `params`, and echoes recoverable request IDs on Invalid Request errors.
+- **OAuth token exchange atomicity** - Authorization-code and refresh-token exchanges consume/revoke the grant and insert the new token pair in one database transaction.
+- **OAuth form parse errors** - Malformed authorize/token form bodies return `invalid_request`; `invalid_target` is reserved for resource parameter problems after a successful parse.
+
+### Documentation
+
+- **Remote client and deployment acceptance** - Updated MCP/OAuth/API guidance to configure native clients directly with `/mcp/rpc`; added a provider-neutral release checklist using Keycloak only as Vega's documented upstream OIDC provider.
+
+### Tests
+
+- **Security and compatibility boundary** - Added trusted-origin/resource canonicalization, migration invalidation, non-burning concurrent grant redemption, OAuth continuation, metadata/challenge, transport, Origin, protocol-version, Agora, legacy `/mcp`, cookie/static, wrong-resource, and no-cookie-fallback coverage.
 
 ## [3.21.0] - 2026-07-18
 

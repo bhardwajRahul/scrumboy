@@ -16,6 +16,7 @@ import (
 	"scrumboy/internal/httpapi/ratelimit"
 	"scrumboy/internal/mailer"
 	"scrumboy/internal/oidc"
+	"scrumboy/internal/publicorigin"
 	"scrumboy/internal/store"
 	"scrumboy/internal/version"
 )
@@ -79,6 +80,7 @@ type Options struct {
 	// overrides the request-derived origin for reset links (see resetBaseURL)
 	// and is the canonical OAuth discovery issuer.
 	PublicBaseURL string
+	PublicOrigin  *publicorigin.Resolver
 
 	// TrustProxy (SCRUMBOY_TRUST_PROXY). When true, clientIP honors
 	// X-Forwarded-For for authentication and OAuth rate-limit IP keys. Default
@@ -128,6 +130,7 @@ type Server struct {
 
 	publicBaseURL string // SCRUMBOY_PUBLIC_BASE_URL; reset-link origin and canonical OAuth issuer when set
 	trustProxy    bool   // SCRUMBOY_TRUST_PROXY; gates forwarded client IP and OAuth origin signals
+	publicOrigin  *publicorigin.Resolver
 
 	webFS               fs.FS
 	fileSrv             http.Handler
@@ -177,10 +180,9 @@ type storeAPI interface {
 	// OAuth 2.1 authorization server (RFC 7591/6749/7636/7009) for MCP clients.
 	CreateOAuthClient(ctx context.Context, clientID, clientName, redirectURI string) (store.OAuthClient, error)
 	GetOAuthClient(ctx context.Context, clientID string) (store.OAuthClient, error)
-	CreateOAuthAuthCode(ctx context.Context, clientID string, userID int64, redirectURI, codeChallenge, codeChallengeMethod string) (string, error)
-	ConsumeOAuthAuthCode(ctx context.Context, rawCode string) (store.OAuthAuthCode, error)
-	IssueOAuthTokenPair(ctx context.Context, clientID string, userID int64) (store.OAuthTokenPair, error)
-	ConsumeOAuthRefreshToken(ctx context.Context, rawToken string) (clientID string, userID int64, err error)
+	CreateOAuthAuthCode(ctx context.Context, clientID string, userID int64, redirectURI, codeChallenge, codeChallengeMethod, resource string) (string, error)
+	RedeemOAuthAuthCodeAndIssue(ctx context.Context, rawCode, expectedClientID, expectedRedirectURI, expectedResource, codeVerifier string) (store.OAuthTokenPair, error)
+	ConsumeOAuthRefreshTokenAndIssue(ctx context.Context, rawToken, expectedClientID, expectedResource string) (store.OAuthTokenPair, error)
 	RevokeOAuthToken(ctx context.Context, rawToken, hint string) error
 
 	GetUserByOIDCIdentity(ctx context.Context, issuer, subject string) (store.User, error)
@@ -463,6 +465,11 @@ func NewServer(st storeAPI, opts Options) *Server {
 	if opts.EncryptionKey != nil {
 		encKey = opts.EncryptionKey
 	}
+	publicBaseURL := config.NormalizeBaseURL(opts.PublicBaseURL)
+	publicOrigin := opts.PublicOrigin
+	if publicOrigin == nil {
+		publicOrigin = publicorigin.New(publicBaseURL, opts.TrustProxy)
+	}
 
 	return &Server{
 		store:                       st,
@@ -497,8 +504,9 @@ func NewServer(st storeAPI, opts Options) *Server {
 		totpLimiter:                 totpLimiter,
 		recoveryCodeLimiter:         recoveryCodeLimiter,
 		smtpConfigured:              smtpConfigured,
-		publicBaseURL:               config.NormalizeBaseURL(opts.PublicBaseURL),
+		publicBaseURL:               publicBaseURL,
 		trustProxy:                  opts.TrustProxy,
+		publicOrigin:                publicOrigin,
 		webFS:                       webFS,
 		fileSrv:                     http.FileServer(http.FS(webFS)),
 		indexHTML:                   indexHTML,
@@ -551,7 +559,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == "/.well-known/oauth-protected-resource" {
+	if r.URL.Path == "/.well-known/oauth-protected-resource" || r.URL.Path == publicorigin.MCPResourceMetadataPath {
 		s.handleOAuthProtectedResourceMetadata(w, r)
 		return
 	}

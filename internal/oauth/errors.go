@@ -16,6 +16,7 @@ const (
 	ErrAccessDenied         = "access_denied"
 	ErrUnsupportedResponse  = "unsupported_response_type"
 	ErrServerError          = "server_error"
+	ErrInvalidTarget        = "invalid_target"
 )
 
 // Error codes from RFC 7591 §3.2.2 (dynamic client registration).

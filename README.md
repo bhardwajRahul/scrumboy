@@ -285,18 +285,26 @@ curl -X POST http://localhost:8080/mcp \
 
 ### MCP (JSON-RPC) for AI agents
 
-Scrumboy exposes a **Model Context Protocol (MCP) compatible JSON-RPC endpoint** for AI agents (Claude, etc.) and MCP-compatible clients.
+Scrumboy exposes a standards-based, JSON-only Streamable HTTP endpoint for native MCP clients such as Cursor and Claude Code.
 
 **Endpoint:** `POST /mcp/rpc`
 
 This is separate from the `/mcp` HTTP endpoint above and follows **JSON-RPC 2.0** (`initialize`, `tools/list`, `tools/call`, etc.). See **[`docs/mcp.md`](docs/mcp.md)** for tools, auth, response shapes, and examples; **[`API.md`](API.md)** for the full HTTP/MCP behavior reference.
+
+Native clients must be configured directly with `/mcp/rpc`. It is the sole OAuth protected resource; `/mcp` remains the legacy Scrumboy `{tool,input}` API.
+
+```bash
+claude mcp add --transport http scrumboy https://scrumboy.example.com/mcp/rpc
+```
 
 #### Example: `initialize`
 
 ```bash
 curl -X POST http://localhost:8080/mcp/rpc \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer sb_your_token_here" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
 ```
 
 #### Example: list tools
@@ -304,6 +312,9 @@ curl -X POST http://localhost:8080/mcp/rpc \
 ```bash
 curl -X POST http://localhost:8080/mcp/rpc \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-11-25" \
+  -H "Authorization: Bearer sb_your_token_here" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 ```
 
@@ -312,6 +323,8 @@ curl -X POST http://localhost:8080/mcp/rpc \
 ```bash
 curl -X POST http://localhost:8080/mcp/rpc \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-11-25" \
   -H "Authorization: Bearer sb_your_token_here" \
   -d '{
     "jsonrpc":"2.0",
@@ -331,7 +344,8 @@ curl -X POST http://localhost:8080/mcp/rpc \
 
 - Compatible with MCP clients that support **HTTP JSON-RPC** to this URL.
 - Some MCP clients expect **stdio**-based servers - those are **not** supported here.
-- Authentication works via **session cookie** or **Bearer** token (same rules as `/mcp`).
+- `/mcp/rpc` accepts a **session cookie**, a static **`sb_…` Bearer** token, or a Scrumboy OAuth token bound to this exact resource. `/mcp` accepts cookies and static tokens only.
+- In full mode, unauthenticated `/mcp/rpc` requests receive an empty 401 with RFC 9728 protected-resource discovery metadata.
 - Compatible Codex/Claude-style agent workspaces that support local or manual
   plugin loading can use the Scrumboy Board Operator plugin package in
   [`plugins/scrumboy-board-operator`](plugins/scrumboy-board-operator). The
@@ -477,7 +491,8 @@ Invariants (e.g. canonical URL `/{slug}`, no UI links to `/p/{id}`) are enforced
 
 - **Architecture diagrams:** [`docs/diagrams/`](docs/diagrams/) - Mermaid sources and self-contained viewer (`serve-diagrams.bat` or `python serve.py` in that folder, then open `http://127.0.0.1:8775/`)
 - **MCP (HTTP tools + JSON-RPC):** [`docs/mcp.md`](docs/mcp.md) - tool catalog, auth, legacy vs `/mcp/rpc`, examples (agents & automation). See also [`API.md`](API.md) for exhaustive MCP HTTP detail.
-- **OAuth 2.1 for MCP clients:** [`docs/oauth.md`](docs/oauth.md) - discovery, Dynamic Client Registration, PKCE, authorize/token/revoke flow for clients like Claude Code's `--transport http` OAuth connect.
+- **OAuth 2.1 for MCP clients:** [`docs/oauth.md`](docs/oauth.md) - resource discovery, Dynamic Client Registration, PKCE, and resource-bound authorize/token/revoke flows for native clients such as Cursor and Claude Code.
+- **Remote MCP/OAuth release acceptance:** [`docs/mcp-oauth-acceptance.md`](docs/mcp-oauth-acceptance.md) - Vega/Keycloak evidence record plus Cursor, Claude Code, cookie/static, legacy, and negative-resource gates.
 - **Agent plugin package:** [`plugins/scrumboy-board-operator`](plugins/scrumboy-board-operator) - local/manual plugin metadata, board-operator Skill, and seed eval cases for MCP/Agoragentic agent workflows.
 - **PWA / Web Push (VAPID):** [`docs/pwa.md`](docs/pwa.md) - keys, subscriber contact, post-login auto-subscribe when VAPID is configured, Settings opt-out, tradeoffs.
 - **Roles and permissions:** [`docs/roles_and_permissions.md`](docs/roles_and_permissions.md) - project roles, backend authorization, anonymous boards.

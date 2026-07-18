@@ -360,6 +360,7 @@ func TestOAuthOIDCContinuationConsentApproveRefererOnly(t *testing.T) {
 		"code_challenge_method": {"S256"},
 		"state":                 {state},
 		"action":                {"approve"},
+		"resource":              {ts.URL + "/mcp/rpc"},
 	}
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/oauth/authorize", strings.NewReader(form.Encode()))
 	if err != nil {
@@ -405,6 +406,7 @@ func TestOAuthExpiredConsentPOSTReturnsToCompleteAuthorizeGET(t *testing.T) {
 		"code_challenge_method": {"S256"},
 		"state":                 {state},
 		"action":                {"approve"},
+		"resource":              {ts.URL + "/mcp/rpc"},
 	}
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/oauth/authorize", strings.NewReader(form.Encode()))
 	if err != nil {

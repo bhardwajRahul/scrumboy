@@ -21,6 +21,7 @@ import (
 	"scrumboy/internal/migrate"
 	"scrumboy/internal/oidc"
 	"scrumboy/internal/projectcolor"
+	"scrumboy/internal/publicorigin"
 	"scrumboy/internal/store"
 	"scrumboy/internal/tlsredirect"
 )
@@ -120,7 +121,8 @@ func main() {
 	if maxB <= 0 {
 		maxB = 1 << 20
 	}
-	mcpH := mcp.New(st, mcp.Options{Mode: cfg.ScrumboyMode})
+	publicOrigin := publicorigin.New(cfg.PublicBaseURL, cfg.TrustProxy)
+	mcpH := mcp.New(st, mcp.Options{Mode: cfg.ScrumboyMode, PublicOrigin: publicOrigin})
 	srv := httpapi.NewServer(st, httpapi.Options{
 		Logger:               logger,
 		MaxRequestBody:       cfg.MaxRequestBodyBytes,
@@ -146,6 +148,7 @@ func main() {
 		SMTPTLSMode:          cfg.SMTPTLSMode,
 		SMTPDebug:            cfg.SMTPDebug,
 		PublicBaseURL:        cfg.PublicBaseURL,
+		PublicOrigin:         publicOrigin,
 		TrustProxy:           cfg.TrustProxy,
 	})
 	st.SetTodoAssignedPublisher(srv.PublishTodoAssigned)
