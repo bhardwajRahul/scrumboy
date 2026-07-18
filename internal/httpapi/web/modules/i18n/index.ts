@@ -93,7 +93,7 @@ const BOOTSTRAP_EN_CATALOG: MessageCatalog = {
   "auth.fields.password.placeholder": "Password",
   "auth.forgot.backToSignIn": "Back to sign in",
   "auth.forgot.failed": "Could not request a password reset.",
-  "auth.forgot.helper": "Enter your email to reset your Scrumboy password. SSO users recover their identity-provider credentials through their organization’s SSO provider.",
+  "auth.forgot.helper": "Enter your email to reset your Scrumboy password. If you sign in with SSO, reset your SSO credentials through your organization’s identity provider.",
   "auth.forgot.link": "Forgot your Scrumboy password?",
   "auth.forgot.submit": "Send reset link",
   "auth.forgot.success": "If an account exists for that email address, a password reset email has been sent.",

@@ -1419,9 +1419,9 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
 	const effectiveLocal = !!u?.hasLocalPassword && getLocalAuthEnabled();
 	const effectiveSSO = !!u?.oidcLinked && getOidcEnabled();
 	const ownerWarning = u?.systemRole === "owner" && !effectiveLocal && !effectiveSSO
-	  ? `<div class="settings-section__description" role="alert" data-i18n-text="settings.profile.authentication.warning.noEffectiveOwner">No effective owner login method is available. Existing sessions may be temporary; host recovery is required.</div>`
+	  ? `<div class="settings-section__description" role="alert" data-i18n-text="settings.profile.authentication.warning.noEffectiveOwner">This owner account has no effective sign-in method under the current authentication configuration. The current session may be temporary; host recovery may be required.</div>`
 	  : u?.systemRole === "owner" && !effectiveLocal && effectiveSSO && !getLocalAuthEnabled()
-	    ? `<div class="settings-section__description" role="alert" data-i18n-text="settings.profile.authentication.warning.localDisabledOwner">This owner relies on SSO while local authentication is disabled. Recovery requires host access, recover-owner, and re-enabling local authentication.</div>`
+	    ? `<div class="settings-section__description" role="alert" data-i18n-text="settings.profile.authentication.warning.localDisabledOwner">This owner relies on SSO while local authentication is disabled. If SSO becomes unavailable, recovery requires host access, recover-owner, and re-enabling local authentication.</div>`
 	    : u?.systemRole === "owner" && !effectiveLocal && effectiveSSO
 	      ? `<div class="settings-section__description" role="alert" data-i18n-text="settings.profile.authentication.warning.providerOnly">This owner relies on the external SSO provider. Set a local recovery password to prepare for an outage.</div>`
 	    : "";

@@ -90,7 +90,7 @@
   "auth.fields.password.placeholder": "[!! Password !!]",
   "auth.forgot.backToSignIn": "[!! Back to sign in !!]",
   "auth.forgot.failed": "[!! Could not request a password reset. !!]",
-  "auth.forgot.helper": "[!! Enter your email to reset your Scrumboy password. SSO users recover their identity-provider credentials through their organization’s SSO provider. !!]",
+  "auth.forgot.helper": "[!! Enter your email to reset your Scrumboy password. If you sign in with SSO, reset your SSO credentials through your organization’s identity provider. !!]",
   "auth.forgot.link": "[!! Forgot your Scrumboy password? !!]",
   "auth.forgot.submit": "[!! Send reset link !!]",
   "auth.forgot.success": "[!! If an account exists for that email address, a password reset email has been sent. !!]",
@@ -987,7 +987,7 @@
   "settings.profile.authentication.setPassword": "[!! Set Scrumboy password !!]",
   "settings.profile.authentication.connectSSO": "[!! Connect SSO !!]",
   "settings.profile.authentication.connectRequiresLocal": "[!! Set or recover a Scrumboy password before connecting the current SSO provider. !!]",
-  "settings.profile.authentication.warning.noEffectiveOwner": "[!! No effective owner login method is available. Existing sessions may be temporary; host recovery is required. !!]",
+  "settings.profile.authentication.warning.noEffectiveOwner": "[!! This owner account has no effective sign-in method under the current authentication configuration. The current session may be temporary; host recovery may be required. !!]",
   "settings.profile.authentication.warning.providerOnly": "[!! This owner relies on the external SSO provider. Set a local recovery password to prepare for an outage. !!]",
   "settings.profile.authentication.localDisabled": "[!! A local password is stored, but local login is disabled by the operator. !!]",
   "settings.profile.authentication.localDisabledSet": "[!! The password will be stored, but it cannot be used until the operator re-enables local authentication. !!]",
@@ -1005,5 +1005,5 @@
   "settings.profile.authentication.linkFailed": "[!! Could not connect SSO. !!]",
   "settings.profile.authentication.linked": "[!! SSO connected. !!]",
   "settings.users.table.authentication": "[!! Authentication !!]",
-  "settings.profile.authentication.warning.localDisabledOwner": "[!! This owner relies on SSO while local authentication is disabled. Recovery requires host access, recover-owner, and re-enabling local authentication. !!]"
+  "settings.profile.authentication.warning.localDisabledOwner": "[!! This owner relies on SSO while local authentication is disabled. If SSO becomes unavailable, recovery requires host access, recover-owner, and re-enabling local authentication. !!]"
 }

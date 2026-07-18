@@ -208,7 +208,7 @@ async function setupSettingsView(options: {
   return { i18n, settings, mutations };
 }
 
-describe('settings phase 5 i18n (profile / users / backup / customization)', () => {
+describe('settings i18n (profile / users / backup / customization)', () => {
   beforeEach(() => {
     vi.resetModules();
     installBaseDOM();
@@ -272,6 +272,22 @@ describe('settings phase 5 i18n (profile / users / backup / customization)', () 
 	  expect(document.getElementById('connectSSOBtn')).toBeNull();
 	  expect(document.getElementById('settingsTabContent')?.textContent).toContain('Connect SSO');
 	  expect(document.getElementById('settingsTabContent')?.textContent).toContain('Set or recover a Scrumboy password');
+	});
+
+	it('scopes the no-effective-method warning to this owner account', async () => {
+	  const strandedOwner = { id: 1, name: 'Owner', email: 'owner@example.com', systemRole: 'owner', twoFactorEnabled: false, hasLocalPassword: false, oidcLinked: false };
+	  await setupSettingsView({ activeTab: 'profile', user: strandedOwner, oidcEnabled: true, localAuthEnabled: true });
+	  const text = document.getElementById('settingsTabContent')?.textContent ?? '';
+	  expect(text).toContain('This owner account has no effective sign-in method');
+	  expect(text).not.toContain('No effective owner login method is available');
+	});
+
+	it('makes the local-auth-disabled owner warning conditional on SSO becoming unavailable', async () => {
+	  const ssoOnlyOwner = { id: 1, name: 'Owner', email: 'owner@example.com', systemRole: 'owner', twoFactorEnabled: false, hasLocalPassword: false, oidcLinked: true };
+	  await setupSettingsView({ activeTab: 'profile', user: ssoOnlyOwner, oidcEnabled: true, localAuthEnabled: false });
+	  const text = document.getElementById('settingsTabContent')?.textContent ?? '';
+	  expect(text).toContain('If SSO becomes unavailable');
+	  expect(text).not.toMatch(/disabled\. Recovery requires host access/);
 	});
 
 	it('relocalizes first-password dialog without clearing typed secrets and releases it on close', async () => {
