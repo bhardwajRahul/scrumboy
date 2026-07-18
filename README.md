@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.19.0-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.20.0-blue" alt="version" />
   <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   <img src="https://img.shields.io/badge/i18n-23%20languages-yellow" alt="i18n" />
   <a href="https://github.com/markrai/scrumboy/actions/workflows/ci.yml">
@@ -386,8 +386,8 @@ None of these are required for basic startup.
 | `SCRUMBOY_SMTP_FROM` | (empty) - Envelope + header `From`, e.g. `Scrumboy <no-reply@example.com>`. Required with Host. |
 | `SCRUMBOY_SMTP_TLS_MODE` | `starttls` (or `implicit`, `none`) - see [`docs/smtp.md`](docs/smtp.md). |
 | `SCRUMBOY_SMTP_DEBUG` | (empty) - Set to `1` to log SMTP send attempts (never credentials/body). |
-| `SCRUMBOY_PUBLIC_BASE_URL` | (empty) - **Required for self-service password-reset email.** Canonical public origin (e.g. `https://scrumboy.example.com`). Must be absolute `http`/`https` with hostname; no path, query, fragment, or userinfo. Missing or invalid → self-service emails disabled (generic API response only). Also used for admin-generated reset links when set. See [`docs/smtp.md`](docs/smtp.md#reset-link-url). |
-| `SCRUMBOY_TRUST_PROXY` | (empty) - Set to `1`/`true`/`on`/`yes` to honor `X-Forwarded-For` for auth rate-limit IP keys. Default off: use `RemoteAddr` only. Enable only behind a reverse proxy that overwrites/strips client XFF. |
+| `SCRUMBOY_PUBLIC_BASE_URL` | (empty) - **Required for self-service password-reset email.** Canonical public origin (e.g. `https://scrumboy.example.com`). Must be absolute `http`/`https` with hostname; no path, query, fragment, or userinfo. Missing or invalid → self-service emails disabled (generic API response only). Also used for admin-generated reset links and as the canonical OAuth discovery issuer when set. For **OAuth**, non-loopback issuers must be **HTTPS**; plain `http` is accepted only for loopback (`localhost` / `127.0.0.0/8` / `::1`). See [`docs/smtp.md`](docs/smtp.md#reset-link-url) and [`docs/oauth.md`](docs/oauth.md#issuer--discovery-origin). |
+| `SCRUMBOY_TRUST_PROXY` | (empty) - Set to `1`/`true`/`on`/`yes` to honor `X-Forwarded-For` for auth/OAuth rate-limit IP keys and (for OAuth issuer discovery) trusted `X-Forwarded-Proto` / `X-Forwarded-Host` / `CF-Visitor`. Default off: use `RemoteAddr` only for IP keys. Enable only behind a reverse proxy that **overwrites or strips client-supplied** values for all of those headers — not only XFF. When enabled, OAuth issuer discovery requires either `SCRUMBOY_PUBLIC_BASE_URL` or a proxy-provided `X-Forwarded-Host` together with a forwarded HTTPS indication; `X-Forwarded-Proto` alone (or multi-value forwarded scheme/host fields) results in 503. |
 
 `docker-compose.yml` overrides some of these (e.g. `SQLITE_BUSY_TIMEOUT_MS=5000`).
 
@@ -467,6 +467,7 @@ Invariants (e.g. canonical URL `/{slug}`, no UI links to `/p/{id}`) are enforced
 
 - **Architecture diagrams:** [`docs/diagrams/`](docs/diagrams/) - Mermaid sources and self-contained viewer (`serve-diagrams.bat` or `python serve.py` in that folder, then open `http://127.0.0.1:8775/`)
 - **MCP (HTTP tools + JSON-RPC):** [`docs/mcp.md`](docs/mcp.md) - tool catalog, auth, legacy vs `/mcp/rpc`, examples (agents & automation). See also [`API.md`](API.md) for exhaustive MCP HTTP detail.
+- **OAuth 2.1 for MCP clients:** [`docs/oauth.md`](docs/oauth.md) - discovery, Dynamic Client Registration, PKCE, authorize/token/revoke flow for clients like Claude Code's `--transport http` OAuth connect.
 - **Agent plugin package:** [`plugins/scrumboy-board-operator`](plugins/scrumboy-board-operator) - local/manual plugin metadata, board-operator Skill, and seed eval cases for MCP/Agoragentic agent workflows.
 - **PWA / Web Push (VAPID):** [`docs/pwa.md`](docs/pwa.md) - keys, subscriber contact, post-login auto-subscribe when VAPID is configured, Settings opt-out, tradeoffs.
 - **Roles and permissions:** [`docs/roles_and_permissions.md`](docs/roles_and_permissions.md) - project roles, backend authorization, anonymous boards.

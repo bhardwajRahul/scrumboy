@@ -1,6 +1,30 @@
 # Changelog
 
-> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** unless noted below.
+> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** unless noted below.
+
+## [3.20.0] - 2026-07-15
+
+### Added
+
+- **OAuth 2.1 authorization server for MCP clients** - Full-mode support for MCP clients that use automatic OAuth discovery, PKCE, and Dynamic Client Registration (e.g. Claude Code's `claude mcp add --transport http`). Adds RFC 8414/9728 discovery (`/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`), RFC 7591 `POST /oauth/register` (public clients only), consent-gated `/oauth/authorize`, `/oauth/token` (authorization code + refresh rotation), and RFC 7009 `/oauth/revoke`. OAuth access tokens are accepted as Bearer credentials on `/mcp` and `/mcp/rpc` additively alongside existing static API tokens and session cookies. Migration `055_add_oauth_authorization_server.sql` adds `oauth_clients`, `oauth_auth_codes`, `oauth_access_tokens`, and `oauth_refresh_tokens`.
+
+### Changed
+
+- **`SCRUMBOY_TRUST_PROXY` consumers** - Per-IP auth rate limiting now also covers OAuth DCR (`POST /oauth/register`) and `POST /oauth/token`. As before, `X-Forwarded-For` is honored only when TrustProxy is enabled.
+- **OAuth HTML `Referrer-Policy`** - Login, consent, and error pages send `Referrer-Policy: same-origin` (not `no-referrer`) so classic browser form Approve POSTs that omit `Origin` still carry a same-origin `Referer` for consent CSRF validation, while cross-origin navigations continue to withhold `Referer`. Exact-origin matching remains required, so sibling subdomains remain rejected.
+
+### Fixed
+
+- **OAuth consent Approve in browsers that omit `Origin`** - `Referrer-Policy: no-referrer` had suppressed the `Referer` fallback used by `oauthConsentOriginAllowed`, so legitimate consent submissions could fail with “Invalid request origin.”
+
+### Documentation
+
+- **OAuth for MCP** - Added `docs/oauth.md` (discovery, DCR, PKCE, authorize/token/revoke, token lifetimes, deliberately unimplemented items); linked from `README.md` and `docs/mcp.md`. Documents consent Origin/Referer CSRF checks and `Referrer-Policy: same-origin`.
+
+### Tests
+
+- **OAuth** - Happy-path register → authorize → consent → token → MCP call; PKCE mismatch; expired/replayed auth codes; redirect URI mismatch; anonymous-mode 404s; refresh rotation/reuse rejection; revoked-token rejection by MCP; DCR validation (malformed redirect URI, loopback HTTP allowed); strict JSON Content-Type on DCR; DCR rate limit ignores spoofed XFF by default; consent Origin/Referer matrix (including Referer-only Approve and missing-header rejection); OIDC continuation with Referer-only consent approval.
+- **MCP** - Invalid Bearer (including OAuth-shaped tokens) does not fall back to the session cookie.
 
 ## [3.19.0] - 2026-07-14
 

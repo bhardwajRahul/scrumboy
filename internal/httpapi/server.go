@@ -27,10 +27,12 @@ type Options struct {
 	ScrumboyMode        string // "full" or "anonymous"
 	// DataDir is the instance data directory (SQLite lives here; also used for per-user wallpaper files).
 	// Empty disables wallpaper upload/serve (returns 503 for those routes).
-	DataDir       string
-	AuthRateLimit *ratelimit.Limiter
-	MCPHandler    http.Handler
-	AgoraHandler  http.Handler
+	DataDir             string
+	AuthRateLimit       *ratelimit.Limiter
+	OAuthDCRRateLimit   *ratelimit.Limiter
+	OAuthTokenRateLimit *ratelimit.Limiter
+	MCPHandler          http.Handler
+	AgoraHandler        http.Handler
 	// EncryptionKey is the HMAC secret for password reset tokens. Required for admin password reset.
 	// Set from SCRUMBOY_ENCRYPTION_KEY (base64). If unset, password reset endpoints return 503.
 	EncryptionKey []byte
@@ -74,11 +76,15 @@ type Options struct {
 
 	// PublicBaseURL (SCRUMBOY_PUBLIC_BASE_URL). Required for self-service
 	// password-reset emails; missing or invalid values fail closed. When set,
-	// overrides the request-derived origin for reset links (see resetBaseURL).
+	// overrides the request-derived origin for reset links (see resetBaseURL)
+	// and is the canonical OAuth discovery issuer.
 	PublicBaseURL string
 
 	// TrustProxy (SCRUMBOY_TRUST_PROXY). When true, clientIP honors
-	// X-Forwarded-For for auth rate limits. Default false (RemoteAddr only).
+	// X-Forwarded-For for authentication and OAuth rate-limit IP keys. Default
+	// false (RemoteAddr only). Enable only behind a reverse proxy that
+	// overwrites or strips client-supplied XFF. Without PublicBaseURL, OAuth
+	// discovery also requires forwarded HTTPS and an explicit X-Forwarded-Host.
 	TrustProxy bool
 }
 
@@ -101,7 +107,9 @@ type Server struct {
 	mailCancel          context.CancelFunc
 	mailDone            <-chan struct{} // closed once the mail worker's shutdown flush completes; nil if SMTP isn't configured
 
-	authRateLimit *ratelimit.Limiter
+	authRateLimit       *ratelimit.Limiter
+	oauthDCRRateLimit   *ratelimit.Limiter
+	oauthTokenRateLimit *ratelimit.Limiter
 
 	encryptionKey []byte        // for password reset tokens; nil if not configured
 	oidcService   *oidc.Service // nil when OIDC is not configured
@@ -111,8 +119,8 @@ type Server struct {
 
 	smtpConfigured bool // Host+port+From statically valid; gates request-password-reset email sending
 
-	publicBaseURL string // SCRUMBOY_PUBLIC_BASE_URL; empty disables self-service reset email (see resetBaseURL)
-	trustProxy    bool   // SCRUMBOY_TRUST_PROXY; when true, clientIP honors X-Forwarded-For
+	publicBaseURL string // SCRUMBOY_PUBLIC_BASE_URL; reset-link origin and canonical OAuth issuer when set
+	trustProxy    bool   // SCRUMBOY_TRUST_PROXY; gates forwarded client IP and OAuth origin signals
 
 	webFS               fs.FS
 	fileSrv             http.Handler
@@ -157,6 +165,15 @@ type storeAPI interface {
 	CreateUserAPIToken(ctx context.Context, userID int64, name *string) (id int64, plaintext string, createdAt time.Time, err error)
 	ListUserAPITokens(ctx context.Context, userID int64) ([]store.APITokenMeta, error)
 	RevokeUserAPIToken(ctx context.Context, userID, tokenID int64) error
+
+	// OAuth 2.1 authorization server (RFC 7591/6749/7636/7009) for MCP clients.
+	CreateOAuthClient(ctx context.Context, clientID, clientName, redirectURI string) (store.OAuthClient, error)
+	GetOAuthClient(ctx context.Context, clientID string) (store.OAuthClient, error)
+	CreateOAuthAuthCode(ctx context.Context, clientID string, userID int64, redirectURI, codeChallenge, codeChallengeMethod string) (string, error)
+	ConsumeOAuthAuthCode(ctx context.Context, rawCode string) (store.OAuthAuthCode, error)
+	IssueOAuthTokenPair(ctx context.Context, clientID string, userID int64) (store.OAuthTokenPair, error)
+	ConsumeOAuthRefreshToken(ctx context.Context, rawToken string) (clientID string, userID int64, err error)
+	RevokeOAuthToken(ctx context.Context, rawToken, hint string) error
 
 	GetUserByOIDCIdentity(ctx context.Context, issuer, subject string) (store.User, error)
 	GetUserByEmail(ctx context.Context, email string) (store.User, error)
@@ -372,6 +389,14 @@ func NewServer(st storeAPI, opts Options) *Server {
 	if authRateLimit == nil {
 		authRateLimit = ratelimit.New(10, time.Minute)
 	}
+	oauthDCRRateLimit := opts.OAuthDCRRateLimit
+	if oauthDCRRateLimit == nil {
+		oauthDCRRateLimit = ratelimit.New(10, time.Minute)
+	}
+	oauthTokenRateLimit := opts.OAuthTokenRateLimit
+	if oauthTokenRateLimit == nil {
+		oauthTokenRateLimit = ratelimit.New(60, time.Minute)
+	}
 	hub := NewHub(defaultSubscriberBuffer)
 	sseBridgeConsumer := newSSEBridge(hub)
 	whQueue := newWebhookQueue(logger)
@@ -435,6 +460,8 @@ func NewServer(st storeAPI, opts Options) *Server {
 		mailCancel:                  mailCancel,
 		mailDone:                    mailDone,
 		authRateLimit:               authRateLimit,
+		oauthDCRRateLimit:           oauthDCRRateLimit,
+		oauthTokenRateLimit:         oauthTokenRateLimit,
 		encryptionKey:               encKey,
 		oidcService:                 opts.OIDCService,
 		passwordResetAdminLimiter:   passwordResetAdminLimiter,
@@ -491,6 +518,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if s.mcpHandler != nil && (r.URL.Path == "/mcp" || strings.HasPrefix(r.URL.Path, "/mcp/")) {
 		s.mcpHandler.ServeHTTP(w, r)
+		return
+	}
+
+	if r.URL.Path == "/.well-known/oauth-protected-resource" {
+		s.handleOAuthProtectedResourceMetadata(w, r)
+		return
+	}
+	if r.URL.Path == "/.well-known/oauth-authorization-server" {
+		s.handleOAuthASMetadata(w, r)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/oauth/") {
+		s.handleOAuth(w, r)
 		return
 	}
 

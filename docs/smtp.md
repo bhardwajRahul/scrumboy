@@ -251,4 +251,3 @@ Confirmed working end-to-end against a live Scrumboy instance (bootstrap → req
 - `[docs/vapid.md](vapid.md)` - the parallel optional-feature model this design mirrors (config gate, startup log states, partial-config handling).
 - `[FAQ.md](../FAQ.md)` - [Do I need to configure SMTP? What happens if I don't?](../FAQ.md#do-i-need-to-configure-smtp-what-happens-if-i-dont); [I configured SMTP - why don't I see Forgot password?](../FAQ.md#i-configured-smtp---why-dont-i-see-forgot-password).
 - `[README.md](../README.md#config)` - env variable table.
-
