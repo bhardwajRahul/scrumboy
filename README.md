@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
   <img src="https://img.shields.io/badge/i18n-23%20languages-yellow" alt="i18n" />
   <a href="https://github.com/markrai/scrumboy/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/markrai/scrumboy/ci.yml?branch=main&label=tests" alt="tests" />
+    <img src="https://github.com/markrai/scrumboy/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" />
   </a>
 </p>
 
