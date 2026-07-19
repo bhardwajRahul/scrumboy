@@ -362,19 +362,32 @@ func TestJSONRPC_NotificationWithInvalidParamsRejected(t *testing.T) {
 	defer cleanup()
 
 	client := newStatelessClient(ts)
-	for _, params := range []any{123, nil} {
-		resp, out := doJSONRPC(t, client, ts.URL, map[string]any{
-			"jsonrpc": "2.0",
-			"method":  "notifications/initialized",
-			"params":  params,
+	for _, tc := range []struct {
+		name   string
+		method string
+		params any
+	}{
+		{name: "known scalar", method: "notifications/initialized", params: 123},
+		{name: "known null", method: "notifications/initialized", params: nil},
+		{name: "unknown scalar", method: "notifications/example", params: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resp, out := doJSONRPC(t, client, ts.URL, map[string]any{
+				"jsonrpc": "2.0",
+				"method":  tc.method,
+				"params":  tc.params,
+			})
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("status=%d, want 400", resp.StatusCode)
+			}
+			errObj, ok := out["error"].(map[string]any)
+			if !ok || errObj["code"] != float64(-32600) {
+				t.Fatalf("response=%+v, want InvalidRequest", out)
+			}
+			if id, present := out["id"]; !present || id != nil {
+				t.Fatalf("id=%v present=%v, want explicit null", id, present)
+			}
 		})
-		if resp.StatusCode == http.StatusAccepted {
-			t.Fatalf("params=%v accepted as notification; want reject", params)
-		}
-		errObj, ok := out["error"].(map[string]any)
-		if !ok || errObj["code"] != float64(-32600) {
-			t.Fatalf("params=%v response=%+v, want InvalidRequest", params, out)
-		}
 	}
 }
 
@@ -1056,8 +1069,12 @@ func TestJSONRPC_ToolsCall_WithoutID(t *testing.T) {
 		},
 	})
 
-	if resp.StatusCode != http.StatusAccepted || out != nil {
-		t.Fatalf("tools/call notification status=%d body=%v, want empty 202", resp.StatusCode, out)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("tools/call without id status=%d body=%v, want 400", resp.StatusCode, out)
+	}
+	errObj, ok := out["error"].(map[string]any)
+	if !ok || errObj["code"] != float64(-32600) {
+		t.Fatalf("tools/call without id body=%v, want InvalidRequest", out)
 	}
 }
 

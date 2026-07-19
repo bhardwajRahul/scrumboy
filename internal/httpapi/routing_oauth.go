@@ -232,6 +232,7 @@ type authorizeParams struct {
 	State               string
 	Resource            string
 	ResourceCount       int
+	DuplicateParameter  string
 }
 
 func parseAuthorizeParams(r *http.Request) (authorizeParams, error) {
@@ -239,20 +240,58 @@ func parseAuthorizeParams(r *http.Request) (authorizeParams, error) {
 		return authorizeParams{}, err
 	}
 	resources := r.Form["resource"]
-	resource := ""
-	if len(resources) == 1 {
-		resource = resources[0]
-	}
 	return authorizeParams{
-		ResponseType:        r.FormValue("response_type"),
-		ClientID:            r.FormValue("client_id"),
-		RedirectURI:         r.FormValue("redirect_uri"),
-		CodeChallenge:       r.FormValue("code_challenge"),
-		CodeChallengeMethod: r.FormValue("code_challenge_method"),
-		State:               r.FormValue("state"),
-		Resource:            resource,
+		ResponseType:        oauthSingleValue(r.Form, "response_type"),
+		ClientID:            oauthSingleValue(r.Form, "client_id"),
+		RedirectURI:         oauthSingleValue(r.Form, "redirect_uri"),
+		CodeChallenge:       oauthSingleValue(r.Form, "code_challenge"),
+		CodeChallengeMethod: oauthSingleValue(r.Form, "code_challenge_method"),
+		State:               oauthSingleValue(r.Form, "state"),
+		Resource:            oauthSingleValue(r.Form, "resource"),
 		ResourceCount:       len(resources),
+		DuplicateParameter: oauthDuplicateParameter(r.Form,
+			"response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state"),
 	}, nil
+}
+
+func oauthSingleValue(values url.Values, name string) string {
+	if len(values[name]) != 1 {
+		return ""
+	}
+	return values[name][0]
+}
+
+func oauthDuplicateParameter(values url.Values, names ...string) string {
+	for _, name := range names {
+		if len(values[name]) > 1 {
+			return name
+		}
+	}
+	return ""
+}
+
+func parseOAuthFormBody(r *http.Request, definedParameters ...string) (url.Values, error) {
+	contentTypes := r.Header.Values("Content-Type")
+	if len(contentTypes) != 1 {
+		return nil, errors.New("Content-Type must be application/x-www-form-urlencoded")
+	}
+	mediaType, _, err := mime.ParseMediaType(contentTypes[0])
+	if err != nil || !strings.EqualFold(mediaType, "application/x-www-form-urlencoded") {
+		return nil, errors.New("Content-Type must be application/x-www-form-urlencoded")
+	}
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return nil, errors.New("malformed query string")
+	}
+	for _, name := range definedParameters {
+		if _, present := query[name]; present {
+			return nil, errors.New("OAuth parameters must be supplied in the form body")
+		}
+	}
+	if err := r.ParseForm(); err != nil {
+		return nil, errors.New("malformed request body")
+	}
+	return r.PostForm, nil
 }
 
 func oauthAuthorizeRequestURI(params authorizeParams) string {
@@ -287,6 +326,10 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "malformed request body")
 		return
 	}
+	if params.DuplicateParameter == "client_id" || params.DuplicateParameter == "redirect_uri" {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "duplicate OAuth parameter")
+		return
+	}
 	ctx := s.requestContext(r)
 
 	client, err := s.store.GetOAuthClient(ctx, params.ClientID)
@@ -304,6 +347,10 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	// From here on redirect_uri is trusted (exact match to the registered
 	// client), so remaining validation failures redirect with error params.
+	if params.DuplicateParameter != "" {
+		s.redirectOAuthError(w, r, params.RedirectURI, oauth.ErrInvalidRequest, "OAuth parameters must occur at most once", params.State)
+		return
+	}
 	if params.ResourceCount != 1 {
 		s.redirectOAuthError(w, r, params.RedirectURI, oauth.ErrInvalidTarget, "exactly one resource parameter is required", params.State)
 		return
@@ -402,6 +449,8 @@ func (s *Server) handleOAuthAuthorizeSubmit(w http.ResponseWriter, r *http.Reque
 // handleOAuthToken implements the RFC 6749 §4.1.3/§6 token endpoint for the
 // authorization_code and refresh_token grants.
 func (s *Server) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 	if s.mode == "anonymous" {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
 		return
@@ -414,30 +463,34 @@ func (s *Server) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
 		oauth.WriteJSON(w, http.StatusTooManyRequests, oauth.ErrInvalidRequest, "too many attempts; try again later")
 		return
 	}
-
-	w.Header().Set("Cache-Control", "no-store")
-	if err := r.ParseForm(); err != nil {
-		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "malformed request body")
+	form, err := parseOAuthFormBody(r,
+		"grant_type", "code", "redirect_uri", "client_id", "code_verifier", "refresh_token", "resource")
+	if err != nil {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "request must use an application/x-www-form-urlencoded body")
+		return
+	}
+	if duplicate := oauthDuplicateParameter(form, "grant_type", "code", "redirect_uri", "client_id", "code_verifier", "refresh_token"); duplicate != "" {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "OAuth parameters must occur at most once")
 		return
 	}
 	ctx := s.requestContext(r)
 
-	switch r.FormValue("grant_type") {
+	switch form.Get("grant_type") {
 	case "authorization_code":
-		s.handleOAuthTokenAuthCode(w, r, ctx)
+		s.handleOAuthTokenAuthCode(w, r, ctx, form)
 	case "refresh_token":
-		s.handleOAuthTokenRefresh(w, r, ctx)
+		s.handleOAuthTokenRefresh(w, r, ctx, form)
 	default:
 		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrUnsupportedGrantType, "unsupported grant_type")
 	}
 }
 
-func (s *Server) handleOAuthTokenAuthCode(w http.ResponseWriter, r *http.Request, ctx context.Context) {
-	code := r.FormValue("code")
-	redirectURI := r.FormValue("redirect_uri")
-	clientID := r.FormValue("client_id")
-	codeVerifier := r.FormValue("code_verifier")
-	resource, ok := s.oauthTokenResource(w, r)
+func (s *Server) handleOAuthTokenAuthCode(w http.ResponseWriter, r *http.Request, ctx context.Context, form url.Values) {
+	code := form.Get("code")
+	redirectURI := form.Get("redirect_uri")
+	clientID := form.Get("client_id")
+	codeVerifier := form.Get("code_verifier")
+	resource, ok := s.oauthTokenResource(w, r, form)
 	if !ok {
 		return
 	}
@@ -464,10 +517,10 @@ func (s *Server) handleOAuthTokenAuthCode(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (s *Server) handleOAuthTokenRefresh(w http.ResponseWriter, r *http.Request, ctx context.Context) {
-	refreshToken := r.FormValue("refresh_token")
-	clientID := r.FormValue("client_id")
-	resource, ok := s.oauthTokenResource(w, r)
+func (s *Server) handleOAuthTokenRefresh(w http.ResponseWriter, r *http.Request, ctx context.Context, form url.Values) {
+	refreshToken := form.Get("refresh_token")
+	clientID := form.Get("client_id")
+	resource, ok := s.oauthTokenResource(w, r, form)
 	if !ok {
 		return
 	}
@@ -492,12 +545,8 @@ func (s *Server) handleOAuthTokenRefresh(w http.ResponseWriter, r *http.Request,
 	})
 }
 
-func (s *Server) oauthTokenResource(w http.ResponseWriter, r *http.Request) (string, bool) {
-	if err := r.ParseForm(); err != nil {
-		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "malformed request body")
-		return "", false
-	}
-	values := r.Form["resource"]
+func (s *Server) oauthTokenResource(w http.ResponseWriter, r *http.Request, form url.Values) (string, bool) {
+	values := form["resource"]
 	if len(values) != 1 {
 		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidTarget, "exactly one resource parameter is required")
 		return "", false
@@ -526,8 +575,17 @@ func (s *Server) handleOAuthRevoke(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 		return
 	}
-	token := r.FormValue("token")
-	hint := r.FormValue("token_type_hint")
+	form, err := parseOAuthFormBody(r, "token", "token_type_hint")
+	if err != nil {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "request must use an application/x-www-form-urlencoded body")
+		return
+	}
+	if duplicate := oauthDuplicateParameter(form, "token", "token_type_hint"); duplicate != "" {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "OAuth parameters must occur at most once")
+		return
+	}
+	token := form.Get("token")
+	hint := form.Get("token_type_hint")
 	if token != "" {
 		if err := s.store.RevokeOAuthToken(s.requestContext(r), token, hint); err != nil {
 			s.logger.Printf("oauth: revoke token: %v", err)

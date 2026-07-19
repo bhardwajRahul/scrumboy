@@ -527,7 +527,7 @@ Example **`result`** (values from `internal/mcp/jsonrpc_handler.go`):
 }
 ```
 
-**2. `notifications/initialized`** (optional client ack): POST body with **`method`** **`notifications/initialized`** or **`initialized`** (both accepted), **no `id`**. Accepted notifications return **202 Accepted** with an empty body.
+**2. `notifications/initialized`** (optional client ack): POST body with **`method`** **`notifications/initialized`** or **`initialized`** (both accepted), **no `id`**. Accepted notifications return **202 Accepted** with an empty body. A structurally invalid notification (for example, scalar or `null` `params`) returns **400** and has no side effect.
 
 **3. `tools/list`**:
 
@@ -608,8 +608,8 @@ Same **`code`** for a rejected **Bearer** token, with **`message`: `Authenticati
 
 - **Transport authentication failure:** empty HTTP **401**, no JSON-RPC `result` or tool result, and a complete RFC 9728 `WWW-Authenticate` challenge. Invalid Bearers add `error="invalid_token"`.
 - **Invalid Origin:** empty HTTP **403** without an OAuth challenge. Requests with no `Origin` remain valid for non-browser clients; a supplied Origin must match the trusted public origin.
-- **Method/media/transport failures:** authenticated GET and unsupported methods return empty **405** with `Allow: POST`; restrictive `Accept` values that do not allow both JSON and SSE return **406**; unsupported JSON content types return **415**; accepted notifications return empty **202**.
-- **Protocol errors** (bad JSON, unknown method, etc.): response is JSON-RPC **`error`** with integer **`code`** (e.g. `-32700` parse error, `-32601` method not found). **HTTP status is 200** for these encoded responses (see `writeJSONRPCError`).
+- **Method/media/transport failures:** authenticated GET and unsupported methods return empty **405** with `Allow: POST`; restrictive `Accept` values that do not allow both JSON and SSE return **406**; unsupported JSON content types return **415**; accepted notifications return empty **202**. Structurally rejected notifications and known request-only methods (`initialize`, `ping`, `tools/list`, and `tools/call`) sent without an `id` return **400** and do not run a handler.
+- **Protocol errors** (bad JSON, unknown method, etc.): response is JSON-RPC **`error`** with integer **`code`** (e.g. `-32700` parse error, `-32601` method not found). Valid requests with an `id` keep the normal **200** protocol-error response. Rejected no-`id` messages use **400**, with `id: null` when an error body is emitted.
 - **Tool execution failure** (`tools/call`): HTTP **200** with a **`result`** object containing **`isError: true`**, **`content`** (text), and no successful `structuredContent` in the error path (`writeJSONRPCToolErrorResult` in `internal/mcp/jsonrpc_handler.go`).
 - **Tool success**: **`result`** includes **`content`** (JSON text of payload) and **`structuredContent`** (parsed tool `data`).
 

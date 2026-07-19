@@ -115,6 +115,8 @@ Static Bearer API tokens (`docs/mcp.md`) remain fully supported and unaffected �
 
 `/oauth/*` is deliberately outside `/api/*`: it does not require the `X-Scrumboy: 1` CSRF header that `/api/*` writes require. The consent form at `/oauth/authorize` instead combines `SameSite=Lax` session-cookie semantics with a canonical `Origin` check (falling back to `Referer` when `Origin` is absent). A submission whose browser origin does not match the OAuth issuer is rejected. See the Consent section for why `Referrer-Policy: same-origin` is required for that fallback.
 
+`/oauth/token` and `/oauth/revoke` accept OAuth parameters only in a POST body encoded as `application/x-www-form-urlencoded` (media-type parameters are allowed). Defined parameters in the query string, unsupported or malformed content types, and duplicate defined parameters are rejected with `invalid_request`; token `resource` cardinality and value errors retain `invalid_target`. Token endpoint responses, including errors, send `Cache-Control: no-store` and `Pragma: no-cache`.
+
 ---
 
 ## Example: token exchange
@@ -164,7 +166,7 @@ Codes used: **`invalid_request`**, **`invalid_client`**, **`invalid_grant`**, **
 
 `/oauth/authorize` failures either redirect to the client's `redirect_uri` with `error`/`error_description`/`state` query params (once `redirect_uri` itself is verified against the registered client), or — if `redirect_uri` cannot be verified — render a plain error page instead of redirecting, to avoid an open-redirect.
 
-`/oauth/revoke` always returns `200`, whether or not the presented token existed (RFC 7009 §2.2) — this is intentional and prevents the endpoint from being used to probe for token existence.
+For a well-formed form-body request, `/oauth/revoke` returns `200` whether or not the presented token existed (RFC 7009 §2.2). Malformed, query-supplied, or duplicate parameters return `invalid_request` without revoking a token. This preserves existence hiding without accepting credentials from URLs.
 
 ---
 

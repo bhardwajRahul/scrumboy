@@ -54,10 +54,10 @@ In addition to the **`/mcp`** HTTP interface above, Scrumboy exposes a Model Con
 - Uses **JSON-RPC 2.0**.
 - **`jsonrpc`:** must be the string `"2.0"`.
 - **`method`:** required (string).
-- **`id`:** required for **requests** that expect a JSON body (`initialize`, `tools/list`, `tools/call`). Omitted for **notifications** (see below). For **parse errors**, the response uses `"id": null` per JSON-RPC.
-- **`params`:** `initialize` requires `protocolVersion`, `capabilities`, and `clientInfo.name`. `tools/list` may omit it. For **`tools/call`**, `params` must be a JSON object (see below).
+- **`id`:** required for supported request-only methods (`initialize`, `ping`, `tools/list`, `tools/call`). Omitted for **notifications** (see below). A request-only method without an `id` is rejected with HTTP **400** and is not dispatched. For **parse errors**, the response uses `"id": null` per JSON-RPC.
+- **`params`:** `initialize` requires `protocolVersion`, `capabilities`, `clientInfo.name`, and `clientInfo.version`. `tools/list` may omit it. For **`tools/call`**, `params` must be a JSON object (see below).
 
-After Origin validation and authentication, **non-POST** methods receive an empty **405 Method Not Allowed** with `Allow: POST`; authenticated GET does not open an SSE stream. **HTTP status** for normal JSON-RPC replies is **200** for both success and protocol error objects in the body. Accepted notifications, including **`notifications/initialized`**, receive empty **202 Accepted** responses.
+After Origin validation and authentication, **non-POST** methods receive an empty **405 Method Not Allowed** with `Allow: POST`; authenticated GET does not open an SSE stream. **HTTP status** for normal JSON-RPC requests with IDs is **200** for both success and protocol error objects in the body. Accepted notifications, including **`notifications/initialized`**, receive empty **202 Accepted** responses. Structurally rejected notifications receive **400** and have no side effect; an emitted JSON-RPC error uses `id: null`.
 
 **Example request:**
 

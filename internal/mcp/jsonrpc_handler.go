@@ -196,11 +196,11 @@ func (a *Adapter) serveJSONRPC(w http.ResponseWriter, r *http.Request) {
 			if fail.HasID {
 				writeJSONRPCError(w, fail.ID, fail.Code, fail.Message)
 			} else {
-				writeJSONRPCError(w, nil, fail.Code, fail.Message)
+				writeJSONRPCErrorStatus(w, http.StatusBadRequest, nil, fail.Code, fail.Message)
 			}
 			return
 		}
-		writeJSONRPCError(w, nil, jsonRPCInvalidRequest, err.Error())
+		writeJSONRPCErrorStatus(w, http.StatusBadRequest, nil, jsonRPCInvalidRequest, err.Error())
 		return
 	}
 	if req.IsReply {
@@ -209,7 +209,11 @@ func (a *Adapter) serveJSONRPC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !req.HasID {
-		if req.Method != "initialize" && !validMCPProtocolHeader(r.Header.Values("MCP-Protocol-Version")) {
+		if isMCPRequestOnlyMethod(req.Method) {
+			writeJSONRPCErrorStatus(w, http.StatusBadRequest, nil, jsonRPCInvalidRequest, "method requires a request id")
+			return
+		}
+		if !validMCPProtocolHeader(r.Header.Values("MCP-Protocol-Version")) {
 			writeEmptyStatus(w, http.StatusBadRequest)
 			return
 		}
@@ -234,6 +238,15 @@ func (a *Adapter) serveJSONRPC(w http.ResponseWriter, r *http.Request) {
 		a.handleJSONRPCToolsCall(w, r, req)
 	default:
 		writeJSONRPCError(w, req.ID, jsonRPCMethodNotFound, "method not found")
+	}
+}
+
+func isMCPRequestOnlyMethod(method string) bool {
+	switch method {
+	case "initialize", "ping", "tools/list", "tools/call":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -496,12 +509,20 @@ func writeJSONRPCErrorWithData(w http.ResponseWriter, id json.RawMessage, code i
 }
 
 func writeJSONRPCError(w http.ResponseWriter, id json.RawMessage, code int, message string) {
-	writeJSONRPCResponse(w, jsonRPCResponse{JSONRPC: "2.0", ID: id, Error: &jsonRPCError{Code: code, Message: message}})
+	writeJSONRPCErrorStatus(w, http.StatusOK, id, code, message)
+}
+
+func writeJSONRPCErrorStatus(w http.ResponseWriter, status int, id json.RawMessage, code int, message string) {
+	writeJSONRPCResponseStatus(w, status, jsonRPCResponse{JSONRPC: "2.0", ID: id, Error: &jsonRPCError{Code: code, Message: message}})
 }
 
 func writeJSONRPCResponse(w http.ResponseWriter, response jsonRPCResponse) {
+	writeJSONRPCResponseStatus(w, http.StatusOK, response)
+}
+
+func writeJSONRPCResponseStatus(w http.ResponseWriter, status int, response jsonRPCResponse) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(response)
 }
 

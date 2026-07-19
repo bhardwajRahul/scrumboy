@@ -164,7 +164,10 @@ func (a *Adapter) resolveRequestAuth(r *http.Request, allowOAuth bool) requestAu
 
 	u, err := a.store.GetUserBySessionToken(ctx, c.Value)
 	if err != nil {
-		return requestAuthResult{Ctx: ctx}
+		if errors.Is(err, store.ErrNotFound) {
+			return requestAuthResult{Ctx: ctx}
+		}
+		return requestAuthResult{Ctx: ctx, Err: err}
 	}
 
 	ctx = store.WithUserID(ctx, u.ID)
