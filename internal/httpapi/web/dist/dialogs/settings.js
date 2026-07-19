@@ -5,7 +5,7 @@ import { escapeHTML, showToast, getAppVersion, showConfirmDialog, confirmDelete,
 import { getStoredTheme, handleThemeChange, THEME_SYSTEM, THEME_DARK, THEME_LIGHT } from '../theme.js';
 import { getStoredWallpaperState, setWallpaperOff, setWallpaperColor, uploadWallpaperImage } from '../wallpaper.js';
 import { processWallpaperFileForUpload } from '../utils.js';
-import { getSlug, getBoard, getProjectId, getProjects, getSettingsProjectId, getSettingsActiveTab, getTagColors, getUser, getAuthStatusAvailable, getOidcEnabled, getLocalAuthEnabled, getPushConfigured, getBackupImportBtn, getBackupData, getBackupPreview, getTrelloImportBtn, getTrelloImportData, getTrelloImportPreview, getTrelloImportResult, getBoardMembers } from '../state/selectors.js';
+import { getSlug, getBoard, getProjectId, getProjects, getSettingsProjectId, getSettingsActiveTab, getTagColors, getUser, getAuthStatusAvailable, getOidcEnabled, getLocalAuthEnabled, getPushConfigured, getPushStatus, getBackupImportBtn, getBackupData, getBackupPreview, getTrelloImportBtn, getTrelloImportData, getTrelloImportPreview, getTrelloImportResult, getBoardMembers } from '../state/selectors.js';
 import { setSettingsProjectId, setSettingsActiveTab, setBackupImportBtn, setBackupData, setBackupPreview, setTrelloImportBtn, setTrelloImportData, setTrelloImportPreview, setTrelloImportResult, setUser, setBoardMembers, } from '../state/mutations.js';
 import { renderRealBurndownChart, destroyBurndownChart, mountBurndownChart } from '../charts/burndown.js';
 import { emit } from '../events.js';
@@ -1082,6 +1082,7 @@ export async function renderSettingsModal(options) {
     // Show Users tab only if user has admin or owner role
     const currentUser = getUser();
     const showUsersTab = showProfileTab && (currentUser?.systemRole === "owner" || currentUser?.systemRole === "admin");
+    const canSeePushConfigurationDetails = currentUser?.systemRole === "owner" || currentUser?.systemRole === "admin";
     // In board view we have a slug and can use capability routes.
     // In projects listing view (full mode), show all tags from all projects the user has access to.
     let tagsURL = null;
@@ -1356,6 +1357,7 @@ export async function renderSettingsModal(options) {
     const desktopNotifyStatusKind = getDesktopNotificationStatusKind();
     const desktopNotifyGranted = desktopNotifyStatusKind === "granted";
     const pushVapidServerReady = showProfileTab && getPushConfigured();
+    const pushStatus = getPushStatus();
     const activeSettingsTab = getSettingsActiveTab();
     const showWallpaperSettings = getAuthStatusAvailable();
     const wallpaperState = showWallpaperSettings ? getStoredWallpaperState() : { v: 1, mode: "off" };
@@ -1404,16 +1406,48 @@ export async function renderSettingsModal(options) {
       </div>
     `
         : "";
-    const pushPwaDisabledNoticeKey = !pushVapidServerReady
-        ? showProfileTab
-            ? "settings.customization.push.vapidNotice"
-            : "settings.customization.push.anonymousNotice"
-        : "";
-    const pushPwaDisabledNoticeText = !pushVapidServerReady
-        ? showProfileTab
-            ? "Web Push needs VAPID keys on the server (SCRUMBOY_VAPID_PUBLIC_KEY and SCRUMBOY_VAPID_PRIVATE_KEY; see docs)."
-            : "Web Push is not available in anonymous mode."
-        : "";
+    let pushPwaDisabledNoticeKey = "";
+    let pushPwaDisabledNoticeText = "";
+    if (!pushVapidServerReady) {
+        if (!showProfileTab) {
+            pushPwaDisabledNoticeKey = "settings.customization.push.anonymousNotice";
+            pushPwaDisabledNoticeText = "Web Push is not available in anonymous mode.";
+        }
+        else if (!pushStatus || pushStatus.state === "not_configured") {
+            pushPwaDisabledNoticeKey = "settings.customization.push.vapidNotice";
+            pushPwaDisabledNoticeText = "Web Push needs VAPID keys on the server (SCRUMBOY_VAPID_PUBLIC_KEY and SCRUMBOY_VAPID_PRIVATE_KEY; see docs).";
+        }
+        else if (!canSeePushConfigurationDetails) {
+            pushPwaDisabledNoticeKey = "settings.customization.push.unavailableNotice";
+            pushPwaDisabledNoticeText = "Web Push is currently unavailable.";
+        }
+        else {
+            const adminNoticeByReason = {
+                invalid_subscriber: {
+                    key: "settings.customization.push.adminWarning.invalidSubscriber",
+                    text: "Web Push is disabled because SCRUMBOY_VAPID_SUBSCRIBER is invalid.",
+                },
+                invalid_vapid_public_key: {
+                    key: "settings.customization.push.adminWarning.invalidPublicKey",
+                    text: "Web Push is disabled because SCRUMBOY_VAPID_PUBLIC_KEY is invalid.",
+                },
+                invalid_vapid_private_key: {
+                    key: "settings.customization.push.adminWarning.invalidPrivateKey",
+                    text: "Web Push is disabled because SCRUMBOY_VAPID_PRIVATE_KEY is invalid.",
+                },
+                initialization_failed: {
+                    key: "settings.customization.push.adminWarning.initializationFailed",
+                    text: "Web Push is disabled because initialization failed. Check the server logs.",
+                },
+            };
+            const notice = (pushStatus.reason && adminNoticeByReason[pushStatus.reason]) || {
+                key: "settings.customization.push.adminWarning.unknown",
+                text: "Web Push is disabled because of a server configuration error. Check the server logs.",
+            };
+            pushPwaDisabledNoticeKey = notice.key;
+            pushPwaDisabledNoticeText = notice.text;
+        }
+    }
     const languageSectionHTML = `
       <div class="settings-section">
         <label class="settings-section__title" for="settingsLocaleSelect" data-i18n-text="settings.language.title">Language</label>
@@ -1450,10 +1484,10 @@ export async function renderSettingsModal(options) {
         <p class="muted" id="desktopNotifyStatus" style="margin: 8px 0;" data-i18n-text="${getDesktopNotificationStatusMessageKey(desktopNotifyStatusKind)}">${escapeHTML(getDesktopNotificationStatusDescription())}</p>
         <button type="button" class="btn" id="desktopNotifyEnableBtn" ${desktopNotifyGranted ? "disabled" : ""} data-i18n-text="${getDesktopNotificationButtonMessageKey(desktopNotifyStatusKind)}">${desktopNotifyGranted ? "Notifications enabled" : "Enable notifications"}</button>
       </div>
-      ${pushPwaDisabledNoticeKey ? `<p class="settings-push-vapid-notice" role="status" data-i18n-text="${pushPwaDisabledNoticeKey}">${escapeHTML(pushPwaDisabledNoticeText)}</p>` : ""}
       <div class="settings-section settings-section--push-pwa${!pushVapidServerReady ? " settings-section--push-pwa-disabled" : ""}">
         <div class="settings-section__title" data-i18n-text="settings.customization.push.title">Background notifications (PWA)</div>
         <div class="settings-section__description muted" data-i18n-text="settings.customization.push.description">Alerts when someone assigns you a todo while this app is in the background or closed (best on an installed PWA). Requires VAPID keys on the server. When configured, sign-in triggers an automatic subscribe attempt (the browser may ask for permission). Use the toggle to turn Web Push off or back on for this browser only.</div>
+        ${pushPwaDisabledNoticeKey ? `<p class="settings-push-vapid-notice" role="status" data-i18n-text="${pushPwaDisabledNoticeKey}">${escapeHTML(pushPwaDisabledNoticeText)}</p>` : ""}
         <label class="row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
           <input type="checkbox" id="pushNotifyToggle" ${!pushVapidServerReady ? "disabled" : ""} />
           <span data-i18n-text="settings.customization.push.toggleLabel">Web Push on this device</span>
