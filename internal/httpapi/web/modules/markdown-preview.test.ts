@@ -1,4 +1,5 @@
-// @vitest-environment happy-dom
+// @vitest-environment jsdom
+// DOMPurify >=3.4.8 misbehaves under happy-dom (unsupported). jsdom matches production allow-list behavior.
 import createDOMPurify from "dompurify";
 import MarkdownIt from "markdown-it";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
