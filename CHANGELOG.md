@@ -1,6 +1,30 @@
 # Changelog
 
-> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
+> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
+
+## [3.22.1] - 2026-07-19
+
+### Added
+
+- **Web Push status on auth status** - Authenticated `GET /api/auth/status` includes a `push` object (`state` / `reason`) so Settings can distinguish not-configured, invalid, unavailable, and enabled VAPID setups. Existing `pushConfigured` remains.
+- **Settings Web Push diagnostics** - Owners/admins see reason-specific notices when push is disabled by bad VAPID keys, subscriber, or initialization failure; other signed-in users get a generic unavailable notice.
+
+### Changed
+
+- **Dependency upgrades** - Go module bumps include `webpush-go` `v1.4.0`, `go-jose/v4`, `golang.org/x/crypto`, and JWT via `golang-jwt/jwt/v5`; Docker build image is `golang:1.25.12-alpine`; frontend vendors `dompurify@3.4.11` and `markdown-it@14.2.0`; web package documents Node/npm engines and Docker publish uses `npm ci`.
+- **Prepared VAPID configuration** - Server startup validates and normalizes public/private keys and subscriber together, enables the notifier only when status is `enabled`, and serves the trimmed public key from `/api/push/vapid-public-key`.
+
+### Fixed
+
+- **VAPID key whitespace** - Surrounding whitespace in configured VAPID keys no longer prevents enablement or leaves dirty keys in the notifier and public-key API.
+
+### Documentation
+
+- **Frontend toolchain** - `CONTRIBUTING.md` notes required Node versions and canonical npm for lockfile maintenance; markdown/mermaid pin notes match the vendored library versions.
+
+### Tests
+
+- **Web Push status and prep** - Coverage for auth-status push states/reasons, admin vs non-admin Settings notices, whitespace/padded-base64 key normalization, and a cancellable timeout around the async VAPID request capture test.
 
 ## [3.22.0] - 2026-07-18
 
