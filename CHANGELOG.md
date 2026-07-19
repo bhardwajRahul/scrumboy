@@ -1,8 +1,21 @@
 # Changelog
 
-> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below.
+> **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
 
 ## [3.22.0] - 2026-07-18
+
+### Breaking / upgrade impact
+
+These are intentional compatibility breaks for remote MCP OAuth and Streamable HTTP. Cookies, static `sb_…` API tokens, human OIDC login, and DCR client registrations are unaffected unless noted.
+
+- **Reauthorize MCP OAuth clients** - Migration `057_bind_oauth_tokens_to_mcp_resource.sql` invalidates existing unbound authorization codes, access tokens, and refresh tokens. Clear stale client credentials and complete consent again. DCR registrations remain; cookies and static API tokens keep working.
+- **Point native clients at `/mcp/rpc`, not `/mcp`** - Claude Code, Cursor, and other Streamable HTTP clients must use `https://<host>/mcp/rpc` (for example `claude mcp add --transport http scrumboy https://<host>/mcp/rpc`). Legacy `/mcp` still serves the `{ "tool", "input" }` API with cookies or static tokens, but **rejects OAuth Bearers** and emits no OAuth discovery challenge.
+- **Require `resource=<origin>/mcp/rpc`** - Authorize, token, and refresh requests must send exactly one absolute resource URI for the trusted public origin's `/mcp/rpc`. Missing, duplicate, or wrong values fail with `invalid_target`. Tokens minted for another audience are rejected on `/mcp/rpc`.
+- **OAuth tokens are `/mcp/rpc`-only** - A valid `/mcp/rpc` OAuth access token does not authorize legacy `/mcp` or `/agora/v1/*`.
+- **Drop Streamable HTTP protocol `2024-11-05`** - Supported versions are `2025-03-26`, `2025-06-18`, and `2025-11-25`.
+- **Stricter `/mcp/rpc` transport and initialize** - Invalid browser `Origin` returns empty 403; media-type / Accept / protocol-version rules are enforced; accepted notifications return empty 202; authenticated GET returns 405. `initialize` requires nonempty `clientInfo.name` and `clientInfo.version`.
+
+See [`docs/oauth.md`](docs/oauth.md), [`docs/mcp.md`](docs/mcp.md), and [`docs/mcp-oauth-acceptance.md`](docs/mcp-oauth-acceptance.md).
 
 ### Added
 
@@ -12,9 +25,8 @@
 
 ### Changed
 
-- **Endpoint-specific MCP authentication** - Legacy `/mcp` continues to accept cookies and static `sb_…` tokens but no longer accepts OAuth access tokens or emits OAuth challenges. `/mcp/rpc` accepts cookies, static tokens, and Scrumboy OAuth tokens bound exactly to its canonical resource. Agora remains cookie/static only and cannot act as a deputy for `/mcp/rpc` OAuth tokens.
-- **OAuth artifact migration** - Migration `057_bind_oauth_tokens_to_mcp_resource.sql` invalidates existing unbound authorization codes and tokens without deleting DCR client registrations. OAuth clients must authorize once again; cookies and static API tokens are unaffected.
-- **MCP protocol versions** - Streamable HTTP supports `2025-03-26`, `2025-06-18`, and `2025-11-25`; the old `2024-11-05` version is no longer advertised on this transport.
+- **Endpoint-specific MCP authentication** - Legacy `/mcp` continues to accept cookies and static `sb_…` tokens. `/mcp/rpc` accepts cookies, static tokens, and Scrumboy OAuth tokens bound exactly to its canonical resource. Agora remains cookie/static only and cannot act as a deputy for `/mcp/rpc` OAuth tokens.
+- **MCP protocol versions** - Streamable HTTP advertises and accepts `2025-03-26`, `2025-06-18`, and `2025-11-25`.
 
 ### Fixed
 

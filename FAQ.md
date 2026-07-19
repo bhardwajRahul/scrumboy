@@ -9,6 +9,7 @@
 - [What does the done lane mean for dashboard stats?](#what-does-the-done-lane-mean-for-dashboard-stats)
 - [Are tag colors personal, or shared with the team?](#are-tag-colors-personal-or-shared-with-the-team)
 - [How do I use Scrumboy with Claude or other MCP clients?](#how-do-i-use-scrumboy-with-claude-or-other-mcp-clients)
+- [My Claude or Cursor MCP connection broke after upgrading to 3.22 — what do I do?](#my-claude-or-cursor-mcp-connection-broke-after-upgrading-to-322--what-do-i-do)
 - [Can Scrumboy MCP OAuth work with OIDC-only login?](#can-scrumboy-mcp-oauth-work-with-oidc-only-login)
 - [Can one account use both a Scrumboy password and SSO?](#can-one-account-use-both-a-scrumboy-password-and-sso)
 - [What happens if the SSO provider is unavailable?](#what-happens-if-the-sso-provider-is-unavailable)
@@ -151,20 +152,52 @@ When you open a board, Scrumboy refreshes colors from that board so what you see
 
 ## How do I use Scrumboy with Claude or other MCP clients?
 
-**Yes.** Scrumboy exposes an **MCP-compatible HTTP API** on the instance you run. AI assistants and automation (Claude, Cursor, custom agents, scripts) can list and call tools to manage projects, todos, sprints, tags, members, and board snapshots - without using the web UI for every change.
+Scrumboy exposes an **MCP-compatible HTTP API** on the instance you run. AI assistants and automation (Claude, Cursor, custom agents, scripts) can list and call tools to manage projects, todos, sprints, tags, members, and board snapshots — without using the web UI for every change.
 
-**Recommended for MCP-style clients:** `POST /mcp/rpc` with **JSON-RPC 2.0** (`initialize`, `tools/list`, `tools/call`). That is the same protocol shape many MCP clients expect, served over HTTP to your Scrumboy URL.
+**Canonical endpoint for native MCP clients (Claude Code, Cursor, and similar):** `https://YOUR_HOST/mcp/rpc`
 
-**Also available:** `POST /mcp` with a simple `{"tool":"…","input":{…}}` envelope for scripts and older integrations.
+Configure the client with that exact URL, for example:
 
-**Authentication:** sign in and use your session cookie, or create an **API access token** (starts with `sb_`) and send `Authorization: Bearer sb_…`. Tokens are created via the API while logged in (see the **Integrations & API Access** section in [`README.md`](README.md)).
+```sh
+claude mcp add --transport http scrumboy https://YOUR_HOST/mcp/rpc
+```
+
+That surface speaks **JSON-RPC 2.0** (`initialize`, `ping`, `tools/list`, `tools/call`) over Streamable HTTP. It is also the **sole OAuth protected resource**: clients discover Scrumboy’s authorization server from the 401 `WWW-Authenticate` challenge, register via DCR, and send Bearer tokens only to `/mcp/rpc`.
+
+**Legacy envelope (scripts / older integrations):** `POST /mcp` with `{"tool":"…","input":{…}}`. It accepts a session cookie or a static **`sb_…` API token**, not MCP OAuth access tokens.
+
+**Authentication options:**
+
+| Credential | `/mcp/rpc` | `/mcp` |
+|------------|------------|--------|
+| Session cookie | Yes | Yes |
+| Static `sb_…` Bearer | Yes | Yes |
+| Scrumboy MCP OAuth access token (bound to `/mcp/rpc`) | Yes | No |
 
 **Important limits today:**
 
 - Scrumboy is an **HTTP** MCP server on your host. It does **not** speak **stdio** MCP (the process-spawn model some desktop apps use). Clients must connect to your Scrumboy base URL over HTTP, or use a bridge that translates stdio to HTTP.
 - All traffic stays between the client and **your** Scrumboy server. Scrumboy does not host a cloud MCP relay for you.
 
-For tool names, auth rules, examples, and the optional Agora discover/invoke edge, see [`docs/mcp.md`](docs/mcp.md). For full HTTP behavior, see [`API.md`](API.md).
+For OAuth details see [`docs/oauth.md`](docs/oauth.md). For tool names and examples see [`docs/mcp.md`](docs/mcp.md). For full HTTP behavior see [`API.md`](API.md). Upgrade impact is summarized in [`CHANGELOG.md`](CHANGELOG.md) under **3.22.0**.
+
+## My Claude or Cursor MCP connection broke after upgrading to 3.22 — what do I do?
+
+**3.22** tightened remote MCP OAuth on purpose. If a client that worked on **3.20 / 3.21** suddenly fails, check these in order:
+
+1. **URL must be `/mcp/rpc`, not `/mcp`.**  
+   Remove the old server entry and re-add with the canonical path, for example:  
+   `claude mcp add --transport http scrumboy https://YOUR_HOST/mcp/rpc`
+
+2. **Clear stale OAuth credentials and authorize again.**  
+   Migration `057` invalidates pre-3.22 authorization codes and access/refresh tokens. DCR client registrations remain; you still need a fresh browser consent. Cookies and static `sb_…` tokens are unaffected.
+
+3. **Do not expect an OAuth token to work on `/mcp` or Agora.**  
+   Those surfaces stay cookie / static-token only. Native clients use `/mcp/rpc` only.
+
+4. **Confirm the client speaks a supported protocol version** (`2025-03-26`, `2025-06-18`, or `2025-11-25`) and sends `clientInfo.name` **and** `clientInfo.version` on `initialize`.
+
+Details: [`CHANGELOG.md`](CHANGELOG.md) (**3.22.0 → Breaking / upgrade impact**), [`docs/oauth.md`](docs/oauth.md), [`docs/mcp-oauth-acceptance.md`](docs/mcp-oauth-acceptance.md).
 
 ## Can Scrumboy MCP OAuth work with OIDC-only login?
 
