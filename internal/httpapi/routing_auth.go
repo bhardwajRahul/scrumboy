@@ -129,6 +129,7 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 		bootstrapAvailable := n == 0 && localAuthEnabled
 
 		var user any = nil
+		includePushStatus := false
 		// Fetch full user record to include isBootstrap flag
 		if userID, ok := store.UserIDFromContext(ctx); ok {
 			u, err := s.store.GetUser(ctx, userID)
@@ -137,6 +138,7 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 				user = nil
 			} else {
 				user = userStatusJSON(u)
+				includePushStatus = true
 			}
 		}
 
@@ -152,6 +154,9 @@ func (s *Server) handleAuth(w http.ResponseWriter, r *http.Request, rest []strin
 		resp["oidcEnabled"] = s.oidcService != nil
 		resp["localAuthEnabled"] = localAuthEnabled
 		resp["wallEnabled"] = s.wallEnabled
+		if includePushStatus {
+			resp["push"] = s.pushStatus
+		}
 		writeJSON(w, http.StatusOK, resp)
 		return
 

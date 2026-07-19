@@ -61,7 +61,7 @@ jobs:
       - name: Build frontend
         run: |
           cd internal/httpapi/web
-          npm install
+          npm ci
           npm run build
 
       # Needed for the linux/arm64 image: the Go compile cross-builds natively

@@ -2,6 +2,10 @@
   "name": "scrumboy-web",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@11.6.1",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24.0.0"
+  },
   "scripts": {
     "postinstall": "node scripts/sync-vendor.mjs",
     "sync:vendor": "node scripts/sync-vendor.mjs",
@@ -18,12 +22,13 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "happy-dom": "^20.9.0",
+    "jsdom": "^29.1.1",
     "typescript": "^5.0.0",
     "vitest": "^2.1.9"
   },
   "dependencies": {
-    "dompurify": "3.4.3",
-    "markdown-it": "14.1.1",
+    "dompurify": "3.4.11",
+    "markdown-it": "14.2.0",
     "mermaid": "11.15.0",
     "uplot": "^1.6.32"
   }
