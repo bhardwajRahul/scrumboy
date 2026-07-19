@@ -11,12 +11,22 @@ import (
 	"testing"
 	"time"
 
+	webpush "github.com/SherClockHolmes/webpush-go"
+
 	"scrumboy/internal/db"
 	"scrumboy/internal/migrate"
 	"scrumboy/internal/store"
 )
 
-const testVapidPub, testVapidPriv = "dGVzdC1wdWJsaWMta2V5LXBhZGRlZA", "dGVzdC1wcml2YXRlLWtleS1wYWRkZWQ"
+var testVapidPriv, testVapidPub = mustTestVAPIDKeys()
+
+func mustTestVAPIDKeys() (string, string) {
+	privateKey, publicKey, err := webpush.GenerateVAPIDKeys()
+	if err != nil {
+		panic(err)
+	}
+	return privateKey, publicKey
+}
 
 func newPushTestServer(t *testing.T, mode string, withVAPID bool) (*httptest.Server, *store.Store, func()) {
 	t.Helper()

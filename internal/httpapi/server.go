@@ -143,6 +143,7 @@ type Server struct {
 
 	vapidPublicKey      string
 	pushVapidConfigured bool // full mode + both VAPID keys present; subscribe and push notify use this
+	pushStatus          pushStatus
 	pushDebug           bool
 
 	dataDir string // user-wallpapers storage; empty = disabled
@@ -421,8 +422,12 @@ func NewServer(st storeAPI, opts Options) *Server {
 	whDispatcher := newWebhookDispatcher(st, whQueue, logger)
 	pushDebug := opts.PushDebug
 	vapidPub := strings.TrimSpace(opts.VAPIDPublicKey)
-	pushVapidConfigured := PushConfigured(mode, opts.VAPIDPublicKey, opts.VAPIDPrivateKey)
-	pushNotifier := newPushNotifier(st, logger, opts.VAPIDPublicKey, opts.VAPIDPrivateKey, opts.VAPIDSubscriber, pushDebug)
+	preparedSubscriber, pushConfigStatus := prepareWebPushConfiguration(mode, opts.VAPIDPublicKey, opts.VAPIDPrivateKey, opts.VAPIDSubscriber)
+	pushVapidConfigured := pushConfigStatus.State == pushStateEnabled
+	if pushConfigStatus.Reason != nil {
+		logger.Printf("push: disabled: %s", *pushConfigStatus.Reason)
+	}
+	pushNotifier := newPushNotifier(st, logger, opts.VAPIDPublicKey, opts.VAPIDPrivateKey, preparedSubscriber, pushVapidConfigured, pushDebug)
 	fanout := eventbus.NewFanout(sseBridgeConsumer, whDispatcher, pushNotifier)
 	whWorker := newWebhookWorker(whQueue, logger)
 	workerCtx, workerCancel := context.WithCancel(context.Background())
@@ -517,6 +522,7 @@ func NewServer(st storeAPI, opts Options) *Server {
 		agoraHandler:                opts.AgoraHandler,
 		vapidPublicKey:              vapidPub,
 		pushVapidConfigured:         pushVapidConfigured,
+		pushStatus:                  pushConfigStatus,
 		pushDebug:                   pushDebug,
 		wallEnabled:                 opts.WallEnabled,
 		markdownNotesEnabled:        opts.MarkdownNotesEnabled,

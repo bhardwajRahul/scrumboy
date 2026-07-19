@@ -18,19 +18,18 @@ type pushNotifier struct {
 	vapidPublicKey  string
 	vapidPrivateKey string
 	subscriber      string // VAPID JWT sub claim (e.g. mailto:ops@example.com)
+	enabled         bool
 	debug           bool
 }
 
-func newPushNotifier(st storeAPI, logger *log.Logger, vapidPublic, vapidPrivate, subscriber string, debug bool) *pushNotifier {
-	if subscriber == "" {
-		subscriber = "mailto:scrumboy@localhost"
-	}
+func newPushNotifier(st storeAPI, logger *log.Logger, vapidPublic, vapidPrivate, subscriber string, enabled, debug bool) *pushNotifier {
 	return &pushNotifier{
 		store:           st,
 		logger:          logger,
 		vapidPublicKey:  vapidPublic,
 		vapidPrivateKey: vapidPrivate,
 		subscriber:      subscriber,
+		enabled:         enabled,
 		debug:           debug,
 	}
 }
@@ -39,7 +38,7 @@ func (p *pushNotifier) OnEvent(ctx context.Context, e eventbus.Event) {
 	if e.Type != "todo.assigned" {
 		return
 	}
-	if p.vapidPublicKey == "" || p.vapidPrivateKey == "" {
+	if !p.enabled || p.vapidPublicKey == "" || p.vapidPrivateKey == "" {
 		return
 	}
 	// Same pattern as webhook dispatcher: never block fanout / SSE.

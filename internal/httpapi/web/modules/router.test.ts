@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WebPushStatus } from './types.js';
 
 const {
   apiFetchMock,
@@ -145,7 +146,7 @@ describe('router push autosubscribe gate', () => {
     vi.restoreAllMocks();
   });
 
-  function installAuthStatus(pushConfigured: boolean): void {
+  function installAuthStatus(pushConfigured: boolean, push?: WebPushStatus): void {
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/auth/status') {
         return {
@@ -153,6 +154,7 @@ describe('router push autosubscribe gate', () => {
           bootstrapAvailable: false,
           mode: 'full',
           pushConfigured,
+          push,
           selfServicePasswordResetEnabled: false,
           oidcEnabled: false,
           localAuthEnabled: true,
@@ -213,6 +215,23 @@ describe('router push autosubscribe gate', () => {
     expect(maybeAutoSubscribePushAfterLoginMock).toHaveBeenCalledTimes(1);
     expect(maybeAutoSubscribePushAfterLoginMock).toHaveBeenCalledWith(7);
     expect(renderProjectsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('hydrates structured Web Push status and clears it on logout', async () => {
+    installAuthStatus(false, { state: 'invalid', reason: 'invalid_subscriber' });
+    const mod = await loadRouterModule();
+
+    await mod.router();
+
+    const selectors = await import('./state/selectors.js');
+    const mutations = await import('./state/mutations.js');
+    expect(selectors.getPushStatus()).toEqual({ state: 'invalid', reason: 'invalid_subscriber' });
+
+    mutations.setAuthStatusChecked(false);
+    installSignedOutAuthStatus();
+    await mod.router();
+
+    expect(selectors.getPushStatus()).toBeNull();
   });
 
   it('passes the self-service password-reset capability to the signed-out auth view', async () => {

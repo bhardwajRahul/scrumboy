@@ -2,7 +2,7 @@
 # runs on the host arch. With CGO disabled the build cross-compiles to the
 # requested TARGETARCH natively -- no QEMU emulation of the compiler, so multi
 # -arch builds stay fast.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.25.12-alpine AS build
 
 WORKDIR /src
 COPY go.mod go.sum ./

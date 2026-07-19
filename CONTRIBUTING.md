@@ -55,7 +55,7 @@ go build ./cmd/scrumboy
 
 ### Frontend (TypeScript)
 
-The web UI lives in `internal/httpapi/web`. Build it with:
+The web UI lives in `internal/httpapi/web`. It requires Node.js `^20.19.0`, `^22.13.0`, or `>=24.0.0`; npm `11.6.1` is the canonical package manager version used to maintain the lockfile. Build it with:
 
 ```bash
 cd internal/httpapi/web
