@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
 
+## [3.22.2] - 2026-07-19
+
+### Changed
+
+- **Frontend test toolchain remediation** - Pin `vitest` to `3.2.6` and add a direct `vite` `6.4.3` pin for the web package; add `vitest.config.ts` so Vitest 3 fake timers match the prior Vitest 2 set (avoid faking `performance.now()`).
+
 ## [3.22.1] - 2026-07-19
 
 ### Added
