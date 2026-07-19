@@ -43,7 +43,7 @@ type Options struct {
 	// Web Push (optional). Push is enabled only in full mode with both public/private VAPID keys set.
 	VAPIDPublicKey  string
 	VAPIDPrivateKey string
-	VAPIDSubscriber string // VAPID JWT "sub" (e.g. mailto:ops@example.com); default in notifier if empty
+	VAPIDSubscriber string // VAPID JWT "sub" (e.g. mailto:ops@example.com); defaults during configuration preparation
 	PushDebug       bool   // Log push send/skip (also SCRUMBOY_DEBUG_PUSH in config)
 
 	// WallEnabled gates the Scrumbaby feature. When false, all /wall routes
@@ -421,13 +421,12 @@ func NewServer(st storeAPI, opts Options) *Server {
 	whQueue := newWebhookQueue(logger)
 	whDispatcher := newWebhookDispatcher(st, whQueue, logger)
 	pushDebug := opts.PushDebug
-	vapidPub := strings.TrimSpace(opts.VAPIDPublicKey)
-	preparedSubscriber, pushConfigStatus := prepareWebPushConfiguration(mode, opts.VAPIDPublicKey, opts.VAPIDPrivateKey, opts.VAPIDSubscriber)
-	pushVapidConfigured := pushConfigStatus.State == pushStateEnabled
-	if pushConfigStatus.Reason != nil {
-		logger.Printf("push: disabled: %s", *pushConfigStatus.Reason)
+	preparedPush := prepareWebPushConfiguration(mode, opts.VAPIDPublicKey, opts.VAPIDPrivateKey, opts.VAPIDSubscriber)
+	pushVapidConfigured := preparedPush.status.State == pushStateEnabled
+	if preparedPush.status.Reason != nil {
+		logger.Printf("push: disabled: %s", *preparedPush.status.Reason)
 	}
-	pushNotifier := newPushNotifier(st, logger, opts.VAPIDPublicKey, opts.VAPIDPrivateKey, preparedSubscriber, pushVapidConfigured, pushDebug)
+	pushNotifier := newPushNotifier(st, logger, preparedPush.publicKey, preparedPush.privateKey, preparedPush.subscriber, pushVapidConfigured, pushDebug)
 	fanout := eventbus.NewFanout(sseBridgeConsumer, whDispatcher, pushNotifier)
 	whWorker := newWebhookWorker(whQueue, logger)
 	workerCtx, workerCancel := context.WithCancel(context.Background())
@@ -520,9 +519,9 @@ func NewServer(st storeAPI, opts Options) *Server {
 		swJS:                        swJS,
 		mcpHandler:                  opts.MCPHandler,
 		agoraHandler:                opts.AgoraHandler,
-		vapidPublicKey:              vapidPub,
+		vapidPublicKey:              preparedPush.publicKey,
 		pushVapidConfigured:         pushVapidConfigured,
-		pushStatus:                  pushConfigStatus,
+		pushStatus:                  preparedPush.status,
 		pushDebug:                   pushDebug,
 		wallEnabled:                 opts.WallEnabled,
 		markdownNotesEnabled:        opts.MarkdownNotesEnabled,

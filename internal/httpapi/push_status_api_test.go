@@ -28,11 +28,12 @@ func TestAuthStatus_WebPushStatesAndReasons(t *testing.T) {
 		forbiddenValues []string
 	}{
 		{
-			name:           "enabled",
-			opts:           Options{ScrumboyMode: "full", VAPIDPublicKey: testVapidPub, VAPIDPrivateKey: testVapidPriv, VAPIDSubscriber: "mailto:ops@example.com"},
-			wantState:      pushStateEnabled,
-			wantReason:     nil,
-			wantConfigured: true,
+			name:            "enabled",
+			opts:            Options{ScrumboyMode: "full", VAPIDPublicKey: " \t" + testVapidPub + "\r\n", VAPIDPrivateKey: "\n" + testVapidPriv + "  ", VAPIDSubscriber: "mailto:ops@example.com"},
+			wantState:       pushStateEnabled,
+			wantReason:      nil,
+			wantConfigured:  true,
+			forbiddenValues: []string{testVapidPub, testVapidPriv},
 		},
 		{
 			name:       "not configured",
@@ -62,10 +63,11 @@ func TestAuthStatus_WebPushStatesAndReasons(t *testing.T) {
 			forbiddenValues: []string{"invalid-private-secret"},
 		},
 		{
-			name:       "initialization unavailable",
-			opts:       Options{ScrumboyMode: "full", VAPIDPublicKey: otherPublic, VAPIDPrivateKey: testVapidPriv},
-			wantState:  pushStateUnavailable,
-			wantReason: pushReasonInitializationFailed,
+			name:            "initialization unavailable",
+			opts:            Options{ScrumboyMode: "full", VAPIDPublicKey: otherPublic, VAPIDPrivateKey: testVapidPriv},
+			wantState:       pushStateUnavailable,
+			wantReason:      pushReasonInitializationFailed,
+			forbiddenValues: []string{otherPublic, testVapidPriv},
 		},
 	}
 

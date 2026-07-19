@@ -162,6 +162,33 @@ func TestPushRoutes_VapidPublicKeyAndSubscribeWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestPushRoutes_VapidPublicKeyTrimsConfiguredKeyWhitespace(t *testing.T) {
+	ts, _, cleanup := newTestHTTPServerWithOptions(t, Options{
+		ScrumboyMode:    "full",
+		VAPIDPublicKey:  " \t" + testVapidPub + "\r\n",
+		VAPIDPrivateKey: "\n" + testVapidPriv + "  ",
+	})
+	defer cleanup()
+
+	resp, err := ts.Client().Get(ts.URL + "/api/push/vapid-public-key")
+	if err != nil {
+		t.Fatalf("GET VAPID public key: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status=%d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	var body struct {
+		PublicKey string `json:"publicKey"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode VAPID public key response: %v", err)
+	}
+	if body.PublicKey != testVapidPub {
+		t.Fatalf("publicKey=%q, want normalized %q", body.PublicKey, testVapidPub)
+	}
+}
+
 func TestPushRoutes_UnsubscribeDeletesOnlyMatchingUserAndEndpoint(t *testing.T) {
 	ts, st, cleanup := newPushTestServer(t, "full", true)
 	defer cleanup()

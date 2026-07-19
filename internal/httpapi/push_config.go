@@ -29,6 +29,13 @@ type pushStatus struct {
 	Reason *string `json:"reason"`
 }
 
+type preparedWebPushConfiguration struct {
+	publicKey  string
+	privateKey string
+	subscriber string
+	status     pushStatus
+}
+
 func newPushStatus(state, reason string) pushStatus {
 	status := pushStatus{State: state}
 	if reason != "" {
@@ -37,32 +44,39 @@ func newPushStatus(state, reason string) pushStatus {
 	return status
 }
 
-func prepareWebPushConfiguration(mode, publicKey, privateKey, subscriber string) (string, pushStatus) {
-	publicKey = strings.TrimSpace(publicKey)
-	privateKey = strings.TrimSpace(privateKey)
-	if publicKey == "" && privateKey == "" {
-		return "", newPushStatus(pushStateNotConfigured, "")
+func prepareWebPushConfiguration(mode, publicKey, privateKey, subscriber string) preparedWebPushConfiguration {
+	prepared := preparedWebPushConfiguration{
+		publicKey:  strings.TrimSpace(publicKey),
+		privateKey: strings.TrimSpace(privateKey),
+	}
+	if prepared.publicKey == "" && prepared.privateKey == "" {
+		prepared.status = newPushStatus(pushStateNotConfigured, "")
+		return prepared
 	}
 
-	publicBytes, err := validVAPIDPublicKey(publicKey)
+	publicBytes, err := validVAPIDPublicKey(prepared.publicKey)
 	if err != nil {
-		return "", newPushStatus(pushStateInvalid, pushReasonInvalidVAPIDPublicKey)
+		prepared.status = newPushStatus(pushStateInvalid, pushReasonInvalidVAPIDPublicKey)
+		return prepared
 	}
-	privateBytes, err := validVAPIDPrivateKey(privateKey)
+	privateBytes, err := validVAPIDPrivateKey(prepared.privateKey)
 	if err != nil {
-		return "", newPushStatus(pushStateInvalid, pushReasonInvalidVAPIDPrivateKey)
+		prepared.status = newPushStatus(pushStateInvalid, pushReasonInvalidVAPIDPrivateKey)
+		return prepared
 	}
 
 	curve := elliptic.P256()
 	privateX, privateY := curve.ScalarBaseMult(privateBytes)
 	derivedPublic := elliptic.Marshal(curve, privateX, privateY)
 	if subtle.ConstantTimeCompare(publicBytes, derivedPublic) != 1 {
-		return "", newPushStatus(pushStateUnavailable, pushReasonInitializationFailed)
+		prepared.status = newPushStatus(pushStateUnavailable, pushReasonInitializationFailed)
+		return prepared
 	}
 
-	preparedSubscriber, err := prepareWebPushSubscriber(subscriber)
+	prepared.subscriber, err = prepareWebPushSubscriber(subscriber)
 	if err != nil {
-		return "", newPushStatus(pushStateInvalid, pushReasonInvalidSubscriber)
+		prepared.status = newPushStatus(pushStateInvalid, pushReasonInvalidSubscriber)
+		return prepared
 	}
 
 	normalizedMode := strings.TrimSpace(mode)
@@ -70,9 +84,11 @@ func prepareWebPushConfiguration(mode, publicKey, privateKey, subscriber string)
 		normalizedMode = "full"
 	}
 	if normalizedMode != "full" {
-		return preparedSubscriber, newPushStatus(pushStateUnavailable, "")
+		prepared.status = newPushStatus(pushStateUnavailable, "")
+		return prepared
 	}
-	return preparedSubscriber, newPushStatus(pushStateEnabled, "")
+	prepared.status = newPushStatus(pushStateEnabled, "")
+	return prepared
 }
 
 func prepareWebPushSubscriber(raw string) (string, error) {

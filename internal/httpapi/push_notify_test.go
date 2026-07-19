@@ -135,11 +135,11 @@ func TestPushNotifier_GeneratesExpectedVAPIDRequest(t *testing.T) {
 		t.Fatalf("store subscription: %v", err)
 	}
 
-	preparedSubscriber, err := prepareWebPushSubscriber("MailTo:ops@example.com")
-	if err != nil {
-		t.Fatalf("prepare subscriber: %v", err)
+	prepared := prepareWebPushConfiguration("full", " \t"+vapidPublic+"\r\n", "\n"+vapidPrivate+"  ", "MailTo:ops@example.com")
+	if prepared.status.State != pushStateEnabled {
+		t.Fatalf("prepare whitespace-padded VAPID configuration: %+v", prepared.status)
 	}
-	notifier := newPushNotifier(st, log.New(os.Stderr, "", 0), vapidPublic, vapidPrivate, preparedSubscriber, true, false)
+	notifier := newPushNotifier(st, log.New(os.Stderr, "", 0), prepared.publicKey, prepared.privateKey, prepared.subscriber, true, false)
 	assignee := user.ID
 	eventPayload, err := json.Marshal(eventbus.TodoAssignedPayload{
 		ProjectID:     project.ID,
@@ -152,10 +152,17 @@ func TestPushNotifier_GeneratesExpectedVAPIDRequest(t *testing.T) {
 		t.Fatalf("marshal event: %v", err)
 	}
 	before := time.Now()
-	notifier.handle(ctx, eventbus.Event{Type: "todo.assigned", ProjectID: project.ID, Payload: eventPayload})
-	after := time.Now()
+	sendCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	go notifier.handle(sendCtx, eventbus.Event{Type: "todo.assigned", ProjectID: project.ID, Payload: eventPayload})
 
-	request := <-captured
+	var request capturedRequest
+	select {
+	case request = <-captured:
+	case <-sendCtx.Done():
+		t.Fatal("timed out waiting for intercepted Web Push request")
+	}
+	after := time.Now()
 	if request.method != http.MethodPost || request.ttl != "86400" || request.contentEncoding != "aes128gcm" || request.contentType != "application/octet-stream" || request.bodyLength <= 0 {
 		t.Fatalf("unexpected Web Push request: %+v", request)
 	}

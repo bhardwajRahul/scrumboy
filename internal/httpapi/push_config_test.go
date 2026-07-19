@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/base64"
 	"strings"
 	"testing"
 
@@ -59,16 +60,28 @@ func TestPrepareWebPushConfigurationStates(t *testing.T) {
 		t.Fatalf("generate second VAPID key pair: %v", err)
 	}
 	_ = otherPrivate
+	publicKeyBytes, err := base64.RawURLEncoding.DecodeString(publicKey)
+	if err != nil {
+		t.Fatalf("decode generated public key: %v", err)
+	}
+	privateKeyBytes, err := base64.RawURLEncoding.DecodeString(privateKey)
+	if err != nil {
+		t.Fatalf("decode generated private key: %v", err)
+	}
+	paddedPublicKey := base64.URLEncoding.EncodeToString(publicKeyBytes)
+	paddedPrivateKey := base64.URLEncoding.EncodeToString(privateKeyBytes)
 
 	tests := []struct {
-		name       string
-		mode       string
-		publicKey  string
-		privateKey string
-		subscriber string
-		wantState  string
-		wantReason string
-		wantSub    string
+		name        string
+		mode        string
+		publicKey   string
+		privateKey  string
+		subscriber  string
+		wantState   string
+		wantReason  string
+		wantSub     string
+		wantPublic  string
+		wantPrivate string
 	}{
 		{name: "not configured", mode: "full", wantState: pushStateNotConfigured},
 		{name: "missing public key", mode: "full", privateKey: privateKey, wantState: pushStateInvalid, wantReason: pushReasonInvalidVAPIDPublicKey},
@@ -79,19 +92,27 @@ func TestPrepareWebPushConfigurationStates(t *testing.T) {
 		{name: "invalid subscriber", mode: "full", publicKey: publicKey, privateKey: privateKey, subscriber: "mailto:mailto:ops@example.com", wantState: pushStateInvalid, wantReason: pushReasonInvalidSubscriber},
 		{name: "anonymous unavailable", mode: "anonymous", publicKey: publicKey, privateKey: privateKey, subscriber: "ops@example.com", wantState: pushStateUnavailable, wantSub: "ops@example.com"},
 		{name: "enabled", mode: "full", publicKey: publicKey, privateKey: privateKey, subscriber: "mailto:ops@example.com", wantState: pushStateEnabled, wantSub: "ops@example.com"},
+		{name: "enabled with surrounding key whitespace", mode: "full", publicKey: " \t" + publicKey + "\r\n", privateKey: "\n" + privateKey + "  ", subscriber: "ops@example.com", wantState: pushStateEnabled, wantSub: "ops@example.com", wantPublic: publicKey, wantPrivate: privateKey},
+		{name: "enabled with padded URL-safe base64", mode: "full", publicKey: paddedPublicKey, privateKey: paddedPrivateKey, subscriber: "ops@example.com", wantState: pushStateEnabled, wantSub: "ops@example.com", wantPublic: paddedPublicKey, wantPrivate: paddedPrivateKey},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			gotSub, got := prepareWebPushConfiguration(tc.mode, tc.publicKey, tc.privateKey, tc.subscriber)
-			if got.State != tc.wantState || gotSub != tc.wantSub {
-				t.Fatalf("prepareWebPushConfiguration() = sub %q status %+v; want sub %q state %q", gotSub, got, tc.wantSub, tc.wantState)
+			got := prepareWebPushConfiguration(tc.mode, tc.publicKey, tc.privateKey, tc.subscriber)
+			if got.status.State != tc.wantState || got.subscriber != tc.wantSub {
+				t.Fatalf("prepareWebPushConfiguration() = sub %q status %+v; want sub %q state %q", got.subscriber, got.status, tc.wantSub, tc.wantState)
+			}
+			if tc.wantPublic != "" && got.publicKey != tc.wantPublic {
+				t.Fatalf("normalized public key = %q, want %q", got.publicKey, tc.wantPublic)
+			}
+			if tc.wantPrivate != "" && got.privateKey != tc.wantPrivate {
+				t.Fatalf("normalized private key = %q, want %q", got.privateKey, tc.wantPrivate)
 			}
 			if tc.wantReason == "" {
-				if got.Reason != nil {
-					t.Fatalf("reason = %q, want null", *got.Reason)
+				if got.status.Reason != nil {
+					t.Fatalf("reason = %q, want null", *got.status.Reason)
 				}
-			} else if got.Reason == nil || *got.Reason != tc.wantReason {
-				t.Fatalf("reason = %v, want %q", got.Reason, tc.wantReason)
+			} else if got.status.Reason == nil || *got.status.Reason != tc.wantReason {
+				t.Fatalf("reason = %v, want %q", got.status.Reason, tc.wantReason)
 			}
 		})
 	}
