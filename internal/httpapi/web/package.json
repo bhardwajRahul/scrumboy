@@ -24,7 +24,8 @@
     "happy-dom": "^20.9.0",
     "jsdom": "^29.1.1",
     "typescript": "^5.0.0",
-    "vitest": "^2.1.9"
+    "vite": "6.4.3",
+    "vitest": "3.2.6"
   },
   "dependencies": {
     "dompurify": "3.4.11",
