@@ -8,13 +8,13 @@ import (
 	"html"
 	"io"
 	"mime"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"unicode/utf8"
 
 	"scrumboy/internal/oauth"
+	"scrumboy/internal/publicorigin"
 	"scrumboy/internal/store"
 )
 
@@ -46,7 +46,7 @@ func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
 // errOAuthIssuerUnavailable is returned by oauthIssuer when no origin can be
 // derived that this server can vouch for. Callers must fail closed (a
 // controlled error response) rather than fall back to a guessed value.
-var errOAuthIssuerUnavailable = errors.New("no trustworthy issuer origin for this request")
+var errOAuthIssuerUnavailable = publicorigin.ErrUnavailable
 
 // oauthIssuer returns the origin advertised in discovery metadata and used to
 // build absolute endpoint URLs, in order:
@@ -66,22 +66,7 @@ var errOAuthIssuerUnavailable = errors.New("no trustworthy issuer origin for thi
 //     a cleartext connection) would let an attacker spoof the metadata
 //     issuer or downgrade it to HTTP.
 func (s *Server) oauthIssuer(r *http.Request) (string, error) {
-	if s.publicBaseURL != "" {
-		return oauthPublicBaseURLIssuer(s.publicBaseURL)
-	}
-	authority, hostname, authorityOK := parseHTTPAuthority(r.Host)
-	if r.TLS != nil && authorityOK {
-		return "https://" + authority, nil
-	}
-	if s.trustProxy {
-		if origin, ok := forwardedOAuthOrigin(r); ok {
-			return origin, nil
-		}
-	}
-	if authorityOK && isLoopbackHostname(hostname) {
-		return "http://" + authority, nil
-	}
-	return "", errOAuthIssuerUnavailable
+	return s.publicOrigin.Origin(r)
 }
 
 // oauthPublicBaseURLIssuer reports whether configured PUBLIC_BASE_URL may be
@@ -89,95 +74,14 @@ func (s *Server) oauthIssuer(r *http.Request) (string, error) {
 // expect HTTPS for non-loopback AS endpoints). Global NormalizeBaseURL still
 // permits http for password-reset compatibility; this check is OAuth-only.
 func oauthPublicBaseURLIssuer(base string) (string, error) {
-	u, err := url.Parse(base)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return "", errOAuthIssuerUnavailable
-	}
-	scheme := strings.ToLower(u.Scheme)
-	_, hostname, ok := parseHTTPAuthority(u.Host)
-	if !ok {
-		return "", errOAuthIssuerUnavailable
-	}
-	switch scheme {
-	case "https":
-		return base, nil
-	case "http":
-		if isLoopbackHostname(hostname) {
-			return base, nil
-		}
-		return "", errOAuthIssuerUnavailable
-	default:
-		return "", errOAuthIssuerUnavailable
-	}
-}
-
-// forwardedOAuthOrigin derives scheme+host as one validated decision from
-// X-Forwarded-Proto/X-Forwarded-Host (falling back to CF-Visitor for scheme
-// only when X-Forwarded-Proto is entirely absent). Only called when
-// SCRUMBOY_TRUST_PROXY is enabled. X-Forwarded-Host is required explicitly;
-// the backend-facing r.Host is never used as a fallback. Only https is
-// accepted here. Each trusted forwarded header must be a single field with a
-// single value (no comma-separated hop lists / duplicate fields).
-func forwardedOAuthOrigin(r *http.Request) (string, bool) {
-	proto, ok := forwardedOAuthScheme(r)
-	if !ok || proto != "https" {
-		return "", false
-	}
-	hostValues := r.Header.Values("X-Forwarded-Host")
-	if len(hostValues) != 1 {
-		return "", false
-	}
-	authority, _, ok := parseHTTPAuthority(hostValues[0])
-	if !ok {
-		return "", false
-	}
-	return "https://" + authority, true
-}
-
-// forwardedOAuthScheme returns a single validated forwarded scheme for OAuth
-// issuer construction. X-Forwarded-Proto wins when present (exactly one field,
-// no commas). CF-Visitor is consulted only when X-Forwarded-Proto is absent,
-// and then only if exactly one CF-Visitor field is present.
-func forwardedOAuthScheme(r *http.Request) (string, bool) {
-	protoValues := r.Header.Values("X-Forwarded-Proto")
-	if len(protoValues) > 0 {
-		if len(protoValues) != 1 {
-			return "", false
-		}
-		proto := strings.ToLower(strings.TrimSpace(protoValues[0]))
-		if proto == "" || strings.Contains(proto, ",") {
-			return "", false
-		}
-		return proto, true
-	}
-	cfValues := r.Header.Values("CF-Visitor")
-	if len(cfValues) != 1 {
-		return "", false
-	}
-	var cfVisitor struct {
-		Scheme string `json:"scheme"`
-	}
-	if err := json.Unmarshal([]byte(cfValues[0]), &cfVisitor); err != nil {
-		return "", false
-	}
-	proto := strings.ToLower(strings.TrimSpace(cfVisitor.Scheme))
-	if proto == "" || strings.Contains(proto, ",") {
-		return "", false
-	}
-	return proto, true
+	return publicorigin.ConfiguredOrigin(base)
 }
 
 // isLoopbackHostname reports whether a validated, port-free hostname refers
 // to localhost, 127.0.0.0/8, or ::1.
 // Deliberately does not treat RFC1918/LAN addresses (192.168.x.x, etc.) as
 // loopback — LAN cleartext HTTP is a separate product decision.
-func isLoopbackHostname(hostname string) bool {
-	if strings.EqualFold(hostname, "localhost") {
-		return true
-	}
-	ip := net.ParseIP(hostname)
-	return ip != nil && ip.IsLoopback()
-}
+func isLoopbackHostname(hostname string) bool { return publicorigin.IsLoopbackHostname(hostname) }
 
 // handleOAuthProtectedResourceMetadata serves RFC 9728 discovery: the two
 // fields Claude Code's MCP OAuth client actually reads.
@@ -196,7 +100,7 @@ func (s *Server) handleOAuthProtectedResourceMetadata(w http.ResponseWriter, r *
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"resource":              issuer + "/mcp",
+		"resource":              issuer + publicorigin.MCPResourcePath,
 		"authorization_servers": []string{issuer},
 	})
 }
@@ -227,6 +131,7 @@ func (s *Server) handleOAuthASMetadata(w http.ResponseWriter, r *http.Request) {
 		"code_challenge_methods_supported":           []string{"S256"},
 		"token_endpoint_auth_methods_supported":      []string{"none"},
 		"revocation_endpoint_auth_methods_supported": []string{"none"},
+		"protected_resources":                        []string{issuer + publicorigin.MCPResourcePath},
 	})
 }
 
@@ -325,17 +230,68 @@ type authorizeParams struct {
 	CodeChallenge       string
 	CodeChallengeMethod string
 	State               string
+	Resource            string
+	ResourceCount       int
+	DuplicateParameter  string
 }
 
-func parseAuthorizeParams(r *http.Request) authorizeParams {
-	return authorizeParams{
-		ResponseType:        r.FormValue("response_type"),
-		ClientID:            r.FormValue("client_id"),
-		RedirectURI:         r.FormValue("redirect_uri"),
-		CodeChallenge:       r.FormValue("code_challenge"),
-		CodeChallengeMethod: r.FormValue("code_challenge_method"),
-		State:               r.FormValue("state"),
+func parseAuthorizeParams(r *http.Request) (authorizeParams, error) {
+	if err := r.ParseForm(); err != nil {
+		return authorizeParams{}, err
 	}
+	resources := r.Form["resource"]
+	return authorizeParams{
+		ResponseType:        oauthSingleValue(r.Form, "response_type"),
+		ClientID:            oauthSingleValue(r.Form, "client_id"),
+		RedirectURI:         oauthSingleValue(r.Form, "redirect_uri"),
+		CodeChallenge:       oauthSingleValue(r.Form, "code_challenge"),
+		CodeChallengeMethod: oauthSingleValue(r.Form, "code_challenge_method"),
+		State:               oauthSingleValue(r.Form, "state"),
+		Resource:            oauthSingleValue(r.Form, "resource"),
+		ResourceCount:       len(resources),
+		DuplicateParameter: oauthDuplicateParameter(r.Form,
+			"response_type", "client_id", "redirect_uri", "code_challenge", "code_challenge_method", "state"),
+	}, nil
+}
+
+func oauthSingleValue(values url.Values, name string) string {
+	if len(values[name]) != 1 {
+		return ""
+	}
+	return values[name][0]
+}
+
+func oauthDuplicateParameter(values url.Values, names ...string) string {
+	for _, name := range names {
+		if len(values[name]) > 1 {
+			return name
+		}
+	}
+	return ""
+}
+
+func parseOAuthFormBody(r *http.Request, definedParameters ...string) (url.Values, error) {
+	contentTypes := r.Header.Values("Content-Type")
+	if len(contentTypes) != 1 {
+		return nil, errors.New("Content-Type must be application/x-www-form-urlencoded")
+	}
+	mediaType, _, err := mime.ParseMediaType(contentTypes[0])
+	if err != nil || !strings.EqualFold(mediaType, "application/x-www-form-urlencoded") {
+		return nil, errors.New("Content-Type must be application/x-www-form-urlencoded")
+	}
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return nil, errors.New("malformed query string")
+	}
+	for _, name := range definedParameters {
+		if _, present := query[name]; present {
+			return nil, errors.New("OAuth parameters must be supplied in the form body")
+		}
+	}
+	if err := r.ParseForm(); err != nil {
+		return nil, errors.New("malformed request body")
+	}
+	return r.PostForm, nil
 }
 
 func oauthAuthorizeRequestURI(params authorizeParams) string {
@@ -345,6 +301,7 @@ func oauthAuthorizeRequestURI(params authorizeParams) string {
 	query.Set("redirect_uri", params.RedirectURI)
 	query.Set("code_challenge", params.CodeChallenge)
 	query.Set("code_challenge_method", params.CodeChallengeMethod)
+	query.Set("resource", params.Resource)
 	if params.State != "" {
 		query.Set("state", params.State)
 	}
@@ -364,7 +321,15 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := parseAuthorizeParams(r)
+	params, err := parseAuthorizeParams(r)
+	if err != nil {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "malformed request body")
+		return
+	}
+	if params.DuplicateParameter == "client_id" || params.DuplicateParameter == "redirect_uri" {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "duplicate OAuth parameter")
+		return
+	}
 	ctx := s.requestContext(r)
 
 	client, err := s.store.GetOAuthClient(ctx, params.ClientID)
@@ -382,6 +347,24 @@ func (s *Server) handleOAuthAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	// From here on redirect_uri is trusted (exact match to the registered
 	// client), so remaining validation failures redirect with error params.
+	if params.DuplicateParameter != "" {
+		s.redirectOAuthError(w, r, params.RedirectURI, oauth.ErrInvalidRequest, "OAuth parameters must occur at most once", params.State)
+		return
+	}
+	if params.ResourceCount != 1 {
+		s.redirectOAuthError(w, r, params.RedirectURI, oauth.ErrInvalidTarget, "exactly one resource parameter is required", params.State)
+		return
+	}
+	resource, err := s.publicOrigin.ValidateMCPResource(r, params.Resource)
+	if err != nil {
+		if errors.Is(err, publicorigin.ErrUnavailable) {
+			s.writeOAuthIssuerUnavailable(w)
+			return
+		}
+		s.redirectOAuthError(w, r, params.RedirectURI, oauth.ErrInvalidTarget, "resource must identify this server's MCP RPC endpoint", params.State)
+		return
+	}
+	params.Resource = resource
 	if params.ResponseType != "code" {
 		s.redirectOAuthError(w, r, params.RedirectURI, oauth.ErrUnsupportedResponse, "only response_type=code is supported", params.State)
 		return
@@ -450,7 +433,7 @@ func (s *Server) handleOAuthAuthorizeSubmit(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	code, err := s.store.CreateOAuthAuthCode(ctx, client.ID, userID, params.RedirectURI, params.CodeChallenge, params.CodeChallengeMethod)
+	code, err := s.store.CreateOAuthAuthCode(ctx, client.ID, userID, params.RedirectURI, params.CodeChallenge, params.CodeChallengeMethod, params.Resource)
 	if err != nil {
 		writeInternal(w, err)
 		return
@@ -466,6 +449,8 @@ func (s *Server) handleOAuthAuthorizeSubmit(w http.ResponseWriter, r *http.Reque
 // handleOAuthToken implements the RFC 6749 §4.1.3/§6 token endpoint for the
 // authorization_code and refresh_token grants.
 func (s *Server) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 	if s.mode == "anonymous" {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
 		return
@@ -478,32 +463,44 @@ func (s *Server) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
 		oauth.WriteJSON(w, http.StatusTooManyRequests, oauth.ErrInvalidRequest, "too many attempts; try again later")
 		return
 	}
-
-	w.Header().Set("Cache-Control", "no-store")
+	form, err := parseOAuthFormBody(r,
+		"grant_type", "code", "redirect_uri", "client_id", "code_verifier", "refresh_token", "resource")
+	if err != nil {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "request must use an application/x-www-form-urlencoded body")
+		return
+	}
+	if duplicate := oauthDuplicateParameter(form, "grant_type", "code", "redirect_uri", "client_id", "code_verifier", "refresh_token"); duplicate != "" {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "OAuth parameters must occur at most once")
+		return
+	}
 	ctx := s.requestContext(r)
 
-	switch r.FormValue("grant_type") {
+	switch form.Get("grant_type") {
 	case "authorization_code":
-		s.handleOAuthTokenAuthCode(w, r, ctx)
+		s.handleOAuthTokenAuthCode(w, r, ctx, form)
 	case "refresh_token":
-		s.handleOAuthTokenRefresh(w, r, ctx)
+		s.handleOAuthTokenRefresh(w, r, ctx, form)
 	default:
 		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrUnsupportedGrantType, "unsupported grant_type")
 	}
 }
 
-func (s *Server) handleOAuthTokenAuthCode(w http.ResponseWriter, r *http.Request, ctx context.Context) {
-	code := r.FormValue("code")
-	redirectURI := r.FormValue("redirect_uri")
-	clientID := r.FormValue("client_id")
-	codeVerifier := r.FormValue("code_verifier")
+func (s *Server) handleOAuthTokenAuthCode(w http.ResponseWriter, r *http.Request, ctx context.Context, form url.Values) {
+	code := form.Get("code")
+	redirectURI := form.Get("redirect_uri")
+	clientID := form.Get("client_id")
+	codeVerifier := form.Get("code_verifier")
+	resource, ok := s.oauthTokenResource(w, r, form)
+	if !ok {
+		return
+	}
 
 	if code == "" || redirectURI == "" || clientID == "" || codeVerifier == "" {
 		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "code, redirect_uri, client_id, and code_verifier are required")
 		return
 	}
 
-	ac, err := s.store.ConsumeOAuthAuthCode(ctx, code)
+	pair, err := s.store.RedeemOAuthAuthCodeAndIssue(ctx, code, clientID, redirectURI, resource, codeVerifier)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidGrant, "the authorization code is invalid, expired, or already used")
@@ -512,17 +509,31 @@ func (s *Server) handleOAuthTokenAuthCode(w http.ResponseWriter, r *http.Request
 		writeInternal(w, err)
 		return
 	}
-	if ac.ClientID != clientID || ac.RedirectURI != redirectURI {
-		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidGrant, "client_id or redirect_uri does not match the authorization request")
-		return
-	}
-	if !oauth.VerifyPKCE(ac.CodeChallengeMethod, codeVerifier, ac.CodeChallenge) {
-		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidGrant, "code_verifier does not match the original code_challenge")
-		return
-	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"access_token":  pair.AccessToken,
+		"token_type":    "Bearer",
+		"expires_in":    pair.ExpiresIn,
+		"refresh_token": pair.RefreshToken,
+	})
+}
 
-	pair, err := s.store.IssueOAuthTokenPair(ctx, ac.ClientID, ac.UserID)
+func (s *Server) handleOAuthTokenRefresh(w http.ResponseWriter, r *http.Request, ctx context.Context, form url.Values) {
+	refreshToken := form.Get("refresh_token")
+	clientID := form.Get("client_id")
+	resource, ok := s.oauthTokenResource(w, r, form)
+	if !ok {
+		return
+	}
+	if refreshToken == "" || clientID == "" {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "refresh_token and client_id are required")
+		return
+	}
+	pair, err := s.store.ConsumeOAuthRefreshTokenAndIssue(ctx, refreshToken, clientID, resource)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidGrant, "the refresh token is invalid, expired, or already used")
+			return
+		}
 		writeInternal(w, err)
 		return
 	}
@@ -534,37 +545,22 @@ func (s *Server) handleOAuthTokenAuthCode(w http.ResponseWriter, r *http.Request
 	})
 }
 
-func (s *Server) handleOAuthTokenRefresh(w http.ResponseWriter, r *http.Request, ctx context.Context) {
-	refreshToken := r.FormValue("refresh_token")
-	if refreshToken == "" {
-		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "refresh_token is required")
-		return
+func (s *Server) oauthTokenResource(w http.ResponseWriter, r *http.Request, form url.Values) (string, bool) {
+	values := form["resource"]
+	if len(values) != 1 {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidTarget, "exactly one resource parameter is required")
+		return "", false
 	}
-	clientID, userID, err := s.store.ConsumeOAuthRefreshToken(ctx, refreshToken)
+	resource, err := s.publicOrigin.ValidateMCPResource(r, values[0])
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidGrant, "the refresh token is invalid, expired, or already used")
-			return
+		if errors.Is(err, publicorigin.ErrUnavailable) {
+			s.writeOAuthIssuerUnavailable(w)
+			return "", false
 		}
-		writeInternal(w, err)
-		return
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidTarget, "resource must identify this server's MCP RPC endpoint")
+		return "", false
 	}
-	if reqClientID := r.FormValue("client_id"); reqClientID != "" && reqClientID != clientID {
-		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidGrant, "client_id does not match this refresh token")
-		return
-	}
-
-	pair, err := s.store.IssueOAuthTokenPair(ctx, clientID, userID)
-	if err != nil {
-		writeInternal(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"access_token":  pair.AccessToken,
-		"token_type":    "Bearer",
-		"expires_in":    pair.ExpiresIn,
-		"refresh_token": pair.RefreshToken,
-	})
+	return resource, true
 }
 
 // handleOAuthRevoke implements RFC 7009 token revocation. Per §2.2, it always
@@ -579,8 +575,17 @@ func (s *Server) handleOAuthRevoke(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 		return
 	}
-	token := r.FormValue("token")
-	hint := r.FormValue("token_type_hint")
+	form, err := parseOAuthFormBody(r, "token", "token_type_hint")
+	if err != nil {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "request must use an application/x-www-form-urlencoded body")
+		return
+	}
+	if duplicate := oauthDuplicateParameter(form, "token", "token_type_hint"); duplicate != "" {
+		oauth.WriteJSON(w, http.StatusBadRequest, oauth.ErrInvalidRequest, "OAuth parameters must occur at most once")
+		return
+	}
+	token := form.Get("token")
+	hint := form.Get("token_type_hint")
 	if token != "" {
 		if err := s.store.RevokeOAuthToken(s.requestContext(r), token, hint); err != nil {
 			s.logger.Printf("oauth: revoke token: %v", err)
@@ -874,6 +879,7 @@ func (s *Server) renderOAuthConsentPage(w http.ResponseWriter, client store.OAut
 <div class="card">
 <h1>Approve access for %s?</h1>
 <p>%s will be able to read and manage projects, todos, sprints, and tags in this Scrumboy instance on your behalf.</p>
+<p>Protected resource:<br><strong>%s</strong></p>
 <p>After you approve, you'll be redirected to:<br><strong>%s</strong></p>
 <p>Only approve this if you recognize the application above and intended to connect it — anyone can register a client with any name, so a name alone doesn't confirm who you're granting access to. Check that this destination is one you trust.</p>
 <form method="POST" action="/oauth/authorize">
@@ -882,13 +888,14 @@ func (s *Server) renderOAuthConsentPage(w http.ResponseWriter, client store.OAut
 <input type="hidden" name="redirect_uri" value="%s">
 <input type="hidden" name="code_challenge" value="%s">
 <input type="hidden" name="code_challenge_method" value="%s">
+<input type="hidden" name="resource" value="%s">
 <input type="hidden" name="state" value="%s">
 <button class="btn-primary" type="submit" name="action" value="approve">Approve</button>
 <button class="btn-secondary" type="submit" name="action" value="deny">Deny</button>
 </form>
 </div></body></html>`,
 		html.EscapeString(name), oauthPageStyle, html.EscapeString(name), html.EscapeString(name),
-		html.EscapeString(params.RedirectURI),
+		html.EscapeString(params.Resource), html.EscapeString(params.RedirectURI),
 		html.EscapeString(params.ResponseType), html.EscapeString(params.ClientID), html.EscapeString(params.RedirectURI),
-		html.EscapeString(params.CodeChallenge), html.EscapeString(params.CodeChallengeMethod), html.EscapeString(params.State))
+		html.EscapeString(params.CodeChallenge), html.EscapeString(params.CodeChallengeMethod), html.EscapeString(params.Resource), html.EscapeString(params.State))
 }

@@ -14,12 +14,14 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"scrumboy/internal/db"
 	"scrumboy/internal/mcp"
 	"scrumboy/internal/migrate"
+	"scrumboy/internal/oauth"
 	"scrumboy/internal/store"
 )
 
@@ -124,6 +126,7 @@ func authorizeURL(baseURL, clientID, redirectURI, challenge, state string) strin
 		"code_challenge":        {challenge},
 		"code_challenge_method": {"S256"},
 		"state":                 {state},
+		"resource":              {baseURL + "/mcp/rpc"},
 	}
 	return baseURL + "/oauth/authorize?" + q.Encode()
 }
@@ -138,6 +141,7 @@ func approveConsent(t *testing.T, client *http.Client, baseURL, clientID, redire
 		"code_challenge_method": {"S256"},
 		"state":                 {state},
 		"action":                {"approve"},
+		"resource":              {baseURL + "/mcp/rpc"},
 	}
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/oauth/authorize", strings.NewReader(form.Encode()))
 	if err != nil {
@@ -162,6 +166,9 @@ func approveConsent(t *testing.T, client *http.Client, baseURL, clientID, redire
 
 func exchangeToken(t *testing.T, baseURL string, form url.Values) (int, map[string]any) {
 	t.Helper()
+	if _, ok := form["resource"]; !ok {
+		form.Set("resource", baseURL+"/mcp/rpc")
+	}
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/oauth/token", strings.NewReader(form.Encode()))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
@@ -252,12 +259,23 @@ func TestOAuth_FullHappyPath(t *testing.T) {
 			t.Fatalf("expected AS metadata field %q, got %+v", field, asMeta)
 		}
 	}
+	protected, ok := asMeta["protected_resources"].([]any)
+	if !ok || len(protected) != 1 || protected[0] != ts.URL+"/mcp/rpc" {
+		t.Fatalf("protected_resources = %#v, want canonical RPC resource", asMeta["protected_resources"])
+	}
 	var prMeta map[string]any
 	if resp, _ := doJSON(t, http.DefaultClient, http.MethodGet, ts.URL+"/.well-known/oauth-protected-resource", nil, &prMeta); resp.StatusCode != http.StatusOK {
 		t.Fatalf("protected resource metadata status=%d", resp.StatusCode)
 	}
-	if prMeta["resource"] == nil {
-		t.Fatalf("expected protected resource metadata to include resource, got %+v", prMeta)
+	if prMeta["resource"] != ts.URL+"/mcp/rpc" {
+		t.Fatalf("protected resource = %#v, want %s/mcp/rpc", prMeta["resource"], ts.URL)
+	}
+	var pathPRMeta map[string]any
+	if resp, _ := doJSON(t, http.DefaultClient, http.MethodGet, ts.URL+"/.well-known/oauth-protected-resource/mcp/rpc", nil, &pathPRMeta); resp.StatusCode != http.StatusOK {
+		t.Fatalf("path-derived protected resource metadata status=%d", resp.StatusCode)
+	}
+	if !reflect.DeepEqual(pathPRMeta, prMeta) {
+		t.Fatalf("path metadata = %+v, root compatibility metadata = %+v", pathPRMeta, prMeta)
 	}
 
 	verifier, challenge := pkcePair(t)
@@ -332,6 +350,113 @@ func TestOAuth_FullHappyPath(t *testing.T) {
 	result, ok := mcpOut["result"].(map[string]any)
 	if !ok || result["isError"] == true {
 		t.Fatalf("expected successful MCP tool call with OAuth bearer token, got %+v", mcpOut)
+	}
+
+	legacyReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/mcp", strings.NewReader(`{"tool":"projects.list","input":{}}`))
+	legacyReq.Header.Set("Content-Type", "application/json")
+	legacyReq.Header.Set("Authorization", "Bearer "+accessToken)
+	legacyResp, err := http.DefaultClient.Do(legacyReq)
+	if err != nil {
+		t.Fatalf("legacy MCP request with OAuth token: %v", err)
+	}
+	defer legacyResp.Body.Close()
+	var legacyOut map[string]any
+	if err := json.NewDecoder(legacyResp.Body).Decode(&legacyOut); err != nil {
+		t.Fatalf("decode legacy authentication error: %v", err)
+	}
+	if legacyResp.StatusCode != http.StatusUnauthorized || legacyResp.Header.Get("WWW-Authenticate") != "" {
+		t.Fatalf("legacy OAuth token status=%d challenge=%q body=%+v", legacyResp.StatusCode, legacyResp.Header.Get("WWW-Authenticate"), legacyOut)
+	}
+	if legacyOut["ok"] != false {
+		t.Fatalf("legacy OAuth token must retain the legacy error envelope: %+v", legacyOut)
+	}
+}
+
+func TestOAuthResourceParameterValidation(t *testing.T) {
+	ts, _, cleanup := newTestHTTPServerWithMCP(t, "full")
+	defer cleanup()
+	redirectURI := "http://localhost:9999/callback"
+	clientID := registerOAuthClient(t, ts.URL, redirectURI)
+	_, challenge := pkcePair(t)
+
+	query := url.Values{
+		"response_type":         {"code"},
+		"client_id":             {clientID},
+		"redirect_uri":          {redirectURI},
+		"code_challenge":        {challenge},
+		"code_challenge_method": {"S256"},
+		"state":                 {"resource-test"},
+	}
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := client.Get(ts.URL + "/oauth/authorize?" + query.Encode())
+	if err != nil {
+		t.Fatalf("authorize without resource: %v", err)
+	}
+	resp.Body.Close()
+	location, _ := url.Parse(resp.Header.Get("Location"))
+	if resp.StatusCode != http.StatusFound || location.Query().Get("error") != oauth.ErrInvalidTarget {
+		t.Fatalf("authorize without resource status=%d location=%s", resp.StatusCode, location)
+	}
+
+	for name, resources := range map[string][]string{
+		"missing":   nil,
+		"duplicate": {ts.URL + "/mcp/rpc", ts.URL + "/mcp/rpc"},
+		"wrong":     {ts.URL + "/mcp"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			form := url.Values{"grant_type": {"authorization_code"}, "code": {"invalid"}, "redirect_uri": {redirectURI}, "client_id": {clientID}, "code_verifier": {"invalid"}}
+			if resources != nil {
+				form["resource"] = resources
+			}
+			response, err := http.Post(ts.URL+"/oauth/token", "application/x-www-form-urlencoded", strings.NewReader(form.Encode()))
+			if err != nil {
+				t.Fatalf("token request: %v", err)
+			}
+			defer response.Body.Close()
+			var out map[string]any
+			if err := json.NewDecoder(response.Body).Decode(&out); err != nil {
+				t.Fatalf("decode token error: %v", err)
+			}
+			if response.StatusCode != http.StatusBadRequest || out["error"] != oauth.ErrInvalidTarget {
+				t.Fatalf("status=%d body=%+v", response.StatusCode, out)
+			}
+		})
+	}
+}
+
+func TestOAuth_MalformedFormReturnsInvalidRequest(t *testing.T) {
+	ts, _, cleanup := newTestHTTPServerWithMCP(t, "full")
+	defer cleanup()
+
+	authorizeReq, err := http.NewRequest(http.MethodPost, ts.URL+"/oauth/authorize", strings.NewReader("client_id=%"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizeReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	authorizeResp, err := http.DefaultClient.Do(authorizeReq)
+	if err != nil {
+		t.Fatalf("authorize malformed form: %v", err)
+	}
+	defer authorizeResp.Body.Close()
+	var authorizeOut map[string]any
+	if err := json.NewDecoder(authorizeResp.Body).Decode(&authorizeOut); err != nil {
+		t.Fatalf("decode authorize error: %v", err)
+	}
+	if authorizeResp.StatusCode != http.StatusBadRequest || authorizeOut["error"] != oauth.ErrInvalidRequest {
+		t.Fatalf("authorize malformed form status=%d body=%+v", authorizeResp.StatusCode, authorizeOut)
+	}
+
+	tokenResp, err := http.Post(ts.URL+"/oauth/token", "application/x-www-form-urlencoded", strings.NewReader("grant_type=%"))
+	if err != nil {
+		t.Fatalf("token malformed form: %v", err)
+	}
+	defer tokenResp.Body.Close()
+	var tokenOut map[string]any
+	if err := json.NewDecoder(tokenResp.Body).Decode(&tokenOut); err != nil {
+		t.Fatalf("decode token error: %v", err)
+	}
+	if tokenResp.StatusCode != http.StatusBadRequest || tokenOut["error"] != oauth.ErrInvalidRequest {
+		t.Fatalf("token malformed form status=%d body=%+v", tokenResp.StatusCode, tokenOut)
 	}
 }
 
@@ -521,6 +646,7 @@ func TestOAuth_RefreshTokenFlow(t *testing.T) {
 	status2, refreshResp := exchangeToken(t, ts.URL, url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {firstRefreshToken},
+		"client_id":     {clientID},
 	})
 	if status2 != http.StatusOK {
 		t.Fatalf("refresh exchange status=%d body=%+v", status2, refreshResp)
@@ -551,6 +677,7 @@ func TestOAuth_RefreshTokenFlow(t *testing.T) {
 	status3, reuseResp := exchangeToken(t, ts.URL, url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {firstRefreshToken},
+		"client_id":     {clientID},
 	})
 	if status3 != http.StatusBadRequest || reuseResp["error"] != "invalid_grant" {
 		t.Fatalf("expected reused refresh token to be rejected, got status=%d body=%+v", status3, reuseResp)
@@ -601,16 +728,25 @@ func TestOAuth_RevokedAccessTokenRejectedByMCP(t *testing.T) {
 		t.Fatalf("expected 200 from revoking a nonexistent token, got %d", garbageRevokeResp.StatusCode)
 	}
 
-	mcpReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/mcp", strings.NewReader(`{"tool":"projects.list","input":{}}`))
+	mcpReq, _ := http.NewRequest(http.MethodPost, ts.URL+"/mcp/rpc", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 	mcpReq.Header.Set("Content-Type", "application/json")
+	mcpReq.Header.Set("Accept", "application/json, text/event-stream")
 	mcpReq.Header.Set("Authorization", "Bearer "+accessToken)
 	mcpResp, err := http.DefaultClient.Do(mcpReq)
 	if err != nil {
 		t.Fatalf("mcp call with revoked token: %v", err)
 	}
 	defer mcpResp.Body.Close()
-	if mcpResp.StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for revoked access token on legacy /mcp, got %d", mcpResp.StatusCode)
+	body, err := io.ReadAll(mcpResp.Body)
+	if err != nil {
+		t.Fatalf("read revoked-token response: %v", err)
+	}
+	if mcpResp.StatusCode != http.StatusUnauthorized || len(body) != 0 {
+		t.Fatalf("revoked-token status=%d body=%q, want empty 401", mcpResp.StatusCode, body)
+	}
+	wantChallenge := `Bearer error="invalid_token", resource_metadata="` + ts.URL + `/.well-known/oauth-protected-resource/mcp/rpc"`
+	if got := mcpResp.Header.Get("WWW-Authenticate"); got != wantChallenge {
+		t.Fatalf("WWW-Authenticate=%q, want %q", got, wantChallenge)
 	}
 }
 
@@ -816,6 +952,7 @@ func TestOAuth_ConsentSubmitRejectsCrossOriginPost(t *testing.T) {
 		"code_challenge_method": {"S256"},
 		"state":                 {"s1"},
 		"action":                {"approve"},
+		"resource":              {ts.URL + "/mcp/rpc"},
 	}
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/oauth/authorize", strings.NewReader(form.Encode()))
 	if err != nil {
@@ -847,6 +984,7 @@ func postConsentApprove(t *testing.T, client *http.Client, baseURL, clientID, re
 		"code_challenge_method": {"S256"},
 		"state":                 {state},
 		"action":                {"approve"},
+		"resource":              {baseURL + "/mcp/rpc"},
 	}
 	req, err := http.NewRequest(http.MethodPost, baseURL+"/oauth/authorize", strings.NewReader(form.Encode()))
 	if err != nil {

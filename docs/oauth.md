@@ -1,24 +1,24 @@
 # OAuth 2.1 for MCP Clients
 
-Updated: 2026-07-16
+Updated: 2026-07-18
 
-Scrumboy's MCP endpoint (`/mcp`, `/mcp/rpc`) supports OAuth 2.1 for clients that implement automatic discovery, PKCE, and Dynamic Client Registration (DCR) — for example Claude Code's `claude mcp add --transport http` flow. This is an alternative to manually minting a static API token via `POST /api/me/tokens`; no manual client registration is needed — the client self-registers and the user approves access through a normal browser consent screen. **No environment variables are required for a direct-TLS or loopback/localhost deployment.** When `SCRUMBOY_TRUST_PROXY=1`, OAuth issuer discovery requires either `SCRUMBOY_PUBLIC_BASE_URL` or a proxy-provided `X-Forwarded-Host` together with a forwarded HTTPS indication. See [Issuer / discovery origin](#issuer--discovery-origin) below.
+Scrumboy's canonical MCP Streamable HTTP endpoint, `/mcp/rpc`, supports OAuth 2.1 for clients that implement automatic discovery, PKCE, and Dynamic Client Registration (DCR) — for example Cursor and Claude Code. `/mcp/rpc` is the sole OAuth protected resource. The separate `/mcp` endpoint remains Scrumboy's legacy bootstrap/tool API and accepts session cookies or static `sb_…` API tokens, never OAuth access tokens. **No environment variables are required for a direct-TLS or loopback/localhost deployment.** When `SCRUMBOY_TRUST_PROXY=1`, OAuth issuer discovery requires either `SCRUMBOY_PUBLIC_BASE_URL` or a proxy-provided `X-Forwarded-Host` together with a forwarded HTTPS indication. See [Issuer / discovery origin](#issuer--discovery-origin) below.
 
-Compatible clients: any MCP client that speaks HTTP OAuth discovery (RFC 8414 / RFC 9728), PKCE (RFC 7636, S256 only), and Dynamic Client Registration (RFC 7591). Claude Code is the primary target; any other MCP-over-HTTP client with the same OAuth support works identically.
+Compatible clients: any MCP client that speaks HTTP OAuth discovery (RFC 8414 / RFC 9728), PKCE (RFC 7636, S256 only), Dynamic Client Registration (RFC 7591), and OAuth resource indicators. Cursor and Claude Code are the live-acceptance targets; other compatible MCP-over-HTTP clients use the same protocol.
 
 ---
 
 ## Quick Start
 
-For direct-TLS and loopback/localhost deployments, point an MCP client at your Scrumboy instance's `/mcp` endpoint:
+Point a native MCP client directly at `/mcp/rpc`:
 
 ```sh
-claude mcp add --transport http scrumboy https://scrumboy.example.com/mcp
+claude mcp add --transport http scrumboy https://scrumboy.example.com/mcp/rpc
 ```
 
 The client will:
 
-1. Fetch `/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server` to discover the endpoints below.
+1. Receive `WWW-Authenticate: Bearer resource_metadata="https://scrumboy.example.com/.well-known/oauth-protected-resource/mcp/rpc"` from the protected transport, then fetch that document and `/.well-known/oauth-authorization-server`.
 2. `POST /oauth/register` to self-register as a public client (no `client_secret`).
 3. Open a browser to `/oauth/authorize` with a PKCE `code_challenge`.
 4. Prompt you to log in (if not already) and approve access.
@@ -30,13 +30,13 @@ Static Bearer API tokens (`docs/mcp.md`) remain fully supported and unaffected �
 
 ## How It Works
 
-1. MCP client discovers endpoints via `GET /.well-known/oauth-authorization-server` and `GET /.well-known/oauth-protected-resource`.
+1. MCP client discovers endpoints via the challenged `GET /.well-known/oauth-protected-resource/mcp/rpc` document and `GET /.well-known/oauth-authorization-server`. The root protected-resource endpoint remains a compatibility fallback and describes the same `/mcp/rpc` resource.
 2. Client registers itself via `POST /oauth/register` (RFC 7591) and receives a `client_id` (no secret — public client).
-3. Client redirects the user's browser to `GET /oauth/authorize` with `response_type=code`, its `client_id`, `redirect_uri`, and a PKCE `code_challenge` (S256).
+3. Client redirects the user's browser to `GET /oauth/authorize` with `response_type=code`, its `client_id`, `redirect_uri`, a PKCE `code_challenge` (S256), and exactly one `resource=https://scrumboy.example.com/mcp/rpc` parameter.
 4. If the user has no active Scrumboy session, the authorization page offers the configured sign-in methods: local password, SSO, or both. Successful sign-in returns to the pending authorization request and shows consent ("Approve access for `<client name>`?").
 5. On approval, Scrumboy redirects back to the client's `redirect_uri` with a single-use authorization code.
-6. Client exchanges the code (plus its `code_verifier`) for an access token and refresh token at `POST /oauth/token`.
-7. Client sends the access token as `Authorization: Bearer <token>` on `/mcp` or `/mcp/rpc` requests, exactly like a static API token.
+6. Client exchanges the code (plus its `code_verifier`) for an access token and refresh token at `POST /oauth/token`, repeating the same `resource` value. Refresh requests also include `client_id` and the canonical `resource`.
+7. Client sends the opaque Scrumboy access token as `Authorization: Bearer <token>` only to `/mcp/rpc`.
 
 ---
 
@@ -51,6 +51,13 @@ Static Bearer API tokens (`docs/mcp.md`) remain fully supported and unaffected �
 
 - Required on every authorization request. Only `S256` is accepted; `plain` is rejected.
 
+**Protected resource binding**
+
+- Authorization and token requests require exactly one absolute `resource` URI identifying `<trusted-public-origin>/mcp/rpc`; missing, duplicate, malformed, or different values fail with `invalid_target`.
+- Scheme and hostname case are accepted case-insensitively for interoperability. Path, port, escaping, query, fragment, and trailing-slash semantics are not normalized. The path must be exactly `/mcp/rpc`.
+- Authorization codes, access tokens, and refresh tokens persist the canonical resource. Code and refresh redemption validate client, redirect URI, PKCE, and resource before the artifact is consumed, and consume/revoke plus access/refresh token insertion run in a single database transaction so a failed issue does not leave a spent grant without tokens.
+- `/mcp/rpc` accepts only Scrumboy's own opaque OAuth access tokens bound to its current canonical resource. Upstream OIDC-provider tokens are not MCP credentials. OAuth artifacts issued before resource binding are invalidated during migration and require one reauthorization; DCR client registrations remain usable.
+
 **Authentication / OIDC continuation**
 
 - Initial instance ownership is still established through the main app: while Scrumboy has zero users, OAuth authorization shows **Set up Scrumboy first** and does not start SSO. After that one-time bootstrap, the configured login modes below apply.
@@ -59,6 +66,7 @@ Static Bearer API tokens (`docs/mcp.md`) remain fully supported and unaffected �
 - The SSO action sends the complete current `/oauth/authorize?...` request as the OIDC login route's `return_to`. The existing OIDC sanitizer requires that continuation to remain an internal relative Scrumboy path. A client parameter also named `return_to` may remain inside the preserved authorize query, but `/oauth/authorize` does not use it for navigation and it cannot replace the server-constructed outer continuation.
 - After successful SSO, the existing callback creates the session and returns to the full pending authorize request, which then renders consent. Failed or cancelled SSO keeps the existing internal `/?oidc_error=...` destination; restart the authorization request after a failure.
 - Password accounts with 2FA complete the challenge inline on the same authorization page through the existing `/api/auth/login` and `/api/auth/login/2fa` APIs. The pending token remains only in page memory; successful verification reloads the authorize request into consent. **Start over** clears the challenge and restores password login, while hybrid deployments keep **Continue with SSO** available. Invalid, expired, and rate-limited attempts use fixed user-facing messages rather than raw API errors.
+- Upstream human sign-in remains provider-neutral: Scrumboy uses standard OIDC discovery, authorization code flow, issuer validation, and `(issuer, subject)` identity binding. The upstream provider receives only Scrumboy's configured callback (for Vega, `https://<vega-host>/api/auth/oidc/callback`). Cursor and Claude redirect URIs are dynamically registered with Scrumboy's OAuth server and are not registered with the upstream provider.
 
 **Consent**
 
@@ -97,7 +105,8 @@ Static Bearer API tokens (`docs/mcp.md`) remain fully supported and unaffected �
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/.well-known/oauth-protected-resource` | RFC 9728 — advertises this MCP resource's authorization server. |
+| `GET` | `/.well-known/oauth-protected-resource/mcp/rpc` | Canonical RFC 9728 metadata for `<origin>/mcp/rpc`. |
+| `GET` | `/.well-known/oauth-protected-resource` | Compatibility metadata alias; returns the identical `/mcp/rpc` resource identity. |
 | `GET` | `/.well-known/oauth-authorization-server` | RFC 8414 — advertises the endpoints below. |
 | `POST` | `/oauth/register` | RFC 7591 — self-service client registration. |
 | `GET`/`POST` | `/oauth/authorize` | RFC 6749 §3.1 — login/consent, then issues an authorization code. |
@@ -105,6 +114,8 @@ Static Bearer API tokens (`docs/mcp.md`) remain fully supported and unaffected �
 | `POST` | `/oauth/revoke` | RFC 7009 — revokes an access or refresh token. |
 
 `/oauth/*` is deliberately outside `/api/*`: it does not require the `X-Scrumboy: 1` CSRF header that `/api/*` writes require. The consent form at `/oauth/authorize` instead combines `SameSite=Lax` session-cookie semantics with a canonical `Origin` check (falling back to `Referer` when `Origin` is absent). A submission whose browser origin does not match the OAuth issuer is rejected. See the Consent section for why `Referrer-Policy: same-origin` is required for that fallback.
+
+`/oauth/token` and `/oauth/revoke` accept OAuth parameters only in a POST body encoded as `application/x-www-form-urlencoded` (media-type parameters are allowed). Defined parameters in the query string, unsupported or malformed content types, and duplicate defined parameters are rejected with `invalid_request`; token `resource` cardinality and value errors retain `invalid_target`. Token endpoint responses, including errors, send `Cache-Control: no-store` and `Pragma: no-cache`.
 
 ---
 
@@ -117,7 +128,8 @@ curl -X POST https://scrumboy.example.com/oauth/token \
   --data-urlencode "code=$CODE" \
   --data-urlencode "redirect_uri=$REDIRECT_URI" \
   --data-urlencode "client_id=$CLIENT_ID" \
-  --data-urlencode "code_verifier=$CODE_VERIFIER"
+  --data-urlencode "code_verifier=$CODE_VERIFIER" \
+  --data-urlencode "resource=https://scrumboy.example.com/mcp/rpc"
 ```
 
 ```json
@@ -134,6 +146,8 @@ Then use it exactly like a static API token:
 ```sh
 curl -X POST https://scrumboy.example.com/mcp/rpc \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2025-11-25" \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"projects.list","arguments":{}}}'
 ```
@@ -148,11 +162,11 @@ curl -X POST https://scrumboy.example.com/mcp/rpc \
 {"error": "invalid_grant", "error_description": "the authorization code is invalid, expired, or already used"}
 ```
 
-Codes used: **`invalid_request`**, **`invalid_client`**, **`invalid_grant`**, **`unsupported_grant_type`**, **`access_denied`**, **`unsupported_response_type`**, **`invalid_redirect_uri`**, **`invalid_client_metadata`**.
+Codes used: **`invalid_request`**, **`invalid_client`**, **`invalid_grant`**, **`invalid_target`**, **`unsupported_grant_type`**, **`access_denied`**, **`unsupported_response_type`**, **`invalid_redirect_uri`**, **`invalid_client_metadata`**.
 
 `/oauth/authorize` failures either redirect to the client's `redirect_uri` with `error`/`error_description`/`state` query params (once `redirect_uri` itself is verified against the registered client), or — if `redirect_uri` cannot be verified — render a plain error page instead of redirecting, to avoid an open-redirect.
 
-`/oauth/revoke` always returns `200`, whether or not the presented token existed (RFC 7009 §2.2) — this is intentional and prevents the endpoint from being used to probe for token existence.
+For a well-formed form-body request, `/oauth/revoke` returns `200` whether or not the presented token existed (RFC 7009 §2.2). Malformed, query-supplied, or duplicate parameters return `invalid_request` without revoking a token. This preserves existence hiding without accepting credentials from URLs.
 
 ---
 

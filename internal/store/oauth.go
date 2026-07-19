@@ -33,6 +33,13 @@ type OAuthAuthCode struct {
 	RedirectURI         string
 	CodeChallenge       string
 	CodeChallengeMethod string
+	Resource            string
+}
+
+type OAuthRefreshGrant struct {
+	ClientID string
+	UserID   int64
+	Resource string
 }
 
 // OAuthTokenPair is a freshly minted access+refresh token pair.
@@ -91,8 +98,8 @@ WHERE id = ?
 
 // CreateOAuthAuthCode issues a new single-use authorization code (plaintext
 // returned once) with a 60s TTL, bound to the presented PKCE code_challenge.
-func (s *Store) CreateOAuthAuthCode(ctx context.Context, clientID string, userID int64, redirectURI, codeChallenge, codeChallengeMethod string) (plaintext string, err error) {
-	if clientID == "" || userID <= 0 || redirectURI == "" || codeChallenge == "" {
+func (s *Store) CreateOAuthAuthCode(ctx context.Context, clientID string, userID int64, redirectURI, codeChallenge, codeChallengeMethod, resource string) (plaintext string, err error) {
+	if clientID == "" || userID <= 0 || redirectURI == "" || codeChallenge == "" || resource == "" {
 		return "", fmt.Errorf("%w: missing required auth code fields", ErrValidation)
 	}
 	secret, err := oauth.GenerateOpaqueSecret()
@@ -103,50 +110,108 @@ func (s *Store) CreateOAuthAuthCode(ctx context.Context, clientID string, userID
 	nowMs := time.Now().UTC().UnixMilli()
 	expiresMs := time.Now().UTC().Add(authCodeTTL).UnixMilli()
 	_, err = s.db.ExecContext(ctx, `
-INSERT INTO oauth_auth_codes(code_hash, client_id, user_id, redirect_uri, code_challenge, code_challenge_method, created_at, expires_at, consumed_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
-`, codeHash, clientID, userID, redirectURI, codeChallenge, codeChallengeMethod, nowMs, expiresMs)
+INSERT INTO oauth_auth_codes(code_hash, client_id, user_id, redirect_uri, code_challenge, code_challenge_method, resource, created_at, expires_at, consumed_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+`, codeHash, clientID, userID, redirectURI, codeChallenge, codeChallengeMethod, resource, nowMs, expiresMs)
 	if err != nil {
 		return "", fmt.Errorf("insert oauth auth code: %w", err)
 	}
 	return secret, nil
 }
 
-// ConsumeOAuthAuthCode atomically redeems a not-yet-consumed, not-yet-expired
-// authorization code: single-use is enforced by the conditional UPDATE below,
-// not merely by an in-memory check, so a replayed code can never redeem twice
-// even under concurrent requests.
-func (s *Store) ConsumeOAuthAuthCode(ctx context.Context, rawCode string) (OAuthAuthCode, error) {
+// newOAuthTokenSecrets mints opaque access/refresh secrets. Tests may override
+// it to force deterministic hashes (e.g. collision rollback coverage).
+var newOAuthTokenSecrets = defaultNewOAuthTokenSecrets
+
+func defaultNewOAuthTokenSecrets() (accessSecret, refreshSecret string, err error) {
+	accessSecret, err = oauth.GenerateOpaqueSecret()
+	if err != nil {
+		return "", "", err
+	}
+	refreshSecret, err = oauth.GenerateOpaqueSecret()
+	if err != nil {
+		return "", "", err
+	}
+	return accessSecret, refreshSecret, nil
+}
+
+// RedeemOAuthAuthCode validates every request-bound property before consuming a
+// code. Failed client, redirect, resource, or PKCE comparisons do not burn an
+// otherwise valid grant. Prefer RedeemOAuthAuthCodeAndIssue on production token
+// exchange paths so consume and token insert share one transaction.
+func (s *Store) RedeemOAuthAuthCode(ctx context.Context, rawCode, expectedClientID, expectedRedirectURI, expectedResource, codeVerifier string) (OAuthAuthCode, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OAuthAuthCode{}, fmt.Errorf("begin redeem oauth auth code tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	ac, err := s.redeemOAuthAuthCodeTx(ctx, tx, rawCode, expectedClientID, expectedRedirectURI, expectedResource, codeVerifier)
+	if err != nil {
+		return OAuthAuthCode{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return OAuthAuthCode{}, fmt.Errorf("commit redeem oauth auth code tx: %w", err)
+	}
+	return ac, nil
+}
+
+// RedeemOAuthAuthCodeAndIssue validates and consumes an authorization code and
+// mints a new access/refresh pair in a single database transaction. Invalid
+// client, redirect, resource, or PKCE comparisons do not burn the grant; if
+// token insertion fails after a successful consume, the whole transaction rolls
+// back so the code remains redeemable.
+func (s *Store) RedeemOAuthAuthCodeAndIssue(ctx context.Context, rawCode, expectedClientID, expectedRedirectURI, expectedResource, codeVerifier string) (OAuthTokenPair, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OAuthTokenPair{}, fmt.Errorf("begin redeem auth code and issue tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	ac, err := s.redeemOAuthAuthCodeTx(ctx, tx, rawCode, expectedClientID, expectedRedirectURI, expectedResource, codeVerifier)
+	if err != nil {
+		return OAuthTokenPair{}, err
+	}
+	pair, err := s.issueOAuthTokenPairTx(ctx, tx, ac.ClientID, ac.UserID, ac.Resource)
+	if err != nil {
+		return OAuthTokenPair{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return OAuthTokenPair{}, fmt.Errorf("commit redeem auth code and issue tx: %w", err)
+	}
+	return pair, nil
+}
+
+func (s *Store) redeemOAuthAuthCodeTx(ctx context.Context, tx *sql.Tx, rawCode, expectedClientID, expectedRedirectURI, expectedResource, codeVerifier string) (OAuthAuthCode, error) {
 	rawCode = strings.TrimSpace(rawCode)
-	if rawCode == "" {
+	if rawCode == "" || expectedClientID == "" || expectedRedirectURI == "" || expectedResource == "" || codeVerifier == "" {
 		return OAuthAuthCode{}, ErrNotFound
 	}
 	codeHash := hashToken(rawCode)
 	nowMs := time.Now().UTC().UnixMilli()
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return OAuthAuthCode{}, fmt.Errorf("begin consume auth code tx: %w", err)
-	}
-	defer tx.Rollback()
-
 	var ac OAuthAuthCode
-	err = tx.QueryRowContext(ctx, `
-SELECT client_id, user_id, redirect_uri, code_challenge, code_challenge_method
+	err := tx.QueryRowContext(ctx, `
+SELECT client_id, user_id, redirect_uri, code_challenge, code_challenge_method, resource
 FROM oauth_auth_codes
 WHERE code_hash = ? AND consumed_at IS NULL AND expires_at > ?
-`, codeHash, nowMs).Scan(&ac.ClientID, &ac.UserID, &ac.RedirectURI, &ac.CodeChallenge, &ac.CodeChallengeMethod)
+`, codeHash, nowMs).Scan(&ac.ClientID, &ac.UserID, &ac.RedirectURI, &ac.CodeChallenge, &ac.CodeChallengeMethod, &ac.Resource)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return OAuthAuthCode{}, ErrNotFound
 		}
 		return OAuthAuthCode{}, fmt.Errorf("select oauth auth code: %w", err)
 	}
+	if ac.ClientID != expectedClientID || ac.RedirectURI != expectedRedirectURI || ac.Resource != expectedResource || !oauth.VerifyPKCE(ac.CodeChallengeMethod, codeVerifier, ac.CodeChallenge) {
+		return OAuthAuthCode{}, ErrNotFound
+	}
 
 	res, err := tx.ExecContext(ctx, `
 UPDATE oauth_auth_codes SET consumed_at = ?
 WHERE code_hash = ? AND consumed_at IS NULL AND expires_at > ?
-`, nowMs, codeHash, nowMs)
+  AND client_id = ? AND redirect_uri = ? AND resource = ?
+  AND code_challenge = ? AND code_challenge_method = ?
+`, nowMs, codeHash, nowMs, ac.ClientID, ac.RedirectURI, ac.Resource, ac.CodeChallenge, ac.CodeChallengeMethod)
 	if err != nil {
 		return OAuthAuthCode{}, fmt.Errorf("consume oauth auth code: %w", err)
 	}
@@ -158,24 +223,34 @@ WHERE code_hash = ? AND consumed_at IS NULL AND expires_at > ?
 		// Consumed concurrently between the SELECT and UPDATE above.
 		return OAuthAuthCode{}, ErrNotFound
 	}
-	if err := tx.Commit(); err != nil {
-		return OAuthAuthCode{}, fmt.Errorf("commit consume auth code tx: %w", err)
-	}
 	return ac, nil
 }
 
 // IssueOAuthTokenPair mints a new access token (1h TTL) and refresh token (30d
-// TTL) for a client/user pair, e.g. after a successful authorization_code or
-// refresh_token grant.
-func (s *Store) IssueOAuthTokenPair(ctx context.Context, clientID string, userID int64) (OAuthTokenPair, error) {
-	if clientID == "" || userID <= 0 {
-		return OAuthTokenPair{}, fmt.Errorf("%w: missing client id or user id", ErrValidation)
+// TTL) for a client/user pair. Production authorization_code and refresh_token
+// exchanges use the combined redeem/consume-and-issue methods instead.
+func (s *Store) IssueOAuthTokenPair(ctx context.Context, clientID string, userID int64, resource string) (OAuthTokenPair, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OAuthTokenPair{}, fmt.Errorf("begin issue token pair tx: %w", err)
 	}
-	accessSecret, err := oauth.GenerateOpaqueSecret()
+	defer tx.Rollback()
+
+	pair, err := s.issueOAuthTokenPairTx(ctx, tx, clientID, userID, resource)
 	if err != nil {
 		return OAuthTokenPair{}, err
 	}
-	refreshSecret, err := oauth.GenerateOpaqueSecret()
+	if err := tx.Commit(); err != nil {
+		return OAuthTokenPair{}, fmt.Errorf("commit issue token pair tx: %w", err)
+	}
+	return pair, nil
+}
+
+func (s *Store) issueOAuthTokenPairTx(ctx context.Context, tx *sql.Tx, clientID string, userID int64, resource string) (OAuthTokenPair, error) {
+	if clientID == "" || userID <= 0 || resource == "" {
+		return OAuthTokenPair{}, fmt.Errorf("%w: missing client id, user id, or resource", ErrValidation)
+	}
+	accessSecret, refreshSecret, err := newOAuthTokenSecrets()
 	if err != nil {
 		return OAuthTokenPair{}, err
 	}
@@ -185,26 +260,17 @@ func (s *Store) IssueOAuthTokenPair(ctx context.Context, clientID string, userID
 	accessExpiresMs := now.Add(accessTokenTTL).UnixMilli()
 	refreshExpiresMs := now.Add(refreshTokenTTL).UnixMilli()
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return OAuthTokenPair{}, fmt.Errorf("begin issue token pair tx: %w", err)
-	}
-	defer tx.Rollback()
-
 	if _, err := tx.ExecContext(ctx, `
-INSERT INTO oauth_access_tokens(token_hash, client_id, user_id, created_at, expires_at, revoked_at)
-VALUES (?, ?, ?, ?, ?, NULL)
-`, hashToken(accessSecret), clientID, userID, nowMs, accessExpiresMs); err != nil {
+INSERT INTO oauth_access_tokens(token_hash, client_id, user_id, resource, created_at, expires_at, revoked_at)
+VALUES (?, ?, ?, ?, ?, ?, NULL)
+`, hashToken(accessSecret), clientID, userID, resource, nowMs, accessExpiresMs); err != nil {
 		return OAuthTokenPair{}, fmt.Errorf("insert oauth access token: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-INSERT INTO oauth_refresh_tokens(token_hash, client_id, user_id, created_at, expires_at, revoked_at)
-VALUES (?, ?, ?, ?, ?, NULL)
-`, hashToken(refreshSecret), clientID, userID, nowMs, refreshExpiresMs); err != nil {
+INSERT INTO oauth_refresh_tokens(token_hash, client_id, user_id, resource, created_at, expires_at, revoked_at)
+VALUES (?, ?, ?, ?, ?, ?, NULL)
+`, hashToken(refreshSecret), clientID, userID, resource, nowMs, refreshExpiresMs); err != nil {
 		return OAuthTokenPair{}, fmt.Errorf("insert oauth refresh token: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return OAuthTokenPair{}, fmt.Errorf("commit issue token pair tx: %w", err)
 	}
 
 	return OAuthTokenPair{
@@ -214,60 +280,97 @@ VALUES (?, ?, ?, ?, ?, NULL)
 	}, nil
 }
 
-// ConsumeOAuthRefreshToken validates and revokes (rotates away from) a
-// refresh token, returning the client/user it was issued to so a new token
-// pair can be minted. Revocation happens unconditionally on first successful
-// use, which is what makes reuse of an already-rotated token fail.
-func (s *Store) ConsumeOAuthRefreshToken(ctx context.Context, rawToken string) (clientID string, userID int64, err error) {
+// ConsumeOAuthRefreshToken validates and revokes (rotates away from) a refresh
+// token. Prefer ConsumeOAuthRefreshTokenAndIssue on production refresh paths so
+// revoke and token insert share one transaction.
+func (s *Store) ConsumeOAuthRefreshToken(ctx context.Context, rawToken, expectedClientID, expectedResource string) (grant OAuthRefreshGrant, err error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OAuthRefreshGrant{}, fmt.Errorf("begin consume oauth refresh token tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	grant, err = s.consumeOAuthRefreshTokenTx(ctx, tx, rawToken, expectedClientID, expectedResource)
+	if err != nil {
+		return OAuthRefreshGrant{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return OAuthRefreshGrant{}, fmt.Errorf("commit consume oauth refresh token tx: %w", err)
+	}
+	return grant, nil
+}
+
+// ConsumeOAuthRefreshTokenAndIssue validates and revokes a refresh token and
+// mints a new access/refresh pair in a single database transaction. Invalid
+// client or resource comparisons do not revoke the grant; if token insertion
+// fails after a successful revoke, the whole transaction rolls back so the
+// refresh token remains usable.
+func (s *Store) ConsumeOAuthRefreshTokenAndIssue(ctx context.Context, rawToken, expectedClientID, expectedResource string) (OAuthTokenPair, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return OAuthTokenPair{}, fmt.Errorf("begin consume refresh and issue tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	grant, err := s.consumeOAuthRefreshTokenTx(ctx, tx, rawToken, expectedClientID, expectedResource)
+	if err != nil {
+		return OAuthTokenPair{}, err
+	}
+	pair, err := s.issueOAuthTokenPairTx(ctx, tx, grant.ClientID, grant.UserID, grant.Resource)
+	if err != nil {
+		return OAuthTokenPair{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return OAuthTokenPair{}, fmt.Errorf("commit consume refresh and issue tx: %w", err)
+	}
+	return pair, nil
+}
+
+func (s *Store) consumeOAuthRefreshTokenTx(ctx context.Context, tx *sql.Tx, rawToken, expectedClientID, expectedResource string) (grant OAuthRefreshGrant, err error) {
 	rawToken = strings.TrimSpace(rawToken)
-	if rawToken == "" {
-		return "", 0, ErrNotFound
+	if rawToken == "" || expectedClientID == "" || expectedResource == "" {
+		return OAuthRefreshGrant{}, ErrNotFound
 	}
 	tokenHash := hashToken(rawToken)
 	nowMs := time.Now().UTC().UnixMilli()
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return "", 0, fmt.Errorf("begin consume refresh token tx: %w", err)
-	}
-	defer tx.Rollback()
-
 	err = tx.QueryRowContext(ctx, `
-SELECT client_id, user_id
+SELECT client_id, user_id, resource
 FROM oauth_refresh_tokens
 WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?
-`, tokenHash, nowMs).Scan(&clientID, &userID)
+`, tokenHash, nowMs).Scan(&grant.ClientID, &grant.UserID, &grant.Resource)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return "", 0, ErrNotFound
+			return OAuthRefreshGrant{}, ErrNotFound
 		}
-		return "", 0, fmt.Errorf("select oauth refresh token: %w", err)
+		return OAuthRefreshGrant{}, fmt.Errorf("select oauth refresh token: %w", err)
+	}
+	if grant.ClientID != expectedClientID || grant.Resource != expectedResource {
+		return OAuthRefreshGrant{}, ErrNotFound
 	}
 
 	res, err := tx.ExecContext(ctx, `
 UPDATE oauth_refresh_tokens SET revoked_at = ?
-WHERE token_hash = ? AND revoked_at IS NULL
-`, nowMs, tokenHash)
+WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?
+  AND client_id = ? AND resource = ?
+`, nowMs, tokenHash, nowMs, grant.ClientID, grant.Resource)
 	if err != nil {
-		return "", 0, fmt.Errorf("revoke oauth refresh token: %w", err)
+		return OAuthRefreshGrant{}, fmt.Errorf("revoke oauth refresh token: %w", err)
 	}
 	if n, err := res.RowsAffected(); err != nil {
-		return "", 0, fmt.Errorf("revoke oauth refresh token rows: %w", err)
+		return OAuthRefreshGrant{}, fmt.Errorf("revoke oauth refresh token rows: %w", err)
 	} else if n == 0 {
-		return "", 0, ErrNotFound
+		return OAuthRefreshGrant{}, ErrNotFound
 	}
-	if err := tx.Commit(); err != nil {
-		return "", 0, fmt.Errorf("commit consume refresh token tx: %w", err)
-	}
-	return clientID, userID, nil
+	return grant, nil
 }
 
 // GetUserByOAuthAccessToken returns the user for an active (non-revoked,
 // non-expired) OAuth access token. Mirrors GetUserByAPIToken's shape exactly
 // so internal/mcp/adapter.go can use it as a drop-in fallback lookup.
-func (s *Store) GetUserByOAuthAccessToken(ctx context.Context, rawToken string) (User, error) {
+func (s *Store) GetUserByOAuthAccessToken(ctx context.Context, rawToken, expectedResource string) (User, error) {
 	rawToken = strings.TrimSpace(rawToken)
-	if rawToken == "" {
+	if rawToken == "" || expectedResource == "" {
 		return User{}, ErrNotFound
 	}
 	tokenHash := hashToken(rawToken)
@@ -285,9 +388,10 @@ SELECT u.id, u.email, u.name, u.is_bootstrap, u.system_role, u.created_at, u.two
 FROM oauth_access_tokens t
 JOIN users u ON u.id = t.user_id
 WHERE t.token_hash = ?
+	AND t.resource = ?
   AND t.revoked_at IS NULL
   AND t.expires_at > ?
-`, tokenHash, nowMs).Scan(&u.ID, &u.Email, &u.Name, &isBootstrap, &systemRoleStr, &createdAt, &twoFactorEnabled)
+`, tokenHash, expectedResource, nowMs).Scan(&u.ID, &u.Email, &u.Name, &isBootstrap, &systemRoleStr, &createdAt, &twoFactorEnabled)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return User{}, ErrNotFound
