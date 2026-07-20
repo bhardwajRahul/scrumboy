@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
 
+## [3.22.4] - 2026-07-20
+
+### Security
+
+- **Pin CI/CD dependencies** - Pin GitHub Actions and reusable OSV workflows to immutable commit SHAs, and pin Dockerfile base images (`golang:1.25.12-alpine`, `alpine:3.20`) to multi-platform manifest digests.
+
 ## [3.22.3] - 2026-07-20
 
 ### Added
