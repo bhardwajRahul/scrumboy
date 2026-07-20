@@ -2,6 +2,26 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
 
+## [3.22.4] - 2026-07-20
+
+### Security
+
+- **Pin CI/CD dependencies** - Pin GitHub Actions and reusable OSV workflows to immutable commit SHAs, and pin Dockerfile base images (`golang:1.25.12-alpine`, `alpine:3.20`) to multi-platform manifest digests.
+
+## [3.22.3] - 2026-07-20
+
+### Added
+
+- **OSV Scanner CI** - GitHub Actions workflow scans Go and npm lockfiles with OSV Scanner on dependency-path PRs, merges, pushes, and a weekly schedule.
+
+### Changed
+
+- **Go dependency upgrades** - Bump `golang.org/x/crypto` to `v0.54.0`, `golang.org/x/oauth2` to `v0.36.0`, `golang.org/x/term` to `v0.45.0`, and transitive `golang.org/x/sys` to `v0.47.0`; promote `golang-jwt/jwt/v5` to a direct require.
+
+### Security
+
+- **OSV ignore for `GO-2026-5932`** - `osv-scanner.toml` documents that Scrumboy does not import `golang.org/x/crypto/openpgp` or its affected subpackages.
+
 ## [3.22.2] - 2026-07-19
 
 ### Changed
