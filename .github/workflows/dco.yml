@@ -4,16 +4,61 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions:
+  contents: read
+
 jobs:
   dco:
     runs-on: ubuntu-latest
     steps:
-      - name: Get PR commits
-        id: get-pr-commits
-        uses: tim-actions/get-pr-commits@v1.3.1
+      - name: Check out repository
+        uses: actions/checkout@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: DCO check
-        uses: tim-actions/dco@v1.1.0
-        with:
-          commits: ${{ steps.get-pr-commits.outputs.commits }}
+          fetch-depth: 0
+
+      - name: Check DCO sign-offs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python3 <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+
+          base = os.environ["BASE_SHA"]
+          head = os.environ["HEAD_SHA"]
+
+          commits = subprocess.check_output(
+              ["git", "rev-list", "--no-merges", f"{base}..{head}"],
+              text=True,
+          ).splitlines()
+
+          failures = []
+
+          for commit in commits:
+              output = subprocess.check_output(
+                  ["git", "show", "-s", "--format=%an%n%ae%n%B", commit],
+                  text=True,
+              )
+
+              author_name, author_email, message = output.split("\n", 2)
+              expected = f"{author_name} <{author_email}>"
+
+              signoffs = re.findall(
+                  r"(?im)^Signed-off-by:\s*(.+?)\s*$",
+                  message,
+              )
+
+              if not any(signoff.casefold() == expected.casefold() for signoff in signoffs):
+                  failures.append((commit, expected))
+
+          if failures:
+              print("DCO check failed:")
+              for commit, expected in failures:
+                  print(f"  {commit[:12]}: missing Signed-off-by: {expected}")
+              sys.exit(1)
+
+          print(f"DCO check passed for {len(commits)} commit(s).")
+          PY
