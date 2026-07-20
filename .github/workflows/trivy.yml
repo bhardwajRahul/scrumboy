@@ -4,10 +4,14 @@ on:
     branches:
       - 'security/trivy' # Triggers exclusively on your test branch
 
+permissions:
+  contents: read
+
 jobs:
   trivy:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       security-events: write # Required for SARIF uploads to the Security Tab
     steps:
       # Pinned to the immutable commit for v6.1.0
