@@ -2,7 +2,9 @@ name: DCO Check
 
 on:
   pull_request:
-    branches: [main, master]
+    branches:
+      - main
+      - master
 
 permissions:
   contents: read
@@ -10,55 +12,62 @@ permissions:
 jobs:
   dco:
     runs-on: ubuntu-latest
+
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Check DCO sign-offs
+        shell: bash
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          python3 <<'PY'
-          import os
-          import re
-          import subprocess
-          import sys
+          set -euo pipefail
 
-          base = os.environ["BASE_SHA"]
-          head = os.environ["HEAD_SHA"]
+          mapfile -t commits < <(
+            git rev-list --reverse "${BASE_SHA}..${HEAD_SHA}"
+          )
 
-          commits = subprocess.check_output(
-              ["git", "rev-list", "--no-merges", f"{base}..{head}"],
-              text=True,
-          ).splitlines()
+          if (( ${#commits[@]} == 0 )); then
+            echo "No commits found in pull request."
+            exit 0
+          fi
 
-          failures = []
+          failures=0
 
-          for commit in commits:
-              output = subprocess.check_output(
-                  ["git", "show", "-s", "--format=%an%n%ae%n%B", commit],
-                  text=True,
-              )
+          for commit in "${commits[@]}"; do
+            author_name="$(git show -s --format='%an' "$commit")"
+            author_email="$(git show -s --format='%ae' "$commit")"
+            expected="${author_name} <${author_email}>"
+            matched=false
 
-              author_name, author_email, message = output.split("\n", 2)
-              expected = f"{author_name} <{author_email}>"
+            mapfile -t signoffs < <(
+              git show -s --format='%B' "$commit" |
+                git interpret-trailers --parse |
+                sed -nE 's/^Signed-off-by:[[:space:]]*//Ip'
+            )
 
-              signoffs = re.findall(
-                  r"(?im)^Signed-off-by:\s*(.+?)\s*$",
-                  message,
-              )
+            for signoff in "${signoffs[@]}"; do
+              if [[ "${signoff,,}" == "${expected,,}" ]]; then
+                matched=true
+                break
+              fi
+            done
 
-              if not any(signoff.casefold() == expected.casefold() for signoff in signoffs):
-                  failures.append((commit, expected))
+            if [[ "$matched" == true ]]; then
+              echo "PASS ${commit:0:12} ${expected}"
+            else
+              echo "::error title=DCO sign-off missing::Commit ${commit:0:12} must contain: Signed-off-by: ${expected}"
+              failures=$((failures + 1))
+            fi
+          done
 
-          if failures:
-              print("DCO check failed:")
-              for commit, expected in failures:
-                  print(f"  {commit[:12]}: missing Signed-off-by: {expected}")
-              sys.exit(1)
+          if (( failures > 0 )); then
+            echo "DCO check failed for ${failures} commit(s)."
+            exit 1
+          fi
 
-          print(f"DCO check passed for {len(commits)} commit(s).")
-          PY
+          echo "DCO check passed for ${#commits[@]} commit(s)."
