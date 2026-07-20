@@ -1,0 +1,31 @@
+name: Trivy Test Scan
+on:
+  push:
+    branches:
+      - 'security/trivy' # Triggers exclusively on your test branch
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # Required for SARIF uploads to the Security Tab
+    steps:
+      # Upgraded to the latest standard checkout action
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # Upgraded to the modern, verified immutable tag format
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          exit-code: '0' # Keeps the build green during testing
+
+      # Upgraded to the latest CodeQL Action suite for SARIF uploading
+      - name: Upload results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: 'trivy-results.sarif'
