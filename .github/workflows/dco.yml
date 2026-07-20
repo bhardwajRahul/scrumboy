@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
 
           mapfile -t commits < <(
-            git rev-list --reverse "${BASE_SHA}..${HEAD_SHA}"
+            git rev-list --reverse --no-merges "${BASE_SHA}..${HEAD_SHA}"
           )
 
           if (( ${#commits[@]} == 0 )); then
