@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
 
+## [3.22.5] - 2026-07-21
+
+### Changed
+
+- **Frontend dependency upgrades** - Bump `dompurify` to `3.4.12`, `markdown-it` to `14.3.0`, `mermaid` to `11.16.0`, and `happy-dom` to `20.10.6`; sync vendored `/vendor` browser assets.
+
 ## [3.22.4] - 2026-07-20
 
 ### Security
