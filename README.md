@@ -93,7 +93,13 @@ Open [http://localhost:8080](http://localhost:8080).
 
 ### Run the Windows executable
 
-Windows users can download `scrumboy-*-windows-amd64.exe` from [GitHub Releases](https://github.com/markrai/scrumboy/releases). The matching `.sha256` file is published beside it for checksum verification.
+Windows users can download `scrumboy-*-windows-amd64.exe` from [GitHub Releases](https://github.com/markrai/scrumboy/releases). The matching `.sha256` file is published beside it for checksum verification. Release builds also publish a matching `.intoto.jsonl` provenance bundle.
+
+The `.sha256` file checks file integrity. The attestation verifies the artifact's signed build provenance and expected repository identity:
+
+```bash
+gh attestation verify scrumboy-<tag>-windows-amd64.exe -R markrai/scrumboy
+```
 
 Put the exe in a dedicated writable folder before running it, for example `%USERPROFILE%\Scrumboy`. The exe starts a local Scrumboy server; open [http://localhost:8080](http://localhost:8080) after it starts.
 
