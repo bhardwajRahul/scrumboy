@@ -204,6 +204,8 @@ jobs:
     permissions:
       contents: write
       actions: read
+      id-token: write
+      attestations: write
 
     steps:
       - name: Download executable artifacts
@@ -212,12 +214,9 @@ jobs:
           path: ${{ runner.temp }}/release-assets
           merge-multiple: true
 
-      - name: Attach assets to existing release
+      - name: Resolve release assets
+        id: resolve
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           $ErrorActionPreference = "Stop"
 
@@ -234,4 +233,94 @@ jobs:
 
           $exePath = $exeFiles[0].FullName
           $shaPath = $shaFiles[0].FullName
-          gh release upload $env:RELEASE_TAG $exePath $shaPath --clobber
+          $provenancePath = "$exePath.intoto.jsonl"
+
+          "exe_path=$exePath" >> $env:GITHUB_OUTPUT
+          "sha_path=$shaPath" >> $env:GITHUB_OUTPUT
+          "provenance_path=$provenancePath" >> $env:GITHUB_OUTPUT
+
+      - name: Attest Windows executable
+        id: attest
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4.2.0
+        with:
+          subject-path: ${{ steps.resolve.outputs.exe_path }}
+
+      - name: Export provenance bundle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EXE_PATH: ${{ steps.resolve.outputs.exe_path }}
+          PROVENANCE_PATH: ${{ steps.resolve.outputs.provenance_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $exportDir = Join-Path $env:RUNNER_TEMP "attestation-export"
+          Remove-Item -LiteralPath $exportDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $exportDir -Force | Out-Null
+          Set-Location -LiteralPath $exportDir
+
+          gh attestation download "$env:EXE_PATH" `
+            -R "$env:GH_REPO" `
+            --predicate-type "https://slsa.dev/provenance/v1"
+
+          $bundleFiles = @(Get-ChildItem -LiteralPath $exportDir -File | Where-Object {
+            $_.Name -like "sha256-*.jsonl" -or $_.Name -like "sha256:*.jsonl"
+          })
+          if ($bundleFiles.Count -ne 1) {
+            throw "Expected exactly one attestation bundle from gh attestation download, found $($bundleFiles.Count)."
+          }
+
+          $bundlePath = $bundleFiles[0].FullName
+          if ((Get-Item -LiteralPath $bundlePath).Length -le 0) {
+            throw "Attestation bundle '$bundlePath' is empty."
+          }
+
+          Copy-Item -LiteralPath $bundlePath -Destination $env:PROVENANCE_PATH -Force
+          if (-not (Test-Path -LiteralPath $env:PROVENANCE_PATH -PathType Leaf)) {
+            throw "Provenance file was not created at '$env:PROVENANCE_PATH'."
+          }
+          if ((Get-Item -LiteralPath $env:PROVENANCE_PATH).Length -le 0) {
+            throw "Provenance file '$env:PROVENANCE_PATH' is empty."
+          }
+          if (-not $env:PROVENANCE_PATH.EndsWith(".intoto.jsonl")) {
+            throw "Provenance filename must end with .intoto.jsonl."
+          }
+
+          gh attestation verify "$env:EXE_PATH" `
+            -R "$env:GH_REPO" `
+            --bundle "$env:PROVENANCE_PATH" `
+            --predicate-type "https://slsa.dev/provenance/v1" `
+            --signer-workflow "$env:GH_REPO/.github/workflows/windows-exe-release.yml" `
+            --deny-self-hosted-runners
+
+      - name: Attach assets to existing release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          EXE_PATH: ${{ steps.resolve.outputs.exe_path }}
+          SHA_PATH: ${{ steps.resolve.outputs.sha_path }}
+          PROVENANCE_PATH: ${{ steps.resolve.outputs.provenance_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          foreach ($path in @($env:EXE_PATH, $env:SHA_PATH, $env:PROVENANCE_PATH)) {
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Required release asset missing: '$path'."
+            }
+          }
+
+          $provenanceFiles = @(Get-ChildItem -LiteralPath (Split-Path -Parent $env:PROVENANCE_PATH) -File | Where-Object {
+            $_.Name -like "scrumboy-*-windows-amd64.exe.intoto.jsonl"
+          })
+          if ($provenanceFiles.Count -ne 1) {
+            throw "Expected exactly one provenance bundle, found $($provenanceFiles.Count)."
+          }
+
+          gh release upload "$env:RELEASE_TAG" `
+            "$env:EXE_PATH" `
+            "$env:SHA_PATH" `
+            "$env:PROVENANCE_PATH" `
+            --clobber
