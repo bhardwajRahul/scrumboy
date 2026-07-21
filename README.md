@@ -2,10 +2,11 @@
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
   <img src="https://img.shields.io/badge/version-v3.22.5-blue" alt="version" />
-  <img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" /></a>
   <img src="https://img.shields.io/badge/i18n-23%20languages-yellow" alt="i18n" />
   <a href="https://github.com/markrai/scrumboy/actions/workflows/ci.yml"><img src="https://github.com/markrai/scrumboy/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
-  <a href="SECURITY.md"><img src="https://snyk.io/test/github/markrai/scrumboy/badge.svg" alt="Snyk Security" /></a>
+  <a href="SECURITY.md"><img src="https://img.shields.io/badge/Snyk-monitored-8A2BE2?logo=snyk&logoColor=white" alt="snyk monitored" /></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/markrai/scrumboy"><img src="https://api.scorecard.dev/projects/github.com/markrai/scrumboy/badge" alt="OpenSSF Scorecard" /></a>
 </p>
 
 #### Self-hosted project management & issue-tracking solution + instant shareable & customizable boards + realtime collaboration, automation, API access and MCP-compatible client support
@@ -92,7 +93,13 @@ Open [http://localhost:8080](http://localhost:8080).
 
 ### Run the Windows executable
 
-Windows users can download `scrumboy-*-windows-amd64.exe` from [GitHub Releases](https://github.com/markrai/scrumboy/releases). The matching `.sha256` file is published beside it for checksum verification.
+Windows users can download `scrumboy-*-windows-amd64.exe` from [GitHub Releases](https://github.com/markrai/scrumboy/releases). The matching `.sha256` file is published beside it for checksum verification. Release builds also publish a matching `.intoto.jsonl` provenance bundle.
+
+The `.sha256` file checks file integrity. The attestation verifies the artifact's signed build provenance and expected repository identity:
+
+```bash
+gh attestation verify scrumboy-<tag>-windows-amd64.exe -R markrai/scrumboy
+```
 
 Put the exe in a dedicated writable folder before running it, for example `%USERPROFILE%\Scrumboy`. The exe starts a local Scrumboy server; open [http://localhost:8080](http://localhost:8080) after it starts.
 
