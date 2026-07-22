@@ -522,6 +522,36 @@ function bindDialogLocale(dialog: HTMLDialogElement, sync?: () => void): () => v
 }
 
 /**
+ * Wire uniform, orphan-free teardown for a dynamically-created dialog.
+ *
+ * Returns an idempotent `close()` that releases the locale listener, runs any
+ * caller cleanup, and removes the node from the DOM. Native dismiss paths
+ * (Escape / light-dismiss `cancel`, and the `close` event) are routed through
+ * the same `close()` so the node can never be left detached-but-present, which
+ * would otherwise duplicate element IDs and misbind handlers on reopen.
+ */
+function attachDialogClose(
+  dialog: HTMLDialogElement,
+  releaseLocale: () => void,
+  extraCleanup?: () => void
+): () => void {
+  let removed = false;
+  const close = () => {
+    if (removed) return;
+    removed = true;
+    extraCleanup?.();
+    releaseLocale();
+    dialog.remove();
+  };
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    close();
+  });
+  dialog.addEventListener("close", close);
+  return close;
+}
+
+/**
  * Re-localize the Web Push hint without probing push capability or changing the
  * toggle/subscription state. Only the unsupported-browser hint is locale-driven;
  * all other hint states stay empty, matching the binding logic.
@@ -2374,14 +2404,11 @@ function showPasswordResetDialog(userId: string): void {
   (dialog as HTMLDialogElement).showModal();
   const releaseLocale = bindDialogLocale(dialog);
 
-  const closeBtn = document.getElementById("passwordResetDialogClose");
-  const cancelBtn = document.getElementById("passwordResetCancel");
-  const form = document.getElementById("passwordResetForm") as HTMLFormElement;
+  const closeBtn = dialog.querySelector<HTMLElement>("#passwordResetDialogClose");
+  const cancelBtn = dialog.querySelector<HTMLElement>("#passwordResetCancel");
+  const form = dialog.querySelector<HTMLFormElement>("#passwordResetForm");
 
-  const close = () => {
-    releaseLocale();
-    document.body.removeChild(dialog);
-  };
+  const close = attachDialogClose(dialog, releaseLocale);
 
   if (closeBtn) closeBtn.addEventListener("click", close);
   if (cancelBtn) cancelBtn.addEventListener("click", close);
@@ -2441,14 +2468,11 @@ function showPasswordResetFallbackDialog(resetUrl: string): void {
   (dialog as HTMLDialogElement).showModal();
   const releaseLocale = bindDialogLocale(dialog);
 
-  const closeBtn = document.getElementById("passwordResetFallbackClose");
-  const copyBtn = document.getElementById("passwordResetFallbackCopy");
-  const urlInput = document.getElementById("passwordResetUrlDisplay") as HTMLInputElement;
+  const closeBtn = dialog.querySelector<HTMLElement>("#passwordResetFallbackClose");
+  const copyBtn = dialog.querySelector<HTMLElement>("#passwordResetFallbackCopy");
+  const urlInput = dialog.querySelector<HTMLInputElement>("#passwordResetUrlDisplay");
 
-  const close = () => {
-    releaseLocale();
-    document.body.removeChild(dialog);
-  };
+  const close = attachDialogClose(dialog, releaseLocale);
 
   if (closeBtn) closeBtn.addEventListener("click", close);
   dialog.addEventListener("click", (e) => {
@@ -2535,13 +2559,13 @@ function showCreateUserDialog(): void {
   document.body.appendChild(dialog);
   (dialog as HTMLDialogElement).showModal();
 
-  const closeBtn = document.getElementById("createUserDialogClose");
-  const cancelBtn = document.getElementById("createUserCancel");
-  const form = document.getElementById("createUserForm") as HTMLFormElement;
-  const emailInput = document.getElementById("createUserEmail") as HTMLInputElement;
-  const nameInput = document.getElementById("createUserName") as HTMLInputElement;
-  const passwordInput = document.getElementById("createUserPassword") as HTMLInputElement;
-  const passwordToggle = document.getElementById("createUserPasswordToggle");
+  const closeBtn = dialog.querySelector<HTMLElement>("#createUserDialogClose");
+  const cancelBtn = dialog.querySelector<HTMLElement>("#createUserCancel");
+  const form = dialog.querySelector<HTMLFormElement>("#createUserForm");
+  const emailInput = dialog.querySelector<HTMLInputElement>("#createUserEmail");
+  const nameInput = dialog.querySelector<HTMLInputElement>("#createUserName");
+  const passwordInput = dialog.querySelector<HTMLInputElement>("#createUserPassword");
+  const passwordToggle = dialog.querySelector<HTMLElement>("#createUserPasswordToggle");
   const passwordIconPath = passwordToggle?.querySelector("path");
 
   const PATH_SHOW = "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z";
@@ -2567,10 +2591,9 @@ function showCreateUserDialog(): void {
     });
   }
 
-  const close = () => {
-    releaseLocale();
-    document.body.removeChild(dialog);
-  };
+  const close = attachDialogClose(dialog, releaseLocale, () => {
+    if (passwordInput) passwordInput.value = "";
+  });
 
   if (closeBtn) {
     closeBtn.addEventListener("click", close);
@@ -2584,7 +2607,7 @@ function showCreateUserDialog(): void {
     }
   });
 
-  if (form) {
+  if (form && emailInput && nameInput && passwordInput) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const email = emailInput.value.trim();
@@ -2791,20 +2814,20 @@ async function showEnable2FADialog(): Promise<void> {
     (dialog as HTMLDialogElement).showModal();
     const releaseLocale = bindDialogLocale(dialog);
 
-    const close = () => {
-      releaseLocale();
-      document.body.removeChild(dialog);
-    };
+    const form = dialog.querySelector<HTMLFormElement>("#enable2FAForm");
+    const codeInput = dialog.querySelector<HTMLInputElement>("#enable2FACode");
+    const errorEl = dialog.querySelector<HTMLElement>("#enable2FAError");
 
-    document.getElementById("enable2FAClose")?.addEventListener("click", close);
-    document.getElementById("enable2FACancel")?.addEventListener("click", close);
+    const close = attachDialogClose(dialog, releaseLocale, () => {
+      if (codeInput) codeInput.value = "";
+    });
+
+    dialog.querySelector<HTMLElement>("#enable2FAClose")?.addEventListener("click", close);
+    dialog.querySelector<HTMLElement>("#enable2FACancel")?.addEventListener("click", close);
     dialog.addEventListener("click", (e) => {
       if (e.target === dialog) close();
     });
 
-    const form = document.getElementById("enable2FAForm");
-    const codeInput = document.getElementById("enable2FACode") as HTMLInputElement;
-    const errorEl = document.getElementById("enable2FAError") as HTMLElement | null;
     const showError = (msg: string) => {
       if (errorEl) {
         errorEl.textContent = msg;
@@ -2872,13 +2895,10 @@ function showRecoveryCodesDialog(codes: string[]): void {
   (dialog as HTMLDialogElement).showModal();
   const releaseLocale = bindDialogLocale(dialog);
 
-  const close = () => {
-    releaseLocale();
-    document.body.removeChild(dialog);
-  };
+  const close = attachDialogClose(dialog, releaseLocale);
 
-  document.getElementById("recoveryCodesClose")?.addEventListener("click", close);
-  document.getElementById("recoveryCodesDone")?.addEventListener("click", close);
+  dialog.querySelector<HTMLElement>("#recoveryCodesClose")?.addEventListener("click", close);
+  dialog.querySelector<HTMLElement>("#recoveryCodesDone")?.addEventListener("click", close);
   dialog.addEventListener("click", (e) => {
     if (e.target === dialog) close();
   });
@@ -2909,19 +2929,19 @@ function showDisable2FADialog(): void {
   (dialog as HTMLDialogElement).showModal();
   const releaseLocale = bindDialogLocale(dialog);
 
-  const close = () => {
-    releaseLocale();
-    document.body.removeChild(dialog);
-  };
+  const form = dialog.querySelector<HTMLFormElement>("#disable2FAForm");
+  const passwordInput = dialog.querySelector<HTMLInputElement>("#disable2FAPassword");
 
-  document.getElementById("disable2FAClose")?.addEventListener("click", close);
-  document.getElementById("disable2FACancel")?.addEventListener("click", close);
+  const close = attachDialogClose(dialog, releaseLocale, () => {
+    if (passwordInput) passwordInput.value = "";
+  });
+
+  dialog.querySelector<HTMLElement>("#disable2FAClose")?.addEventListener("click", close);
+  dialog.querySelector<HTMLElement>("#disable2FACancel")?.addEventListener("click", close);
   dialog.addEventListener("click", (e) => {
     if (e.target === dialog) close();
   });
 
-  const form = document.getElementById("disable2FAForm");
-  const passwordInput = document.getElementById("disable2FAPassword") as HTMLInputElement;
   if (form && passwordInput) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();

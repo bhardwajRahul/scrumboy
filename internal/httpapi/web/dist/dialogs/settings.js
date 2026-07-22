@@ -410,6 +410,32 @@ function bindDialogLocale(dialog, sync) {
     return release;
 }
 /**
+ * Wire uniform, orphan-free teardown for a dynamically-created dialog.
+ *
+ * Returns an idempotent `close()` that releases the locale listener, runs any
+ * caller cleanup, and removes the node from the DOM. Native dismiss paths
+ * (Escape / light-dismiss `cancel`, and the `close` event) are routed through
+ * the same `close()` so the node can never be left detached-but-present, which
+ * would otherwise duplicate element IDs and misbind handlers on reopen.
+ */
+function attachDialogClose(dialog, releaseLocale, extraCleanup) {
+    let removed = false;
+    const close = () => {
+        if (removed)
+            return;
+        removed = true;
+        extraCleanup?.();
+        releaseLocale();
+        dialog.remove();
+    };
+    dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        close();
+    });
+    dialog.addEventListener("close", close);
+    return close;
+}
+/**
  * Re-localize the Web Push hint without probing push capability or changing the
  * toggle/subscription state. Only the unsupported-browser hint is locale-driven;
  * all other hint states stay empty, matching the binding logic.
@@ -2172,13 +2198,10 @@ function showPasswordResetDialog(userId) {
     document.body.appendChild(dialog);
     dialog.showModal();
     const releaseLocale = bindDialogLocale(dialog);
-    const closeBtn = document.getElementById("passwordResetDialogClose");
-    const cancelBtn = document.getElementById("passwordResetCancel");
-    const form = document.getElementById("passwordResetForm");
-    const close = () => {
-        releaseLocale();
-        document.body.removeChild(dialog);
-    };
+    const closeBtn = dialog.querySelector("#passwordResetDialogClose");
+    const cancelBtn = dialog.querySelector("#passwordResetCancel");
+    const form = dialog.querySelector("#passwordResetForm");
+    const close = attachDialogClose(dialog, releaseLocale);
     if (closeBtn)
         closeBtn.addEventListener("click", close);
     if (cancelBtn)
@@ -2236,13 +2259,10 @@ function showPasswordResetFallbackDialog(resetUrl) {
     document.body.appendChild(dialog);
     dialog.showModal();
     const releaseLocale = bindDialogLocale(dialog);
-    const closeBtn = document.getElementById("passwordResetFallbackClose");
-    const copyBtn = document.getElementById("passwordResetFallbackCopy");
-    const urlInput = document.getElementById("passwordResetUrlDisplay");
-    const close = () => {
-        releaseLocale();
-        document.body.removeChild(dialog);
-    };
+    const closeBtn = dialog.querySelector("#passwordResetFallbackClose");
+    const copyBtn = dialog.querySelector("#passwordResetFallbackCopy");
+    const urlInput = dialog.querySelector("#passwordResetUrlDisplay");
+    const close = attachDialogClose(dialog, releaseLocale);
     if (closeBtn)
         closeBtn.addEventListener("click", close);
     dialog.addEventListener("click", (e) => {
@@ -2328,13 +2348,13 @@ function showCreateUserDialog() {
   `;
     document.body.appendChild(dialog);
     dialog.showModal();
-    const closeBtn = document.getElementById("createUserDialogClose");
-    const cancelBtn = document.getElementById("createUserCancel");
-    const form = document.getElementById("createUserForm");
-    const emailInput = document.getElementById("createUserEmail");
-    const nameInput = document.getElementById("createUserName");
-    const passwordInput = document.getElementById("createUserPassword");
-    const passwordToggle = document.getElementById("createUserPasswordToggle");
+    const closeBtn = dialog.querySelector("#createUserDialogClose");
+    const cancelBtn = dialog.querySelector("#createUserCancel");
+    const form = dialog.querySelector("#createUserForm");
+    const emailInput = dialog.querySelector("#createUserEmail");
+    const nameInput = dialog.querySelector("#createUserName");
+    const passwordInput = dialog.querySelector("#createUserPassword");
+    const passwordToggle = dialog.querySelector("#createUserPasswordToggle");
     const passwordIconPath = passwordToggle?.querySelector("path");
     const PATH_SHOW = "M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z";
     const PATH_HIDE = "M2 5.27L3.28 4 20 20.72 18.73 22 15.65 18.92C14.5 19.3 13.28 19.5 12 19.5 7 19.5 2.73 16.39 1 12c.69-1.76 1.79-3.31 3.19-4.54L2 5.27zM12 9a3 3 0 0 1 3 3c0 .35-.06.69-.17 1l-3.83-3.83c.31-.06.65-.17 1-.17zM12 4.5c5 0 9.27 3.11 11 7.5-.82 2.08-2.21 3.88-4 5.19L17.58 15.76C18.94 14.82 20.06 13.54 20.82 12 19.17 8.64 15.76 6.5 12 6.5c-1.09 0-2.16.18-3.16.5L7.3 5.47C8.74 4.85 10.33 4.5 12 4.5zM3.18 12C4.83 15.36 8.24 17.5 12 17.5c.69 0 1.37-.07 2-.21L11.72 15c-1.43-.15-2.57-1.29-2.72-2.72L5.6 8.87C4.61 9.72 3.78 10.78 3.18 12z";
@@ -2357,10 +2377,10 @@ function showCreateUserDialog() {
             syncPasswordToggleLabel();
         });
     }
-    const close = () => {
-        releaseLocale();
-        document.body.removeChild(dialog);
-    };
+    const close = attachDialogClose(dialog, releaseLocale, () => {
+        if (passwordInput)
+            passwordInput.value = "";
+    });
     if (closeBtn) {
         closeBtn.addEventListener("click", close);
     }
@@ -2372,7 +2392,7 @@ function showCreateUserDialog() {
             close();
         }
     });
-    if (form) {
+    if (form && emailInput && nameInput && passwordInput) {
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
             const email = emailInput.value.trim();
@@ -2575,19 +2595,19 @@ async function showEnable2FADialog() {
         document.body.appendChild(dialog);
         dialog.showModal();
         const releaseLocale = bindDialogLocale(dialog);
-        const close = () => {
-            releaseLocale();
-            document.body.removeChild(dialog);
-        };
-        document.getElementById("enable2FAClose")?.addEventListener("click", close);
-        document.getElementById("enable2FACancel")?.addEventListener("click", close);
+        const form = dialog.querySelector("#enable2FAForm");
+        const codeInput = dialog.querySelector("#enable2FACode");
+        const errorEl = dialog.querySelector("#enable2FAError");
+        const close = attachDialogClose(dialog, releaseLocale, () => {
+            if (codeInput)
+                codeInput.value = "";
+        });
+        dialog.querySelector("#enable2FAClose")?.addEventListener("click", close);
+        dialog.querySelector("#enable2FACancel")?.addEventListener("click", close);
         dialog.addEventListener("click", (e) => {
             if (e.target === dialog)
                 close();
         });
-        const form = document.getElementById("enable2FAForm");
-        const codeInput = document.getElementById("enable2FACode");
-        const errorEl = document.getElementById("enable2FAError");
         const showError = (msg) => {
             if (errorEl) {
                 errorEl.textContent = msg;
@@ -2656,12 +2676,9 @@ function showRecoveryCodesDialog(codes) {
     document.body.appendChild(dialog);
     dialog.showModal();
     const releaseLocale = bindDialogLocale(dialog);
-    const close = () => {
-        releaseLocale();
-        document.body.removeChild(dialog);
-    };
-    document.getElementById("recoveryCodesClose")?.addEventListener("click", close);
-    document.getElementById("recoveryCodesDone")?.addEventListener("click", close);
+    const close = attachDialogClose(dialog, releaseLocale);
+    dialog.querySelector("#recoveryCodesClose")?.addEventListener("click", close);
+    dialog.querySelector("#recoveryCodesDone")?.addEventListener("click", close);
     dialog.addEventListener("click", (e) => {
         if (e.target === dialog)
             close();
@@ -2691,18 +2708,18 @@ function showDisable2FADialog() {
     document.body.appendChild(dialog);
     dialog.showModal();
     const releaseLocale = bindDialogLocale(dialog);
-    const close = () => {
-        releaseLocale();
-        document.body.removeChild(dialog);
-    };
-    document.getElementById("disable2FAClose")?.addEventListener("click", close);
-    document.getElementById("disable2FACancel")?.addEventListener("click", close);
+    const form = dialog.querySelector("#disable2FAForm");
+    const passwordInput = dialog.querySelector("#disable2FAPassword");
+    const close = attachDialogClose(dialog, releaseLocale, () => {
+        if (passwordInput)
+            passwordInput.value = "";
+    });
+    dialog.querySelector("#disable2FAClose")?.addEventListener("click", close);
+    dialog.querySelector("#disable2FACancel")?.addEventListener("click", close);
     dialog.addEventListener("click", (e) => {
         if (e.target === dialog)
             close();
     });
-    const form = document.getElementById("disable2FAForm");
-    const passwordInput = document.getElementById("disable2FAPassword");
     if (form && passwordInput) {
         form.addEventListener("submit", async (e) => {
             e.preventDefault();
