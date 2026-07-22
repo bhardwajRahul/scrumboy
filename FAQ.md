@@ -87,31 +87,44 @@ In that dialog, turn on only the changes you want (each field has its own checkb
 
 A normal click on a card (without Ctrl/⌘) opens the usual single-todo editor and clears the selection. Viewers cannot use multi-select; Ctrl/⌘+click still opens one todo for them.
 
-## What is a temporary board?
+## What is a Temporary Board?
 
-A **temporary board** is a Scrumboy project with an **`expires_at`** timestamp. It is meant to be shared by URL (pastebin-style) rather than kept as a long-lived team project. Durable projects have **`expires_at` unset** and use normal sign-in, members, and roles.
+Scrumboy has three kinds of board, distinguished by two columns (`expires_at` and `creator_user_id`):
+
+- **Anonymous Board** - an expiring board with **no recorded creator** (`expires_at` set, `creator_user_id` null). Pastebin-style: anyone with the link can use it, and it **cannot be claimed**.
+- **Temporary Board** - an expiring board **attributed to the signed-in user who created it** (`expires_at` set, `creator_user_id` set). Shareable by link while temporary, and claimable **only by that creator**.
+- **Durable Project** - a normal, **non-expiring** project (`expires_at` unset) governed by owner/member roles. It is **not** publicly accessible just by knowing the slug.
 
 **How you get one**
 
-- Open **`/anon`** (or **`/temp`**, which redirects there). Scrumboy creates a new board and sends you to **`/{slug}`** - that link is how you share it.
-- In **full mode**, if you are signed in when the board is created, it is still temporary but recorded as yours (**“Temporary Board”**, with a `creator_user_id`). You can later **claim** it to turn it into a durable project (`POST /api/board/{slug}/claim` while logged in).
-- In **anonymous server mode** (`SCRUMBOY_MODE=anonymous`), the instance is built for temporary boards only; new boards from `/anon` have **no owner** (**“Anonymous Board”**, `creator_user_id` is null).
+- Open **`/anon`** (or **`/temp`**, which redirects there). Scrumboy creates a new expiring board and sends you to **`/{slug}`** - that link is how you share it.
+- In **Anonymous Mode** (`SCRUMBOY_MODE=anonymous`), the instance has no users; **Anonymous Mode is built for Anonymous Boards only**, so `/anon` always creates an **Anonymous Board**.
+- In **Full Mode while signed out**, `/anon` also creates an **Anonymous Board** (no creator).
+- In **Full Mode while signed in**, `/anon` creates a **Temporary Board** attributed to you (`creator_user_id` = your user).
 
-**Anonymous temporary boards** (no owner: `expires_at` is set and `creator_user_id` is null) can be used **without signing in**. Anyone with the link can create, edit, move, and delete todos and rename the board. They cannot assign todos to users, change the project image, or delete the whole project from the UI. Tag colors on that board are shared for everyone on the link.
+**Claiming (Temporary Board → Durable Project)**
+
+- Only the **recorded creator** of a Temporary Board can claim it: `POST /api/board/{slug}/claim` while signed in as that creator. Claiming clears `expires_at`, makes you the owner, and grants you maintainer membership.
+- **Anonymous Boards cannot be claimed** - there is no creator to authorize the conversion - and the claim route is **disabled entirely in Anonymous Mode**.
+- Another signed-in user who merely has the link **cannot** claim your Temporary Board; they receive **not found**.
+- After a successful claim the board becomes a **Durable Project**: the **slug is retained**, but it **stops granting public access**. From then on access requires **ownership or membership** - an unrelated authenticated user, or an unauthenticated visitor, requesting the same slug receives **404**. Because it is no longer temporary, a **repeat** `POST /api/board/{slug}/claim` also returns **not found**.
+
+**Using an Anonymous Board** (`expires_at` set, `creator_user_id` null) works **without signing in**. Anyone with the link can create, edit, move, and delete todos and rename the board. They cannot assign todos to users, change the project image, or delete the whole project from the UI. Tag colors on that board are shared for everyone on the link.
 
 **When it expires**
 
-- New temporary boards start with **`expires_at` about 90 days ahead** (`TemporaryBoardLifetimeDays` in the server code).
+- New expiring boards (Temporary and Anonymous Boards) start with **`expires_at` about 90 days ahead** (`TemporaryBoardLifetimeDays` in the server code).
 - **Yes, activity resets the expiry window** - but not as a separate “inactivity counter.” When the board is used, the server runs **`UpdateBoardActivity`**, which sets **`expires_at` to about 90 days from that moment** (rolling lifetime). Qualifying activity includes loading the board (for example a full board read) and todo changes (create, update, move, delete). Updates are **throttled to at most once every 5 minutes** per board so rapid refreshes do not hammer the database.
 - After **`expires_at` has passed**, the board URL returns **404** for reads and edits until the server removes the expired row. There is no “grace period” in the API after expiry.
 
-**Compared to a normal project**
+**Compared to a Durable Project**
 
-| | Temporary board | Durable project |
+| | Expiring board (Temporary / Anonymous) | Durable Project |
 |--|-----------------|-----------------|
 | Lifetime | `expires_at` (90-day rolling window with activity) | No expiry |
-| Sharing | Link-based; anonymous temps need no login | Members and roles |
-| Delete project | Not offered for anonymous temps | Maintainers can delete |
+| Sharing | Link-based; Anonymous Boards need no login | Members and roles |
+| Claimable | Temporary Boards, by their creator only; Anonymous Boards never | n/a (already durable) |
+| Delete project | Not offered for Anonymous Boards | Maintainers can delete |
 
 For permissions detail, see [`docs/roles-and-permissions.md`](docs/roles-and-permissions.md).
 

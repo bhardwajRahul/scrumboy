@@ -2,6 +2,12 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
 
+## [3.22.6] - 2026-07-22
+
+### Security
+
+- **Temporary Board claim authorization (GHSA-vph4-pmmh-ch6x)** — `POST /api/board/{slug}/claim` now permits conversion only by the recorded creator of a Full Mode Temporary Board. Previously, claim authorization checked `owner_user_id`, which is null before a Temporary Board is claimed, instead of verifying `creator_user_id`; an authenticated user with the shared slug could therefore claim another user's board and lock the creator out. Anonymous Boards cannot be claimed, and conversion now uses an atomic state transition before maintainer membership is granted.
+
 ## [3.22.5] - 2026-07-21
 
 ### Changed
