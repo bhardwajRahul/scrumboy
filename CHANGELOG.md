@@ -2,6 +2,13 @@
 
 > **Upgrades:** No breaking changes in **3.7.x** / **3.8.x** / **3.9.x** / **3.10.x** / **3.11.x** / **3.12.x** / **3.13.x** / **3.14.x** / **3.15.x** / **3.16.x** / **3.17.x** / **3.18.x** / **3.19.x** / **3.20.x** / **3.21.x** / **3.22.x** unless noted below. **3.22.0** has MCP/OAuth upgrade impact — see that release.
 
+## [3.22.7] - 2026-07-22
+
+### Fixed
+
+- **Settings Create User dialog lifecycle** - Escape / native dismiss no longer leaves an orphaned `<dialog>` in the DOM with duplicate IDs, which previously broke Cancel, password reveal, and Create (submit closed without calling `POST /api/admin/users`). Dynamic Settings dialogs now use scoped lookups and an idempotent remove-on-close teardown; Create User also clears the temporary password on close.
+- **Keybindings chord parsing** - `chordFromKeyboardEvent` null-guards missing `code`/`key` so IME or synthetic keydowns no longer throw in the capture-phase global handler.
+
 ## [3.22.6] - 2026-07-22
 
 ### Security
