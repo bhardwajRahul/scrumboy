@@ -1,7 +1,5 @@
 # Scrumboy MCP HTTP API
 
-Updated: 2026-07-18
-
 This API is intended for programmatic clients (e.g., agents or integrations), not direct browser use.
 
 This document describes the **Model Context Protocol (MCP) HTTP surface** implemented under `internal/mcp` and mounted by the Scrumboy HTTP server. It reflects **current behavior only**, not a roadmap.
@@ -260,7 +258,7 @@ When the server is configured with OIDC environment variables (`SCRUMBOY_OIDC_IS
 
 These are browser-redirect endpoints, not JSON APIs. After successful OIDC login, the user receives a standard `scrumboy_session` cookie. MCP and REST access work identically to password-based sessions.
 
-`GET /api/auth/status` includes `oidcEnabled` (bool) and `localAuthEnabled` (bool) when OIDC is configured, plus `pushConfigured` (bool) to indicate whether Web Push VAPID is fully configured on the server.
+`GET /api/auth/status` includes `oidcEnabled` (bool) and `localAuthEnabled` (bool) when OIDC is configured, plus `pushConfigured` (bool). `pushConfigured` is true only when Web Push is **effectively enabled** (validated matching VAPID key pair, valid/default subscriber, full mode) — not merely when env key strings are non-empty. In full mode, **signed-in** responses also include `push: { "state": "...", "reason": "..." | null }` with the prepared status (`enabled`, `not_configured`, `invalid`, `unavailable` and reasons such as `invalid_vapid_public_key`, `invalid_vapid_private_key`, `invalid_subscriber`, `initialization_failed`). Unauthenticated and anonymous-mode status omit the detailed `push` object. See [`docs/vapid.md`](docs/vapid.md#effective-enablement-not-just-keys-present).
 
 ### API access tokens (REST)
 
