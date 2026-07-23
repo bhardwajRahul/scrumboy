@@ -51,6 +51,17 @@ func (s *Store) SetUserPreference(ctx context.Context, userID int64, key, value 
 			return err
 		}
 	}
+	if key == "emailNotifications" {
+		pref, err := ParseEmailNotifyPref(value)
+		if err != nil {
+			return err
+		}
+		canonical, err := json.Marshal(pref)
+		if err != nil {
+			return fmt.Errorf("marshal email notification preference: %w", err)
+		}
+		value = string(canonical)
+	}
 	nowMs := time.Now().UTC().UnixMilli()
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO user_preferences (user_id, key, value, updated_at)

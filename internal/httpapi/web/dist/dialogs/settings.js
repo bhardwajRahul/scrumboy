@@ -5,7 +5,7 @@ import { escapeHTML, showToast, getAppVersion, showConfirmDialog, confirmDelete,
 import { getStoredTheme, handleThemeChange, THEME_SYSTEM, THEME_DARK, THEME_LIGHT } from '../theme.js';
 import { getStoredWallpaperState, setWallpaperOff, setWallpaperColor, uploadWallpaperImage } from '../wallpaper.js';
 import { processWallpaperFileForUpload } from '../utils.js';
-import { getSlug, getBoard, getProjectId, getProjects, getSettingsProjectId, getSettingsActiveTab, getTagColors, getUser, getAuthStatusAvailable, getOidcEnabled, getLocalAuthEnabled, getPushConfigured, getPushStatus, getBackupImportBtn, getBackupData, getBackupPreview, getTrelloImportBtn, getTrelloImportData, getTrelloImportPreview, getTrelloImportResult, getBoardMembers } from '../state/selectors.js';
+import { getSlug, getBoard, getProjectId, getProjects, getSettingsProjectId, getSettingsActiveTab, getTagColors, getUser, getAuthStatusAvailable, getOidcEnabled, getLocalAuthEnabled, getPushConfigured, getEmailNotifyAvailable, getPushStatus, getBackupImportBtn, getBackupData, getBackupPreview, getTrelloImportBtn, getTrelloImportData, getTrelloImportPreview, getTrelloImportResult, getBoardMembers } from '../state/selectors.js';
 import { setSettingsProjectId, setSettingsActiveTab, setBackupImportBtn, setBackupData, setBackupPreview, setTrelloImportBtn, setTrelloImportData, setTrelloImportPreview, setTrelloImportResult, setUser, setBoardMembers, } from '../state/mutations.js';
 import { renderRealBurndownChart, destroyBurndownChart, mountBurndownChart } from '../charts/burndown.js';
 import { emit } from '../events.js';
@@ -14,6 +14,7 @@ import { KEY_ACTION_LIST, chordFromKeyboardEvent, formatChordForDisplay, getReso
 import { requestDesktopNotificationPermission, getDesktopNotificationStatusDescription, getDesktopNotificationStatusKind, } from '../core/assignmentNotify.js';
 import { isPushSubscribed, subscribeToPush, unsubscribeFromPush } from '../core/push.js';
 import { getVoiceFlowEnabledPreference, setVoiceFlowEnabledPreference } from '../core/voiceflow-preferences.js';
+import { getEmailNotifyViewState, setEmailNotifyPref } from '../core/email-notify-preferences.js';
 import { bindWorkflowTabInteractions, clearWorkflowDraftState, invalidateWorkflowLaneCountsCache, isWorkflowDraftDirty, loadWorkflowTabContent, resetWorkflowDraftToBaseline, } from './settings-workflow.js';
 import { bindTagTabInteractions, invalidateTagsCache as invalidateTagSettingsCache, loadTagSettingsContent, } from './settings-tags.js';
 import { bindSprintsTabInteractions, refreshSprintDateLabels, renderSprintsTabContent } from './settings-sprints.js';
@@ -1481,6 +1482,37 @@ export async function renderSettingsModal(options) {
         ${renderPublicLocaleSelectHTML({ id: "settingsLocaleSelect", style: "margin-top: 10px; min-width: 180px;" })}
       </div>
     `;
+    const emailNotifyAvailable = showProfileTab && getEmailNotifyAvailable();
+    const emailNotifyState = showProfileTab ? getEmailNotifyViewState() : null;
+    const emailNotifyPref = emailNotifyState?.value ?? null;
+    const emailNotifyReady = emailNotifyState?.status === "ready";
+    const emailNotifyInteractive = emailNotifyAvailable && emailNotifyReady;
+    const emailCategoryRows = [
+        { key: "assigned", labelKey: "settings.customization.emailNotify.category.assigned", label: "When a card is assigned to me" },
+        { key: "cardActivity", labelKey: "settings.customization.emailNotify.category.cardActivity", label: "Card created, moved, or deleted" },
+        { key: "sprintActivity", labelKey: "settings.customization.emailNotify.category.sprintActivity", label: "Sprint activity" },
+        { key: "projectActivity", labelKey: "settings.customization.emailNotify.category.projectActivity", label: "Project, workflow, or tag changes" },
+        { key: "addedToProject", labelKey: "settings.customization.emailNotify.category.addedToProject", label: "When I'm added to a project" },
+    ];
+    const emailNotifySectionHTML = showProfileTab ? `
+      <div class="settings-section settings-section--email-notify${!emailNotifyAvailable ? " settings-section--email-notify-disabled" : ""}">
+        <div class="settings-section__title" data-i18n-text="settings.customization.emailNotify.title">Email notifications</div>
+        <div class="settings-section__description muted" data-i18n-text="settings.customization.emailNotify.description">Get emailed about activity on your boards. Off by default.</div>
+        ${!emailNotifyAvailable ? `<p class="muted" style="margin:8px 0;font-size:13px;" data-i18n-text="settings.customization.emailNotify.unavailableNotice">Email notifications require SMTP to be configured on the server (see docs).</p>` : ""}
+        ${emailNotifyAvailable && emailNotifyState?.status === "error" ? `<p class="muted" style="margin:8px 0;font-size:13px;" data-i18n-text="settings.customization.emailNotify.loadFailed">Could not load email notification settings. Reload the page to try again.</p>` : ""}
+        <label class="row" style="align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
+          <input type="checkbox" id="emailNotifyEnabledToggle" ${!emailNotifyInteractive ? "disabled" : ""} ${emailNotifyPref?.enabled ? "checked" : ""} />
+          <span data-i18n-text="settings.customization.emailNotify.toggleLabel">Email notifications on</span>
+        </label>
+        <div class="email-notify-categories" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+          ${emailCategoryRows.map((row) => `
+          <label class="row" style="align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" class="email-notify-category-toggle" data-category="${row.key}" ${(!emailNotifyInteractive || !emailNotifyPref?.enabled) ? "disabled" : ""} ${emailNotifyPref?.[row.key] ? "checked" : ""} />
+            <span data-i18n-text="${row.labelKey}">${escapeHTML(row.label)}</span>
+          </label>`).join("")}
+        </div>
+      </div>
+    ` : "";
     const customizationHTML = activeSettingsTab === "customization" ? `
     <div id="settingsCustomizationContent">
       ${languageSectionHTML}
@@ -1520,6 +1552,7 @@ export async function renderSettingsModal(options) {
         </label>
         <p class="muted" id="pushNotifyHint" style="margin:8px 0 0 0;font-size:13px;"></p>
       </div>
+      ${emailNotifySectionHTML}
       <div class="settings-section settings-section--keybindings">
         <div class="settings-section__title" data-i18n-text="settings.customization.keybindings.title">Keybindings</div>
         <div class="settings-section__description muted" data-i18n-text="settings.customization.keybindings.description">Click a key to record a new shortcut. Press Esc to cancel while listening.</div>
@@ -2028,6 +2061,46 @@ export async function renderSettingsModal(options) {
                 }, { signal });
             }
         }
+        const emailNotifyEnabledToggle = document.getElementById("emailNotifyEnabledToggle");
+        if (emailNotifyEnabledToggle && !emailNotifyEnabledToggle.hasAttribute("disabled")) {
+            emailNotifyEnabledToggle.addEventListener("change", async () => {
+                const pref = getEmailNotifyViewState().value;
+                if (!pref)
+                    return;
+                document.querySelectorAll("#emailNotifyEnabledToggle, .email-notify-category-toggle").forEach((control) => {
+                    control.disabled = true;
+                });
+                try {
+                    await setEmailNotifyPref({ ...pref, enabled: emailNotifyEnabledToggle.checked });
+                }
+                catch {
+                    showToast(t("settings.customization.emailNotify.saveFailed"));
+                }
+                await renderSettingsModal();
+            }, { signal });
+        }
+        document.querySelectorAll(".email-notify-category-toggle").forEach((toggle) => {
+            if (toggle.hasAttribute("disabled"))
+                return;
+            toggle.addEventListener("change", async () => {
+                const category = toggle.getAttribute("data-category");
+                if (!category)
+                    return;
+                const pref = getEmailNotifyViewState().value;
+                if (!pref)
+                    return;
+                document.querySelectorAll("#emailNotifyEnabledToggle, .email-notify-category-toggle").forEach((control) => {
+                    control.disabled = true;
+                });
+                try {
+                    await setEmailNotifyPref({ ...pref, [category]: toggle.checked });
+                }
+                catch {
+                    showToast(t("settings.customization.emailNotify.saveFailed"));
+                }
+                await renderSettingsModal();
+            }, { signal });
+        });
         resetKeybindingCaptureUI();
         document.querySelectorAll("[data-keybinding-capture]").forEach((btn) => {
             btn.addEventListener("click", () => {

@@ -1,7 +1,7 @@
 <p align="center">
   <img width="372" src="internal/httpapi/web/githublogo.png" alt="scrumboy logo" />
   <br />
-  <img src="https://img.shields.io/badge/version-v3.22.7-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-v3.23.0-blue" alt="version" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--v3-orange" alt="license" /></a>
   <img src="https://img.shields.io/badge/i18n-23%20languages-yellow" alt="i18n" />
   <a href="https://github.com/markrai/scrumboy/actions/workflows/ci.yml"><img src="https://github.com/markrai/scrumboy/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
@@ -295,6 +295,10 @@ In both cases, the deployment manager is injecting the environment variable. Scr
 ### SMTP for self-service password reset (optional)
 
 Optional SMTP lets users who already have a Scrumboy-local password request a reset email (**Forgot your Scrumboy password?**). You need a relay (`SCRUMBOY_SMTP_`*), `SCRUMBOY_ENCRYPTION_KEY`, a valid `SCRUMBOY_PUBLIC_BASE_URL`, and local authentication enabled. Owners can generate links only for users with a usable local password; SSO credential recovery belongs to the identity provider. Setup and troubleshooting: `[docs/smtp.md](docs/smtp.md)`.
+
+### Email notifications (optional)
+
+The same SMTP config above also enables opt-in email notifications: users choose per-category (card assigned to them, card/sprint/project activity, added to a project) under Settings → Customization, off by default. No `SCRUMBOY_ENCRYPTION_KEY` required. Setup and category/recipient details: [`docs/notifications.md`](docs/notifications.md).
 
 ### OIDC / SSO login (optional)
 
