@@ -1603,6 +1603,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       </div>`;
   }).join("");
 
+  const hasUser = currentUser != null;
   const desktopNotifyStatusKind = getDesktopNotificationStatusKind();
   const desktopNotifyGranted = desktopNotifyStatusKind === "granted";
 
@@ -1662,18 +1663,17 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
     `
     : "";
 
-  const cardsPerLaneSectionHTML = `
+  const cardsPerLaneSectionHTML = hasUser ? `
       <div class="settings-section">
         <div class="settings-section__title" data-i18n-text="settings.customization.cardsPerLane.title">Cards per lane</div>
         <div class="settings-section__description muted" data-i18n-text="settings.customization.cardsPerLane.description">Number of cards shown by default in each lane before "Load more" is needed.</div>
         <label class="row" style="align-items:center;gap:10px;margin-top:10px;">
-          <select id="cardsPerLaneSelect" style="width:80px;" ${getUser() ? "" : "disabled"}>
+          <select id="cardsPerLaneSelect" style="width:80px;">
             ${CARDS_PER_LANE_ALLOWED.map((n) => `<option value="${n}"${getDefaultCardsPerLane() === n ? " selected" : ""}>${n}</option>`).join("")}
           </select>
         </label>
-        ${!getUser() ? `<p class="muted" style="margin-top:10px;font-size:13px;" data-i18n-text="settings.customization.cardsPerLane.signInHint">Sign in to save this preference.</p>` : ""}
       </div>
-    `;
+    ` : "";
 
   const wrapLanesSectionHTML = `
       <div class="settings-section">
@@ -1792,6 +1792,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
       ${cardsPerLaneSectionHTML}
       ${wrapLanesSectionHTML}
       ${getAuthStatusAvailable() ? renderVoiceFlowCustomizationHTML() : ""}
+      ${hasUser ? `
       <div class="settings-section">
         <div class="settings-section__title" data-i18n-text="settings.customization.notifications.title">Desktop notifications</div>
         <div class="settings-section__description muted" data-i18n-text="settings.customization.notifications.description">OS-level alerts when someone assigns you a todo (works when this tab is in the background).</div>
@@ -1808,6 +1809,7 @@ export async function renderSettingsModal(options?: { skipProfileRefetch?: boole
         </label>
         <p class="muted" id="pushNotifyHint" style="margin:8px 0 0 0;font-size:13px;"></p>
       </div>
+      ` : ""}
       ${emailNotifySectionHTML}
       <div class="settings-section settings-section--keybindings">
         <div class="settings-section__title" data-i18n-text="settings.customization.keybindings.title">Keybindings</div>

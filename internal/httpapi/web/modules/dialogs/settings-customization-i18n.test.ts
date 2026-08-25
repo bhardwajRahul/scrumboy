@@ -425,7 +425,9 @@ describe('settings customization i18n', () => {
   });
 
   it('renders English shell and customization copy by default', async () => {
-    await setupSettingsView();
+    await setupSettingsView({
+      user: { id: 1, name: 'Alex' },
+    });
 
     expect(document.getElementById('settingsDialogTitleLabel')?.textContent).toBe('Settings');
     expect(document.getElementById('settingsDialogVersion')?.textContent).toBe(' vtest-version');
@@ -434,6 +436,43 @@ describe('settings customization i18n', () => {
     expect(document.querySelector('.settings-section__title')?.textContent).toBe('Language');
     expect(document.getElementById('desktopNotifyStatus')?.textContent).toBe(enCatalog['settings.customization.notifications.status.default']);
     expect(document.querySelector('.settings-section--keybindings .settings-section__title')?.textContent).toBe('Keybindings');
+  });
+
+  it('omits user-only Customization controls when no signed-in user (Anonymous Mode)', async () => {
+    await setupSettingsView({
+      authStatusAvailable: false,
+      user: null,
+    });
+
+    const html = document.getElementById('settingsCustomizationContent')?.innerHTML ?? '';
+    expect(document.querySelector('label[for="settingsLocaleSelect"]')?.textContent).toBe('Language');
+    expect(document.querySelector('[data-i18n-text="settings.customization.theme.title"]')?.textContent).toBe('Theme');
+    expect(document.querySelector('[data-i18n-text="settings.customization.wrapLanes.title"]')?.textContent).toBe('Wrap lanes into rows');
+    expect(document.querySelector('.settings-section--keybindings .settings-section__title')?.textContent).toBe('Keybindings');
+    expect(document.getElementById('cardsPerLaneSelect')).toBeNull();
+    expect(html).not.toContain('Cards per lane');
+    expect(html).not.toContain('Sign in to save this preference');
+    expect(document.querySelector('[data-i18n-text="settings.customization.cardsPerLane.signInHint"]')).toBeNull();
+    expect(document.getElementById('desktopNotifyEnableBtn')).toBeNull();
+    expect(document.querySelector('[data-i18n-text="settings.customization.notifications.title"]')).toBeNull();
+    expect(document.querySelector('.settings-section--push-pwa')).toBeNull();
+    expect(document.querySelector('[data-i18n-text="settings.customization.push.title"]')).toBeNull();
+    expect(html).not.toContain('Web Push is not available in anonymous mode');
+    expect(document.querySelector('[data-i18n-text="settings.customization.voiceFlow.title"]')).toBeNull();
+  });
+
+  it('keeps user-only Customization controls when a signed-in user is present', async () => {
+    await setupSettingsView({
+      user: { id: 1, name: 'Alex' },
+    });
+
+    expect(document.getElementById('cardsPerLaneSelect')).toBeInstanceOf(HTMLSelectElement);
+    expect(document.querySelector('[data-i18n-text="settings.customization.cardsPerLane.title"]')?.textContent).toBe('Cards per lane');
+    expect(document.querySelector('[data-i18n-text="settings.customization.notifications.title"]')?.textContent).toBe('Desktop notifications');
+    expect(document.getElementById('desktopNotifyEnableBtn')).toBeInstanceOf(HTMLButtonElement);
+    expect(document.querySelector('.settings-section--push-pwa')).toBeTruthy();
+    expect(document.querySelector('[data-i18n-text="settings.customization.push.title"]')?.textContent).toBe('Background notifications (PWA)');
+    expect(document.querySelector('[data-i18n-text="settings.customization.voiceFlow.title"]')?.textContent).toBe('VoiceFlow');
   });
 
   it('renders catalog-backed pseudo strings on first render', async () => {
@@ -566,7 +605,9 @@ describe('settings customization i18n', () => {
 
   it('updates desktop notification labels on locale change without requesting permission', async () => {
     state.desktopNotificationKind = 'granted';
-    const { i18n } = await setupSettingsView();
+    const { i18n } = await setupSettingsView({
+      user: { id: 1, name: 'Alex' },
+    });
 
     const status = document.getElementById('desktopNotifyStatus');
     const button = document.getElementById('desktopNotifyEnableBtn') as HTMLButtonElement | null;
@@ -688,7 +729,10 @@ describe('settings customization i18n', () => {
   });
 
   it('does not mutate hidden settings content on locale change while the dialog is closed', async () => {
-    const { i18n } = await setupSettingsView({ open: false });
+    const { i18n } = await setupSettingsView({
+      open: false,
+      user: { id: 1, name: 'Alex' },
+    });
 
     const titleBefore = document.getElementById('settingsDialogTitleLabel')?.textContent;
     const tabBefore = document.querySelector('.settings-tab[data-tab="customization"]')?.textContent;
