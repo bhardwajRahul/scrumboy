@@ -2,11 +2,13 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
 
+	useradminapp "scrumboy/internal/application/useradmin"
 	"scrumboy/internal/auth/tokens"
 	"scrumboy/internal/store"
 )
@@ -21,8 +23,9 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request, rest []stri
 	// | Promote admin -> owner | ❌     | ❌     | ❌    |
 	// | Delete user           | ✅     | ❌     | ❌    |
 	// | Demote admin          | ✅     | ❌     | ❌    |
-	// Note: All authorization checks are enforced in store layer, not routing.
-	// Routing only wires requests to store methods.
+	// Store remains authoritative for mutation-time Owner and persistence
+	// invariants. Selected create, role, and deletion orchestration delegates
+	// through internal/application/useradmin after this shared transport gate.
 	ctx := s.requestContext(r)
 	userID, ok := store.UserIDFromContext(ctx)
 	if !ok {
@@ -52,13 +55,13 @@ func (s *Server) handleAdmin(w http.ResponseWriter, r *http.Request, rest []stri
 			s.handleAdminUsersListOrCreate(w, r, userID)
 		} else if len(rest) == 3 && rest[2] == "role" {
 			// PATCH /api/admin/users/{id}/role
-			s.handleAdminUsersUpdateRole(w, r, userID, rest[1])
+			s.handleAdminUsersUpdateRole(w, r, rest[1])
 		} else if len(rest) == 3 && rest[2] == "password-reset" {
 			// POST /api/admin/users/{id}/password-reset
 			s.handleAdminUsersPasswordReset(w, r, userID, rest[1])
 		} else if len(rest) == 2 {
 			// DELETE /api/admin/users/{id}
-			s.handleAdminUsersDelete(w, r, userID, rest[1])
+			s.handleAdminUsersDelete(w, r, rest[1])
 		} else {
 			writeError(w, http.StatusNotFound, "NOT_FOUND", "not found", nil)
 		}
@@ -108,7 +111,11 @@ func (s *Server) handleAdminUsersListOrCreate(w http.ResponseWriter, r *http.Req
 			return
 		}
 
-		u, err := s.store.CreateUser(ctx, in.Email, in.Password, in.Name)
+		u, err := s.userCreations.Create(ctx, useradminapp.CreateCommand{
+			Email:    in.Email,
+			Name:     in.Name,
+			Password: in.Password,
+		})
 		if err != nil {
 			writeStoreErr(w, err, false)
 			return
@@ -121,7 +128,7 @@ func (s *Server) handleAdminUsersListOrCreate(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func (s *Server) handleAdminUsersUpdateRole(w http.ResponseWriter, r *http.Request, requesterID int64, targetIDStr string) {
+func (s *Server) handleAdminUsersUpdateRole(w http.ResponseWriter, r *http.Request, targetIDStr string) {
 	if r.Method != http.MethodPatch {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 		return
@@ -153,13 +160,20 @@ func (s *Server) handleAdminUsersUpdateRole(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := s.store.UpdateUserRole(ctx, requesterID, targetID, newRole); err != nil {
-		writeStoreErr(w, err, false)
+	prepared, err := s.userRoleMutations.Prepare(ctx, useradminapp.RoleChangeCommand{
+		TargetUserID: targetID,
+		NewRole:      newRole,
+	})
+	if err != nil {
+		if errors.Is(err, useradminapp.ErrActorRequired) {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthorized", nil)
+			return
+		}
+		writeInternal(w, err)
 		return
 	}
 
-	// Return updated user
-	u, err := s.store.GetUser(ctx, targetID)
+	u, err := prepared.Update()
 	if err != nil {
 		writeStoreErr(w, err, false)
 		return
@@ -168,7 +182,7 @@ func (s *Server) handleAdminUsersUpdateRole(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, userToJSON(u))
 }
 
-func (s *Server) handleAdminUsersDelete(w http.ResponseWriter, r *http.Request, requesterID int64, targetIDStr string) {
+func (s *Server) handleAdminUsersDelete(w http.ResponseWriter, r *http.Request, targetIDStr string) {
 	if r.Method != http.MethodDelete {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 		return
@@ -181,7 +195,19 @@ func (s *Server) handleAdminUsersDelete(w http.ResponseWriter, r *http.Request, 
 	}
 
 	ctx := s.requestContext(r)
-	if err := s.store.DeleteUser(ctx, requesterID, targetID); err != nil {
+	prepared, err := s.userDeletions.Prepare(ctx, useradminapp.DeleteCommand{
+		TargetUserID: targetID,
+	})
+	if err != nil {
+		if errors.Is(err, useradminapp.ErrActorRequired) {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "unauthorized", nil)
+			return
+		}
+		writeInternal(w, err)
+		return
+	}
+
+	if err := prepared.Delete(); err != nil {
 		writeStoreErr(w, err, false)
 		return
 	}

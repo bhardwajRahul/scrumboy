@@ -22,6 +22,7 @@ import (
 	tagapp "scrumboy/internal/application/tag"
 	todoapp "scrumboy/internal/application/todo"
 	todolinkapp "scrumboy/internal/application/todolink"
+	useradminapp "scrumboy/internal/application/useradmin"
 	workflowapp "scrumboy/internal/application/workflow"
 	"scrumboy/internal/config"
 	"scrumboy/internal/eventbus"
@@ -147,6 +148,9 @@ type Server struct {
 	membershipMutations           *membershipapp.RESTMutationService
 	tagColors                     *tagapp.RESTColorService
 	tagDeletions                  *tagapp.RESTDeletionService
+	userCreations                 *useradminapp.RESTCreationService
+	userRoleMutations             *useradminapp.RESTRoleService
+	userDeletions                 *useradminapp.RESTDeletionService
 
 	logger                  *log.Logger
 	maxBody                 int64
@@ -224,10 +228,10 @@ type storeAPI interface {
 	ResetLocalPassword(ctx context.Context, userID int64, expectedHash, password string) error
 	BootstrapUser(ctx context.Context, email, password, name string) (store.User, error)
 	AuthenticateUser(ctx context.Context, email, password string) (store.User, error)
-	CreateUser(ctx context.Context, email, password, name string) (store.User, error)
+	useradminapp.UserCreationStore
 	ListUsers(ctx context.Context, requesterID int64) ([]store.User, error)
-	UpdateUserRole(ctx context.Context, requesterID, targetUserID int64, newRole store.SystemRole) error
-	DeleteUser(ctx context.Context, requesterID, targetUserID int64) error
+	useradminapp.UserRoleMutationStore
+	useradminapp.UserDeletionStore
 	AssignUnownedDurableProjectsToUser(ctx context.Context, userID int64) error
 	ClaimTemporaryBoard(ctx context.Context, projectID, userID int64) error
 	CreateSession(ctx context.Context, userID int64, ttl time.Duration) (token string, expiresAt time.Time, err error)
@@ -770,6 +774,16 @@ func NewServer(st storeAPI, opts Options) *Server {
 		BoardNames:    st,
 		PersonalNames: st,
 		Publisher:     tagDeletionPublisher{server: server},
+	})
+	server.userCreations = useradminapp.NewRESTCreationService(useradminapp.RESTCreationServiceDependencies{
+		Creations: st,
+	})
+	server.userRoleMutations = useradminapp.NewRESTRoleService(useradminapp.RESTRoleServiceDependencies{
+		Mutations:      st,
+		ProjectionRead: st,
+	})
+	server.userDeletions = useradminapp.NewRESTDeletionService(useradminapp.RESTDeletionServiceDependencies{
+		Deletions: st,
 	})
 	if opts.MCPHandler != nil {
 		opts.MCPHandler.BindCreatorNotificationRequestPublisher(creatorRequestPublisher)
