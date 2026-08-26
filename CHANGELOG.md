@@ -2,6 +2,18 @@
 
 > **Upgrades:** No breaking changes for **3.7.0 ≤ v ≤ 3.33.x** unless noted below. Notable upgrade impact: **3.22.0** (MCP/OAuth), **3.24.0** (MCP tool names), **3.26.0** (MCP project tags), **3.29.0** (MCP JSON-RPC error/`board_get` identity), **3.30.0** (reversible per-project sprint capability), **3.31.0** (per-project priority tiers), **3.33.0** (Agenda ICS feeds need `SCRUMBOY_ENCRYPTION_KEY`) - see those releases.
 
+## [3.33.10] - 2026-08-25
+
+### Enhancements
+
+- **macOS executable releases** - GitHub Actions workflow natively builds,
+  smoke-tests, and attaches `scrumboy-*-darwin-arm64.tar.gz` and
+  `scrumboy-*-darwin-amd64.tar.gz` plus matching `.sha256` checksums and
+  `.intoto.jsonl` provenance bundles to GitHub Releases on publish; manual
+  `workflow_dispatch` runs upload build artifacts for ad-hoc testing. Binaries
+  require macOS 12 Monterey or later. Apple signing and notarization are not
+  included.
+
 ## [3.33.9] - 2026-08-25
 
 ### Enhancements

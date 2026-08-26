@@ -352,7 +352,7 @@ Verified in this repository:
 - DCO check workflow (`.github/workflows/dco.yml`); contributors sign off via `git commit -s` (`[CONTRIBUTING.md](../CONTRIBUTING.md)`).
 - OpenSSF Scorecard workflow + published results.
 - Multi-arch container publish to GHCR (`.github/workflows/docker-publish.yml`); Dockerfile base images digest-pinned.
-- Windows release workflow builds artifacts, records SHA-256, and uses **SLSA-style attestations** (`actions/attest`, `gh attestation verify` documented for consumers). **Authenticode code signing is not implemented.** Docker publish does **not** attach the same attestation/provenance flow.
+- Windows and macOS release workflows build artifacts, record SHA-256, and use **SLSA-style attestations** (`actions/attest`, `gh attestation verify` documented for consumers). **Authenticode code signing is not implemented.** **Apple Developer signing and notarization are not implemented.** Docker publish does **not** attach the same attestation/provenance flow.
 - Concurrency groups on some workflows (`ci`, `scorecard`, `docker-publish`); not on every workflow.
 
 **Not evidenced from repo files alone:** branch-protection required checks/reviews (Scorecard may observe them remotely; `CODEOWNERS` does not prove enforcement).
