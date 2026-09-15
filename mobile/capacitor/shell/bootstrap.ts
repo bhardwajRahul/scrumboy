@@ -13,13 +13,13 @@ import { createSpeechInputComposition } from './speech-input-capability.js';
 import { SPEECH_OUTPUT_CAPABILITY } from '../../../internal/httpapi/web/modules/platform/speech-output.js';
 import { createSpeechOutputComposition } from './speech-output-capability.js';
 import { installVoiceCreateDryRunBridge } from './voice-create-dry-run-bridge.js';
-
-// Temporary local testing: enable VoiceFlow diagnostics in Capacitor Android without WebView console access.
-localStorage.setItem('scrumboy_debug_voiceflow', '1');
+import { ScrumboyTransport } from './native-plugin.js';
+import { createDashboardWidgetCapability, DASHBOARD_WIDGET_CAPABILITY } from './dashboard-widget-capability.js';
 
 const localTextGeneration = createLocalTextGenerationComposition();
 const speechInput = createSpeechInputComposition();
 const speechOutput = createSpeechOutputComposition();
+const dashboardWidgetCapability = createDashboardWidgetCapability(ScrumboyTransport);
 const localTextGenerationCapability = localTextGeneration.registry.get(LOCAL_TEXT_GENERATION_CAPABILITY);
 const speechInputCapability = speechInput.registry.get(SPEECH_INPUT_CAPABILITY);
 const speechOutputCapability = speechOutput.registry.get(SPEECH_OUTPUT_CAPABILITY);
@@ -30,6 +30,7 @@ const capabilities = createClientCapabilityRegistry<AppCapabilityMap>({
   [LOCAL_TEXT_GENERATION_CAPABILITY]: localTextGenerationCapability,
   [SPEECH_INPUT_CAPABILITY]: speechInputCapability,
   [SPEECH_OUTPUT_CAPABILITY]: speechOutputCapability,
+  [DASHBOARD_WIDGET_CAPABILITY]: dashboardWidgetCapability,
 });
 
 void Promise.all([
