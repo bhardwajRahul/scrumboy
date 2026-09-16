@@ -159,6 +159,12 @@ ORDER BY g.name`, todoID)
 // tag joins in the main todo query. Returns map[todoID][]tagNames (sorted, deduped).
 // Empty todoIDs returns empty map. Batches at 500 IDs to stay under SQLite placeholder limit.
 func (s *Store) listTagsForTodos(ctx context.Context, todoIDs []int64) (map[int64][]string, error) {
+	return listTagsForTodosQueryer(ctx, s.db, todoIDs)
+}
+
+// listTagsForTodosQueryer keeps callers that already hold a transaction on the
+// same database snapshot as their todo page query.
+func listTagsForTodosQueryer(ctx context.Context, q sqlRowsQueryer, todoIDs []int64) (map[int64][]string, error) {
 	if len(todoIDs) == 0 {
 		return map[int64][]string{}, nil
 	}
@@ -176,7 +182,7 @@ func (s *Store) listTagsForTodos(ctx context.Context, todoIDs []int64) (map[int6
 			ph[j] = "?"
 			args[j] = id
 		}
-		rows, err := s.db.QueryContext(ctx, `
+		rows, err := q.QueryContext(ctx, `
 SELECT tt.todo_id, g.name
 FROM todo_tags tt
 JOIN tags g ON g.id = tt.tag_id
@@ -287,6 +293,39 @@ func (s *Store) listTagCounts(ctx context.Context, projectID int64, viewerUserID
 		return s.listTagCountsRowLevel(ctx, projectID, viewerUserID, viewerRole)
 	}
 	return s.listTagCountsGrouped(ctx, projectID, viewerUserID, viewerRole)
+}
+
+// activeBoardTagCounts overlays board-payload usage counts without changing the
+// historical tag catalog returned by ListTagCounts and tag-management APIs.
+func (s *Store) activeBoardTagCounts(ctx context.Context, projectID int64) (map[string]int, error) {
+	rows, err := s.db.QueryContext(ctx, `
+SELECT DISTINCT g.name, t.id
+FROM tags g
+JOIN todo_tags tt ON tt.tag_id = g.id
+JOIN todos t ON t.id = tt.todo_id AND t.project_id = ? AND t.archived_at IS NULL
+`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("list active board tag counts: %w", err)
+	}
+	defer rows.Close()
+	sets := make(map[string]map[int64]struct{})
+	for rows.Next() {
+		var name string
+		var id int64
+		if err := rows.Scan(&name, &id); err != nil {
+			return nil, err
+		}
+		key := TagGroupKey(name)
+		if sets[key] == nil {
+			sets[key] = make(map[int64]struct{})
+		}
+		sets[key][id] = struct{}{}
+	}
+	out := make(map[string]int, len(sets))
+	for key, ids := range sets {
+		out[key] = len(ids)
+	}
+	return out, rows.Err()
 }
 
 // listTagCountsRowLevel returns one TagCount per tag row, always with a real TagID.
