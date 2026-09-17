@@ -1,10 +1,52 @@
 # Changelog
 
-> **Upgrades:** No breaking changes for **3.7.0 ≤ v ≤ 3.35.x** unless noted below. Notable upgrade impact: **3.22.0** (MCP/OAuth), **3.24.0** (MCP tool names), **3.26.0** (MCP project tags), **3.29.0** (MCP JSON-RPC error/`board_get` identity), **3.30.0** (reversible per-project sprint capability), **3.31.0** (per-project priority tiers), **3.33.0** (Agenda ICS feeds need `SCRUMBOY_ENCRYPTION_KEY`), **3.33.12** (webhook destinations must be publicly routable), **3.35.0** (backup format 1.2; Trello closed-card titles) - see those releases.
+> **Upgrades:** No breaking changes for **3.7.0 ≤ v ≤ 3.36.x** unless noted below. Notable upgrade impact: **3.22.0** (MCP/OAuth), **3.24.0** (MCP tool names), **3.26.0** (MCP project tags), **3.29.0** (MCP JSON-RPC error/`board_get` identity), **3.30.0** (reversible per-project sprint capability), **3.31.0** (per-project priority tiers), **3.33.0** (Agenda ICS feeds need `SCRUMBOY_ENCRYPTION_KEY`), **3.33.12** (webhook destinations must be publicly routable), **3.35.0** (backup format 1.2; Trello closed-card titles) - see those releases.
+
+## [Unreleased]
+
+## [3.36.0] - 2026-09-17
+
+### Added
+
+- **Desktop Omni tag Browse and Match shelf** - Empty desktop Omni search now
+  offers active, unpinned project tags ranked by recent board activity; typing
+  switches immediately to the existing exact/prefix/substring matches. Pinned
+  tags stay in an independent region, while chevrons page the horizontally
+  scrollable candidate viewport. Mobile retains its existing single rail of
+  pins and typed matches, with no empty-search Browse shelf or chevrons. REST
+  board-tag objects add optional `lastActiveAt`, the latest `updatedAt` among
+  active stories currently carrying the logical tag; selected count-zero
+  historical exceptions omit it.
+
+- **Multi-tag Omni board filtering** - The compact Omni filter can pin up to 20
+  tags in click order. Repeated `tag` URL parameters use logical AND, compose
+  with text/Sprint/Assignee/Priority filters, and are preserved by pagination,
+  drag/drop boundary reads, realtime refreshes, and deep-link navigation.
+  Durable projects match canonical alias groups; temporary boards retain exact
+  stored-name semantics. Legacy pills display every selected tag while keeping
+  their historical replace-all click behavior. MCP `board_get` now accepts
+  preferred `tags[]` with the same logical AND, while retaining scalar `tag`
+  compatibility. `tag` and `tags` are mutually exclusive; commas are not parsed.
 
 ## [3.35.0] - 2026-09-15
 
 ### Added
+
+- **Compact Omni board filtering** - Boards now default to an Omni presentation that
+  keeps the existing debounced text search and shows deterministic matching active-tag
+  suggestions beside it. Selecting a suggestion consumes the discovery text, while an
+  applied tag remains independently visible and clearable and composes with Sprint and
+  every other existing URL filter. Settings → Customization offers **Legacy pills** for
+  users who prefer the previous permanent tag/sprint strip; both layouts control the same
+  URL and backend filters.
+
+  Board payload `tags` are now a current-work projection: canonical tags used by at least
+  one non-archived story, counted by unique active story. An explicitly selected inactive
+  tag is included with count zero so deep-linked filters never become invisible. Full,
+  archive-inclusive tag catalogs remain unchanged in tag management, the project catalog
+  APIs/MCP tools, and exports. Story editing starts from active project tags plus the
+  current story's own tags and can explicitly load the full project catalog; Voice Create
+  uses only active project tags by default.
 
 - **Story archival** - Stories can be archived and restored without changing their
   workflow state. Archival is orthogonal to Done: `columnKey`, `rank`, `doneAt`, the
